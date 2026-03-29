@@ -3,55 +3,132 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
+from uuid import UUID
 
+from application.services.helpdesk import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback
 
 router = Router(name="operator")
 
 
 @router.message(Command("stats"))
-async def handle_stats(message: Message) -> None:
-    await message.answer(
-        "Operator statistics are not connected yet. This command is a placeholder."
-    )
+async def handle_stats(
+    message: Message,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    async with helpdesk_service_factory() as helpdesk_service:
+        stats = await helpdesk_service.get_basic_stats()
+
+    lines = [
+        "Ticket stats:",
+        f"total={stats.total}",
+        f"open={stats.open_total}",
+    ]
+    for status, count in sorted(stats.by_status.items(), key=lambda item: item[0].value):
+        lines.append(f"{status.value}={count}")
+
+    await message.answer("\n".join(lines))
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "take"))
 async def handle_take_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
+    helpdesk_service_factory: HelpdeskServiceFactory,
 ) -> None:
-    await _answer_operator_action(callback, callback_data.action)
+    ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
+    if ticket_public_id is None:
+        await callback.answer("Invalid ticket identifier.")
+        return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        ticket = await helpdesk_service.assign_ticket_to_operator(
+            ticket_public_id=ticket_public_id,
+            telegram_user_id=callback.from_user.id,
+            display_name=callback.from_user.full_name,
+            username=callback.from_user.username,
+        )
+
+    if ticket is None:
+        await callback.answer("Ticket not found.")
+        return
+
+    await callback.answer(f"Ticket {ticket.public_number} assigned.")
+    if callback.message is not None:
+        await callback.message.answer(
+            f"Ticket {ticket.public_number} is now assigned to {callback.from_user.full_name}."
+        )
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "reply"))
 async def handle_reply_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
+    helpdesk_service_factory: HelpdeskServiceFactory,
 ) -> None:
-    await _answer_operator_action(callback, callback_data.action)
+    ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
+    if ticket_public_id is None:
+        await callback.answer("Invalid ticket identifier.")
+        return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        response_text = await helpdesk_service.acknowledge_reply_action(
+            ticket_public_id=ticket_public_id,
+        )
+
+    await callback.answer(response_text)
+    if callback.message is not None:
+        await callback.message.answer(response_text)
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "close"))
 async def handle_close_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
+    helpdesk_service_factory: HelpdeskServiceFactory,
 ) -> None:
-    await _answer_operator_action(callback, callback_data.action)
+    ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
+    if ticket_public_id is None:
+        await callback.answer("Invalid ticket identifier.")
+        return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        ticket = await helpdesk_service.close_ticket(ticket_public_id=ticket_public_id)
+
+    if ticket is None:
+        await callback.answer("Ticket not found.")
+        return
+
+    await callback.answer(f"Ticket {ticket.public_number} closed.")
+    if callback.message is not None:
+        await callback.message.answer(
+            f"Ticket {ticket.public_number} closed successfully."
+        )
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "escalate"))
 async def handle_escalate_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
+    helpdesk_service_factory: HelpdeskServiceFactory,
 ) -> None:
-    await _answer_operator_action(callback, callback_data.action)
+    ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
+    if ticket_public_id is None:
+        await callback.answer("Invalid ticket identifier.")
+        return
 
-
-async def _answer_operator_action(callback: CallbackQuery, action: str) -> None:
-    await callback.answer(f"Operator action '{action}' is not implemented yet.")
-
-    if callback.message is not None:
-        await callback.message.answer(
-            f"Operator action '{action}' was received. Workflow logic will be added later."
+    async with helpdesk_service_factory() as helpdesk_service:
+        response_text = await helpdesk_service.acknowledge_escalate_action(
+            ticket_public_id=ticket_public_id,
         )
+
+    await callback.answer(response_text)
+    if callback.message is not None:
+        await callback.message.answer(response_text)
+
+
+def _parse_ticket_public_id(value: str) -> UUID | None:
+    try:
+        return UUID(value)
+    except ValueError:
+        return None
