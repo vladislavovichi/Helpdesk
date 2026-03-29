@@ -16,7 +16,7 @@ from application.services.helpdesk import HelpdeskServiceFactory
 from application.use_cases.tickets import QueuedTicketSummary, TicketDetailsSummary
 from bot.callbacks import OperatorActionCallback
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
-from domain.tickets import InvalidTicketTransitionError
+from domain.tickets import InvalidTicketTransitionError, format_status_for_humans
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
     OperatorPresenceHelper,
@@ -37,11 +37,11 @@ async def handle_cancel(
     state: FSMContext,
 ) -> None:
     if await state.get_state() is None:
-        await message.answer("No operator action is active.")
+        await message.answer("Сейчас нет активного действия оператора.")
         return
 
     await state.clear()
-    await message.answer("Operator action cancelled.")
+    await message.answer("Действие оператора отменено.")
 
 
 @router.message(Command("queue"))
@@ -52,7 +52,7 @@ async def handle_queue(
     operator_presence: OperatorPresenceHelper,
 ) -> None:
     if not await global_rate_limiter.allow():
-        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
         return
 
     if message.from_user is not None:
@@ -62,10 +62,10 @@ async def handle_queue(
         queued_tickets = await helpdesk_service.list_queued_tickets(limit=10)
 
     if not queued_tickets:
-        await message.answer("Queue is empty.")
+        await message.answer("Очередь пуста.")
         return
 
-    await message.answer("Queued tickets:")
+    await message.answer("Заявки в очереди:")
     for ticket in queued_tickets:
         await message.answer(
             _format_queued_ticket(ticket),
@@ -85,18 +85,18 @@ async def handle_take_next(
     ticket_lock_manager: TicketLockManager,
 ) -> None:
     if message.from_user is None:
-        await message.answer("Operator identity is unavailable for this action.")
+        await message.answer("Не удалось определить оператора для этого действия.")
         return
 
     if not await global_rate_limiter.allow():
-        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
         return
 
     await operator_presence.touch(operator_id=message.from_user.id)
 
     queue_lock = ticket_lock_manager.for_ticket("queue-next")
     if not await queue_lock.acquire():
-        await message.answer("Queue acquisition is busy. Please retry in a moment.")
+        await message.answer("Очередь сейчас занята. Попробуйте чуть позже.")
         return
 
     try:
@@ -115,13 +115,13 @@ async def handle_take_next(
         await queue_lock.release()
 
     if ticket is None:
-        await message.answer("No queued ticket is currently available.")
+        await message.answer("Сейчас нет доступных заявок в очереди.")
         return
 
     if ticket_details is None:
         await message.answer(
-            f"Took next ticket {ticket.public_number}. "
-            f"Current status={ticket.status.value}."
+            f"Следующая заявка {ticket.public_number} взята в работу. "
+            f"Текущий статус: {_format_status(ticket.status)}."
         )
         return
 
@@ -143,16 +143,16 @@ async def handle_ticket_details(
     operator_presence: OperatorPresenceHelper,
 ) -> None:
     if command.args is None:
-        await message.answer("Usage: /ticket <ticket_public_id>")
+        await message.answer("Использование: /ticket <ticket_public_id>")
         return
 
     ticket_public_id = _parse_ticket_public_id(command.args.strip())
     if ticket_public_id is None:
-        await message.answer("Invalid ticket identifier.")
+        await message.answer("Некорректный идентификатор заявки.")
         return
 
     if not await global_rate_limiter.allow():
-        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
         return
 
     if message.from_user is not None:
@@ -164,7 +164,7 @@ async def handle_ticket_details(
         )
 
     if ticket_details is None:
-        await message.answer("Ticket not found.")
+        await message.answer("Заявка не найдена.")
         return
 
     await message.answer(
@@ -184,7 +184,7 @@ async def handle_stats(
     operator_presence: OperatorPresenceHelper,
 ) -> None:
     if not await global_rate_limiter.allow():
-        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
         return
 
     if message.from_user is not None:
@@ -194,12 +194,12 @@ async def handle_stats(
         stats = await helpdesk_service.get_basic_stats()
 
     lines = [
-        "Ticket stats:",
-        f"total={stats.total}",
-        f"open={stats.open_total}",
+        "Статистика по заявкам:",
+        f"всего={stats.total}",
+        f"открыто={stats.open_total}",
     ]
     for status, count in sorted(stats.by_status.items(), key=lambda item: item[0].value):
-        lines.append(f"{status.value}={count}")
+        lines.append(f"{_format_status(status)}={count}")
 
     await message.answer("\n".join(lines))
 
@@ -214,13 +214,13 @@ async def handle_view_action(
 ) -> None:
     ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
-        await _respond_to_operator(callback, "Invalid ticket identifier.")
+        await _respond_to_operator(callback, "Некорректный идентификатор заявки.")
         return
 
     if not await global_rate_limiter.allow():
         await _respond_to_operator(
             callback,
-            "Service is temporarily busy. Please retry in a moment.",
+            "Сервис временно недоступен. Попробуйте чуть позже.",
         )
         return
 
@@ -232,10 +232,10 @@ async def handle_view_action(
         )
 
     if ticket_details is None:
-        await _respond_to_operator(callback, "Ticket not found.")
+        await _respond_to_operator(callback, "Заявка не найдена.")
         return
 
-    await callback.answer(f"Viewing {ticket_details.public_number}")
+    await callback.answer(f"Открыта заявка {ticket_details.public_number}")
     if callback.message is not None:
         await callback.message.answer(
             _format_ticket_details(ticket_details),
@@ -289,13 +289,13 @@ async def handle_take_action(
         return
 
     if ticket is None:
-        await _respond_to_operator(callback, "Ticket not found.")
+        await _respond_to_operator(callback, "Заявка не найдена.")
         return
 
     if ticket.event_type == TicketEventType.REASSIGNED:
-        answer_text = f"Ticket {ticket.public_number} reassigned."
+        answer_text = f"Заявка {ticket.public_number} переназначена."
     else:
-        answer_text = f"Ticket {ticket.public_number} assigned."
+        answer_text = f"Заявка {ticket.public_number} назначена."
 
     if callback.message is None or ticket_details is None:
         await _respond_to_operator(callback, answer_text)
@@ -322,13 +322,13 @@ async def handle_reply_action(
 ) -> None:
     ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
-        await _respond_to_operator(callback, "Invalid ticket identifier.")
+        await _respond_to_operator(callback, "Некорректный идентификатор заявки.")
         return
 
     if not await global_rate_limiter.allow():
         await _respond_to_operator(
             callback,
-            "Service is temporarily busy. Please retry in a moment.",
+            "Сервис временно недоступен. Попробуйте чуть позже.",
         )
         return
 
@@ -340,17 +340,17 @@ async def handle_reply_action(
         )
 
     if ticket_details is None:
-        await _respond_to_operator(callback, "Ticket not found.")
+        await _respond_to_operator(callback, "Заявка не найдена.")
         return
 
     await state.set_state(OperatorTicketStates.replying)
     await state.update_data(ticket_public_id=str(ticket_public_id))
     await _respond_to_operator(
         callback,
-        f"Reply mode enabled for {ticket_details.public_number}.",
+        f"Режим ответа для заявки {ticket_details.public_number} включен.",
         (
-            f"Send the reply text for {ticket_details.public_number}.\n"
-            "Use /cancel to abort."
+            f"Отправьте текст ответа для заявки {ticket_details.public_number}.\n"
+            "Используйте /cancel, чтобы отменить действие."
         ),
     )
 
@@ -366,15 +366,15 @@ async def handle_reply_message(
     ticket_lock_manager: TicketLockManager,
 ) -> None:
     if message.from_user is None or message.text is None:
-        await message.answer("Operator identity is unavailable for this action.")
+        await message.answer("Не удалось определить оператора для этого действия.")
         return
 
     if message.text.startswith("/"):
-        await message.answer("Reply mode is active. Send text or use /cancel.")
+        await message.answer("Сейчас активен режим ответа. Отправьте текст или используйте /cancel.")
         return
 
     if not await global_rate_limiter.allow():
-        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
         return
 
     await operator_presence.touch(operator_id=message.from_user.id)
@@ -383,12 +383,12 @@ async def handle_reply_message(
     ticket_public_id = _parse_ticket_public_id(state_data.get("ticket_public_id"))
     if ticket_public_id is None:
         await state.clear()
-        await message.answer("Reply context is missing. Start the reply action again.")
+        await message.answer("Контекст ответа потерян. Запустите действие заново.")
         return
 
     lock = ticket_lock_manager.for_ticket(str(ticket_public_id))
     if not await lock.acquire():
-        await message.answer("Ticket is being processed by another operator.")
+        await message.answer("Заявка сейчас обрабатывается другим оператором.")
         return
 
     try:
@@ -409,7 +409,7 @@ async def handle_reply_message(
 
             if reply_result is None:
                 await state.clear()
-                await message.answer("Ticket not found.")
+                await message.answer("Заявка не найдена.")
                 return
 
             ticket_details = await helpdesk_service.get_ticket_details(
@@ -424,17 +424,17 @@ async def handle_reply_message(
     try:
         await bot.send_message(
             reply_result.client_chat_id,
-            f"Reply for ticket {reply_result.ticket.public_number}:\n{message.text}",
+            f"Ответ по заявке {reply_result.ticket.public_number}:\n{message.text}",
         )
     except TelegramAPIError as exc:
         delivery_error = str(exc)
 
     if delivery_error is None:
-        await message.answer(f"Reply sent for {reply_result.ticket.public_number}.")
+        await message.answer(f"Ответ по заявке {reply_result.ticket.public_number} отправлен.")
     else:
         await message.answer(
-            f"Reply saved for {reply_result.ticket.public_number}, "
-            f"but client delivery failed: {delivery_error}"
+            f"Ответ по заявке {reply_result.ticket.public_number} сохранен, "
+            f"но доставить его клиенту не удалось: {delivery_error}"
         )
 
     if ticket_details is not None:
@@ -458,13 +458,13 @@ async def handle_reassign_action(
 ) -> None:
     ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
-        await _respond_to_operator(callback, "Invalid ticket identifier.")
+        await _respond_to_operator(callback, "Некорректный идентификатор заявки.")
         return
 
     if not await global_rate_limiter.allow():
         await _respond_to_operator(
             callback,
-            "Service is temporarily busy. Please retry in a moment.",
+            "Сервис временно недоступен. Попробуйте чуть позже.",
         )
         return
 
@@ -476,17 +476,17 @@ async def handle_reassign_action(
         )
 
     if ticket_details is None:
-        await _respond_to_operator(callback, "Ticket not found.")
+        await _respond_to_operator(callback, "Заявка не найдена.")
         return
 
     await state.set_state(OperatorTicketStates.reassigning)
     await state.update_data(ticket_public_id=str(ticket_public_id))
     await _respond_to_operator(
         callback,
-        f"Reassign mode enabled for {ticket_details.public_number}.",
+        f"Режим переназначения для заявки {ticket_details.public_number} включен.",
         (
-            "Send the target operator Telegram user ID, optionally followed by a display "
-            "name.\nExample: 123456789 Jane Doe\nUse /cancel to abort."
+            "Отправьте идентификатор пользователя Telegram целевого оператора, при необходимости добавьте "
+            "имя.\nПример: 123456789 Иван Иванов\nИспользуйте /cancel, чтобы отменить действие."
         ),
     )
 
@@ -501,15 +501,17 @@ async def handle_reassign_message(
     ticket_lock_manager: TicketLockManager,
 ) -> None:
     if message.text is None:
-        await message.answer("Send the target operator Telegram user ID.")
+        await message.answer("Отправьте идентификатор пользователя Telegram целевого оператора.")
         return
 
     if message.text.startswith("/"):
-        await message.answer("Reassign mode is active. Send operator data or use /cancel.")
+        await message.answer(
+            "Сейчас активен режим переназначения. Отправьте данные оператора или используйте /cancel."
+        )
         return
 
     if not await global_rate_limiter.allow():
-        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
         return
 
     if message.from_user is not None:
@@ -518,7 +520,7 @@ async def handle_reassign_message(
     target = _parse_reassign_target(message.text)
     if target is None:
         await message.answer(
-            "Invalid input. Send a Telegram user ID, optionally followed by a display name."
+            "Некорректный ввод. Отправьте идентификатор пользователя Telegram, при необходимости добавьте имя."
         )
         return
 
@@ -526,12 +528,12 @@ async def handle_reassign_message(
     ticket_public_id = _parse_ticket_public_id(state_data.get("ticket_public_id"))
     if ticket_public_id is None:
         await state.clear()
-        await message.answer("Reassign context is missing. Start the action again.")
+        await message.answer("Контекст переназначения потерян. Запустите действие заново.")
         return
 
     lock = ticket_lock_manager.for_ticket(str(ticket_public_id))
     if not await lock.acquire():
-        await message.answer("Ticket is being processed by another operator.")
+        await message.answer("Заявка сейчас обрабатывается другим оператором.")
         return
 
     try:
@@ -550,7 +552,7 @@ async def handle_reassign_message(
 
             if ticket is None:
                 await state.clear()
-                await message.answer("Ticket not found.")
+                await message.answer("Заявка не найдена.")
                 return
 
             ticket_details = await helpdesk_service.get_ticket_details(
@@ -562,13 +564,13 @@ async def handle_reassign_message(
     await state.clear()
 
     if ticket_details is None:
-        await message.answer(f"Ticket {ticket.public_number} updated.")
+        await message.answer(f"Заявка {ticket.public_number} обновлена.")
         return
 
     if ticket.event_type == TicketEventType.REASSIGNED:
-        response_text = f"Ticket {ticket.public_number} reassigned."
+        response_text = f"Заявка {ticket.public_number} переназначена."
     else:
-        response_text = f"Ticket {ticket.public_number} assigned."
+        response_text = f"Заявка {ticket.public_number} назначена."
 
     await message.answer(response_text)
     await message.answer(
@@ -618,14 +620,14 @@ async def handle_close_action(
         return
 
     if ticket is None:
-        await _respond_to_operator(callback, "Ticket not found.")
+        await _respond_to_operator(callback, "Заявка не найдена.")
         return
 
     if callback.message is None or ticket_details is None:
-        await _respond_to_operator(callback, f"Ticket {ticket.public_number} closed.")
+        await _respond_to_operator(callback, f"Заявка {ticket.public_number} закрыта.")
         return
 
-    await callback.answer(f"Ticket {ticket.public_number} closed.")
+    await callback.answer(f"Заявка {ticket.public_number} закрыта.")
     await callback.message.answer(
         _format_ticket_details(ticket_details),
         reply_markup=_build_ticket_actions_markup(
@@ -673,14 +675,14 @@ async def handle_escalate_action(
         return
 
     if ticket is None:
-        await _respond_to_operator(callback, "Ticket not found.")
+        await _respond_to_operator(callback, "Заявка не найдена.")
         return
 
     if callback.message is None or ticket_details is None:
-        await _respond_to_operator(callback, f"Ticket {ticket.public_number} escalated.")
+        await _respond_to_operator(callback, f"Заявка {ticket.public_number} эскалирована.")
         return
 
-    await callback.answer(f"Ticket {ticket.public_number} escalated.")
+    await callback.answer(f"Заявка {ticket.public_number} эскалирована.")
     await callback.message.answer(
         _format_ticket_details(ticket_details),
         reply_markup=_build_ticket_actions_markup(
@@ -701,14 +703,14 @@ async def _operator_ticket_action(
 ) -> AsyncIterator[UUID | None]:
     ticket_public_id = _parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
-        await _respond_to_operator(callback, "Invalid ticket identifier.")
+        await _respond_to_operator(callback, "Некорректный идентификатор заявки.")
         yield None
         return
 
     if not await global_rate_limiter.allow():
         await _respond_to_operator(
             callback,
-            "Service is temporarily busy. Please retry in a moment.",
+            "Сервис временно недоступен. Попробуйте чуть позже.",
         )
         yield None
         return
@@ -719,7 +721,7 @@ async def _operator_ticket_action(
     if not await lock.acquire():
         await _respond_to_operator(
             callback,
-            "Ticket is being processed by another operator.",
+            "Заявка сейчас обрабатывается другим оператором.",
         )
         yield None
         return
@@ -750,21 +752,21 @@ def _build_ticket_actions_markup(
 
     first_row = [
         (
-            "View",
+            "Открыть",
             OperatorActionCallback(action="view", ticket_public_id=callback_value).pack(),
         )
     ]
     if status == TicketStatus.QUEUED:
         first_row.append(
             (
-                "Take",
+                "Взять",
                 OperatorActionCallback(action="take", ticket_public_id=callback_value).pack(),
             )
         )
     elif status in {TicketStatus.ASSIGNED, TicketStatus.ESCALATED}:
         first_row.append(
             (
-                "Reply",
+                "Ответить",
                 OperatorActionCallback(action="reply", ticket_public_id=callback_value).pack(),
             )
         )
@@ -774,14 +776,14 @@ def _build_ticket_actions_markup(
     if status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}:
         second_row.append(
             (
-                "Escalate",
+                "Эскалировать",
                 OperatorActionCallback(action="escalate", ticket_public_id=callback_value).pack(),
             )
         )
     if status != TicketStatus.CLOSED:
         second_row.append(
             (
-                "Close",
+                "Закрыть",
                 OperatorActionCallback(action="close", ticket_public_id=callback_value).pack(),
             )
         )
@@ -791,7 +793,7 @@ def _build_ticket_actions_markup(
     if status != TicketStatus.CLOSED:
         builder.row(
             _build_callback_button(
-                "Reassign",
+                "Переназначить",
                 OperatorActionCallback(action="reassign", ticket_public_id=callback_value).pack(),
             )
         )
@@ -807,29 +809,29 @@ def _format_queued_ticket(ticket: QueuedTicketSummary) -> str:
     return "\n".join(
         [
             f"{ticket.public_number}",
-            f"Public ID: {ticket.public_id}",
-            f"Status: {ticket.status.value}",
-            f"Priority: {ticket.priority}",
-            f"Subject: {ticket.subject}",
+            f"Публичный идентификатор: {ticket.public_id}",
+            f"Статус: {_format_status(ticket.status)}",
+            f"Приоритет: {_format_priority(ticket.priority)}",
+            f"Тема: {ticket.subject}",
         ]
     )
 
 
 def _format_ticket_details(ticket: TicketDetailsSummary) -> str:
-    assigned_operator = "unassigned"
+    assigned_operator = "не назначен"
     if ticket.assigned_operator_id is not None:
-        assigned_name = ticket.assigned_operator_name or "operator"
+        assigned_name = ticket.assigned_operator_name or "оператор"
         assigned_operator = f"{assigned_name} (id={ticket.assigned_operator_id})"
 
     lines = [
         f"{ticket.public_number}",
-        f"Public ID: {ticket.public_id}",
-        f"Status: {ticket.status.value}",
-        f"Priority: {ticket.priority}",
-        f"Subject: {ticket.subject}",
-        f"Assigned: {assigned_operator}",
+        f"Публичный идентификатор: {ticket.public_id}",
+        f"Статус: {_format_status(ticket.status)}",
+        f"Приоритет: {_format_priority(ticket.priority)}",
+        f"Тема: {ticket.subject}",
+        f"Назначен: {assigned_operator}",
         (
-            "Last message: "
+            "Последнее сообщение: "
             f"{_format_last_message(ticket.last_message_text, ticket.last_message_sender_type)}"
         ),
     ]
@@ -850,7 +852,30 @@ def _format_last_message(
     if sender_type is None:
         return preview
 
-    return f"[{sender_type.value}] {preview}"
+    return f"[{_format_sender_type(sender_type)}] {preview}"
+
+
+def _format_status(status: TicketStatus) -> str:
+    return format_status_for_humans(status)
+
+
+def _format_priority(priority: str) -> str:
+    priority_labels = {
+        "low": "низкий",
+        "normal": "обычный",
+        "high": "высокий",
+        "urgent": "срочный",
+    }
+    return priority_labels.get(priority, priority)
+
+
+def _format_sender_type(sender_type: TicketMessageSenderType) -> str:
+    sender_labels = {
+        TicketMessageSenderType.CLIENT: "клиент",
+        TicketMessageSenderType.OPERATOR: "оператор",
+        TicketMessageSenderType.SYSTEM: "система",
+    }
+    return sender_labels.get(sender_type, sender_type.value)
 
 
 def _parse_ticket_public_id(value: str | None) -> UUID | None:
@@ -873,7 +898,7 @@ def _parse_reassign_target(text: str) -> tuple[int, str] | None:
     except ValueError:
         return None
 
-    display_name = parts[1].strip() if len(parts) > 1 else f"Operator {telegram_user_id}"
+    display_name = parts[1].strip() if len(parts) > 1 else f"Оператор {telegram_user_id}"
     if not display_name:
-        display_name = f"Operator {telegram_user_id}"
+        display_name = f"Оператор {telegram_user_id}"
     return telegram_user_id, display_name

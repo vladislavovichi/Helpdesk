@@ -36,6 +36,17 @@ class InvalidTicketTransitionError(ValueError):
     """Raised when a workflow action is not valid for the current ticket state."""
 
 
+def format_status_for_humans(status: TicketStatus) -> str:
+    status_labels = {
+        TicketStatus.NEW: "новый",
+        TicketStatus.QUEUED: "в очереди",
+        TicketStatus.ASSIGNED: "назначен",
+        TicketStatus.ESCALATED: "эскалирован",
+        TicketStatus.CLOSED: "закрыт",
+    }
+    return status_labels.get(status, status.value)
+
+
 def is_open_status(status: TicketStatus) -> bool:
     return status in OPEN_TICKET_STATUSES
 
@@ -43,33 +54,33 @@ def is_open_status(status: TicketStatus) -> bool:
 def ensure_assignable(status: TicketStatus) -> None:
     if status not in ASSIGNABLE_TICKET_STATUSES:
         raise InvalidTicketTransitionError(
-            f"Ticket cannot be assigned while in status {status.value!r}."
+            f"Заявку нельзя назначить, пока она находится в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_escalatable(status: TicketStatus) -> None:
     if status not in ESCALATABLE_TICKET_STATUSES:
         raise InvalidTicketTransitionError(
-            f"Ticket cannot be escalated while in status {status.value!r}."
+            f"Заявку нельзя эскалировать, пока она находится в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_closable(status: TicketStatus) -> None:
     if not is_open_status(status):
         raise InvalidTicketTransitionError(
-            f"Ticket cannot be closed while in status {status.value!r}."
+            f"Заявку нельзя закрыть, пока она находится в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_message_addable(status: TicketStatus) -> None:
     if not is_open_status(status):
         raise InvalidTicketTransitionError(
-            f"Messages cannot be added while the ticket is {status.value!r}."
+            f"Нельзя добавлять сообщения, пока заявка находится в статусе «{format_status_for_humans(status)}»."
         )
 
 
 def ensure_operator_replyable(status: TicketStatus) -> None:
     if status not in OPERATOR_REPLYABLE_TICKET_STATUSES:
         raise InvalidTicketTransitionError(
-            f"Operator replies are not allowed while the ticket is {status.value!r}."
+            f"Ответ оператора недоступен, пока заявка находится в статусе «{format_status_for_humans(status)}»."
         )

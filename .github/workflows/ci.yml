@@ -28,9 +28,6 @@ jobs:
       - name: Install Poetry
         run: python -m pip install --upgrade pip poetry
 
-      - name: Configure Poetry
-        run: poetry config virtualenvs.in-project true
-
       - name: Install dependencies
         run: poetry install
 

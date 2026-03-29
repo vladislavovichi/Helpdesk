@@ -2,7 +2,7 @@ services:
   app:
     build:
       context: .
-    command: ["poetry", "run", "python", "-m", "app.main"]
+    command: ["python", "-m", "app.main"]
     environment:
       PYTHONPATH: /app/src
     env_file:
@@ -23,7 +23,7 @@ services:
       POSTGRES_USER: ${DATABASE__USER:-helpdesk}
       POSTGRES_PASSWORD: ${DATABASE__PASSWORD:-helpdesk}
     ports:
-      - "${POSTGRES_EXPOSE_PORT:-5432}:5432"
+      - "${POSTGRES_EXPOSE_PORT:-5434}:5432"
     healthcheck:
       test:
         [
@@ -40,7 +40,7 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
-      - "${REDIS_EXPOSE_PORT:-6379}:6379"
+      - "${REDIS_EXPOSE_PORT:-6381}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

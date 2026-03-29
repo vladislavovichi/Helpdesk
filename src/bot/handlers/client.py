@@ -22,11 +22,11 @@ async def handle_client_text(
         return
 
     if not await global_rate_limiter.allow():
-        await message.answer("Service is temporarily busy. Please retry in a moment.")
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
         return
 
     if not await chat_rate_limiter.allow(chat_id=message.chat.id):
-        await message.answer("Too many requests from this chat. Please slow down.")
+        await message.answer("Слишком много запросов из этого чата. Пожалуйста, подождите немного.")
         return
 
     try:
@@ -44,15 +44,15 @@ async def handle_client_text(
         await ticket_stream_publisher.publish_new_ticket(
             ticket_id=str(ticket.public_id),
             client_chat_id=message.chat.id,
-            subject=message.text.strip()[:255] or "Client request",
+            subject=message.text.strip()[:255] or "Обращение клиента",
         )
         await message.answer(
-            f"Ticket {ticket.public_number} created and queued. "
-            "An operator will pick it up shortly."
+            f"Заявка {ticket.public_number} создана и поставлена в очередь. "
+            "Оператор скоро ее возьмет в работу."
         )
         return
 
     await message.answer(
-        f"Added your message to ticket {ticket.public_number}. "
-        "The current workflow stays active."
+        f"Ваше сообщение добавлено в заявку {ticket.public_number}. "
+        "Работа по ней продолжается."
     )

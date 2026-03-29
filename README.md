@@ -195,7 +195,7 @@ Install dependencies:
 make install
 ```
 
-The Make targets default to an in-project Poetry virtualenv at `.venv/`.
+The Make targets use Poetry's active virtual environment.
 
 Format code:
 

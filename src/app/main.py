@@ -49,3 +49,7 @@ def main() -> None:
         asyncio.run(run())
     except KeyboardInterrupt:
         logging.getLogger(__name__).info("Shutdown requested, stopping service.")
+
+
+if __name__ == "__main__":
+    main()

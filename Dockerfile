@@ -14,11 +14,11 @@ RUN apt-get update \
     && pip install --no-cache-dir "poetry==${POETRY_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
-RUN poetry install --only main
+COPY pyproject.toml poetry.lock README.md ./
+RUN poetry install --only main --no-root
 
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY src ./src
 
-CMD ["poetry", "run", "python", "-m", "app.main"]
+CMD ["python", "-m", "app.main"]

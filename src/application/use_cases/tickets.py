@@ -29,7 +29,9 @@ def utcnow() -> datetime:
 
 
 def build_ticket_subject(message_text: str) -> str:
-    first_line = message_text.strip().splitlines()[0] if message_text.strip() else "Client request"
+    first_line = (
+        message_text.strip().splitlines()[0] if message_text.strip() else "Обращение клиента"
+    )
     return first_line[:255]
 
 
@@ -189,7 +191,7 @@ class CreateTicketFromClientMessageUseCase:
         active_ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
         if active_ticket is not None:
             if active_ticket.id is None:
-                raise RuntimeError("Active ticket identifier is missing.")
+                raise RuntimeError("Не найден идентификатор активной заявки.")
 
             ensure_message_addable(active_ticket.status)
             await self.ticket_message_repository.add(
@@ -218,7 +220,7 @@ class CreateTicketFromClientMessageUseCase:
             subject=build_ticket_subject(text),
         )
         if ticket.id is None:
-            raise RuntimeError("Ticket identifier was not generated.")
+            raise RuntimeError("Не удалось сгенерировать идентификатор заявки.")
 
         await self.ticket_event_repository.add(
             ticket_id=ticket.id,
@@ -232,7 +234,7 @@ class CreateTicketFromClientMessageUseCase:
 
         queued_ticket = await self.ticket_repository.enqueue(ticket_public_id=ticket.public_id)
         if queued_ticket is None:
-            raise RuntimeError("Ticket could not be placed into the queue.")
+            raise RuntimeError("Не удалось поставить заявку в очередь.")
 
         await self.ticket_event_repository.add(
             ticket_id=ticket.id,
@@ -351,7 +353,7 @@ class AssignTicketToOperatorUseCase:
         previous_status = ticket.status
         previous_operator_id = ticket.assigned_operator_id
         if previous_status == TicketStatus.ASSIGNED and previous_operator_id == operator_id:
-            raise InvalidTicketTransitionError("Ticket is already assigned to this operator.")
+            raise InvalidTicketTransitionError("Заявка уже назначена этому оператору.")
 
         event_type = TicketEventType.ASSIGNED
         if previous_operator_id is not None and previous_operator_id != operator_id:
@@ -517,7 +519,7 @@ class ReplyToTicketAsOperatorUseCase:
             ticket_details.assigned_operator_id is not None
             and ticket_details.assigned_operator_id != operator_id
         ):
-            raise InvalidTicketTransitionError("Ticket is assigned to another operator.")
+            raise InvalidTicketTransitionError("Заявка назначена другому оператору.")
 
         ticket = await self._add_message_to_ticket(
             ticket_public_id=ticket_public_id,
