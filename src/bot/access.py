@@ -1,42 +1,59 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from aiogram.types import CallbackQuery, Message
 
-from application.services.authorization import Permission
-from bot.presentation import OPERATOR_NAVIGATION_BUTTONS, SUPER_ADMIN_NAVIGATION_BUTTONS
+from application.services.authorization import Permission, get_permission_denied_message
+from bot.presentation import (
+    OPERATOR_NAVIGATION_BUTTONS,
+    SUPER_ADMIN_NAVIGATION_BUTTONS,
+    build_main_menu,
+)
+from domain.enums.roles import UserRole
+
+PROTECTED_COMMAND_PERMISSIONS: Mapping[str, Permission] = {
+    "queue": Permission.ACCESS_OPERATOR,
+    "take": Permission.ACCESS_OPERATOR,
+    "ticket": Permission.ACCESS_OPERATOR,
+    "macros": Permission.ACCESS_OPERATOR,
+    "tags": Permission.ACCESS_OPERATOR,
+    "alltags": Permission.ACCESS_OPERATOR,
+    "addtag": Permission.ACCESS_OPERATOR,
+    "rmtag": Permission.ACCESS_OPERATOR,
+    "cancel": Permission.ACCESS_OPERATOR,
+    "stats": Permission.ACCESS_OPERATOR,
+    "operators": Permission.MANAGE_OPERATORS,
+    "add_operator": Permission.MANAGE_OPERATORS,
+    "remove_operator": Permission.MANAGE_OPERATORS,
+}
+PROTECTED_MESSAGE_TEXT_PERMISSIONS: Mapping[str, Permission] = {
+    **{button_text: Permission.ACCESS_OPERATOR for button_text in OPERATOR_NAVIGATION_BUTTONS},
+    **{
+        button_text: Permission.MANAGE_OPERATORS
+        for button_text in SUPER_ADMIN_NAVIGATION_BUTTONS
+    },
+}
+PROTECTED_CALLBACK_PREFIX_PERMISSIONS: tuple[tuple[str, Permission], ...] = (
+    ("admin_operator:", Permission.MANAGE_OPERATORS),
+    ("operator:", Permission.ACCESS_OPERATOR),
+    ("operator_macro:", Permission.ACCESS_OPERATOR),
+)
+PROTECTED_STATE_PERMISSIONS: Mapping[str, Permission] = {
+    "OperatorTicketStates:replying": Permission.ACCESS_OPERATOR,
+    "OperatorTicketStates:reassigning": Permission.ACCESS_OPERATOR,
+}
 
 OPERATOR_COMMANDS = frozenset(
-    {
-        "queue",
-        "take",
-        "ticket",
-        "macros",
-        "tags",
-        "alltags",
-        "addtag",
-        "rmtag",
-        "cancel",
-        "stats",
-    }
+    command_name
+    for command_name, permission in PROTECTED_COMMAND_PERMISSIONS.items()
+    if permission == Permission.ACCESS_OPERATOR
 )
 SUPER_ADMIN_COMMANDS = frozenset(
-    {
-        "operators",
-        "add_operator",
-        "remove_operator",
-    }
+    command_name
+    for command_name, permission in PROTECTED_COMMAND_PERMISSIONS.items()
+    if permission == Permission.MANAGE_OPERATORS
 )
-OPERATOR_CALLBACK_PREFIXES = frozenset({"operator:", "operator_macro:"})
-SUPER_ADMIN_CALLBACK_PREFIXES = frozenset({"admin_operator:"})
-OPERATOR_STATE_NAMES = frozenset(
-    {
-        "OperatorTicketStates:replying",
-        "OperatorTicketStates:reassigning",
-    }
-)
-
-OPERATOR_ACCESS_DENIED_MESSAGE = "Это действие доступно только операторам и супер администратору."
-SUPER_ADMIN_ACCESS_DENIED_MESSAGE = "Это действие доступно только супер администратору."
 
 
 def extract_command_name(text: str | None) -> str | None:
@@ -61,50 +78,41 @@ def resolve_required_permission(
     state_name: str | None = None,
 ) -> Permission | None:
     command_name = extract_command_name(message_text)
-    if command_name in SUPER_ADMIN_COMMANDS:
-        return Permission.MANAGE_OPERATORS
+    if command_name is not None:
+        permission = PROTECTED_COMMAND_PERMISSIONS.get(command_name)
+        if permission is not None:
+            return permission
 
-    if command_name in OPERATOR_COMMANDS:
-        return Permission.ACCESS_OPERATOR
+    if message_text is not None:
+        permission = PROTECTED_MESSAGE_TEXT_PERMISSIONS.get(message_text)
+        if permission is not None:
+            return permission
 
-    if message_text in SUPER_ADMIN_NAVIGATION_BUTTONS:
-        return Permission.MANAGE_OPERATORS
+    if callback_data is not None:
+        for callback_prefix, permission in PROTECTED_CALLBACK_PREFIX_PERMISSIONS:
+            if callback_data.startswith(callback_prefix):
+                return permission
 
-    if message_text in OPERATOR_NAVIGATION_BUTTONS:
-        return Permission.ACCESS_OPERATOR
-
-    if callback_data is not None and any(
-        callback_data.startswith(prefix) for prefix in SUPER_ADMIN_CALLBACK_PREFIXES
-    ):
-        return Permission.MANAGE_OPERATORS
-
-    if callback_data is not None and any(
-        callback_data.startswith(prefix) for prefix in OPERATOR_CALLBACK_PREFIXES
-    ):
-        return Permission.ACCESS_OPERATOR
-
-    if state_name in OPERATOR_STATE_NAMES:
-        return Permission.ACCESS_OPERATOR
+    if state_name is not None:
+        permission = PROTECTED_STATE_PERMISSIONS.get(state_name)
+        if permission is not None:
+            return permission
 
     return None
-
-
-def get_permission_denied_message(permission: Permission) -> str:
-    if permission == Permission.MANAGE_OPERATORS:
-        return SUPER_ADMIN_ACCESS_DENIED_MESSAGE
-    if permission == Permission.ACCESS_ADMIN:
-        return SUPER_ADMIN_ACCESS_DENIED_MESSAGE
-    return OPERATOR_ACCESS_DENIED_MESSAGE
 
 
 async def deny_event_access(
     event: Message | CallbackQuery,
     *,
     permission: Permission,
+    role: UserRole = UserRole.USER,
 ) -> None:
     message_text = get_permission_denied_message(permission)
     if isinstance(event, CallbackQuery):
         await event.answer(message_text, show_alert=True)
         return
 
-    await event.answer(message_text)
+    await event.answer(
+        message_text,
+        reply_markup=build_main_menu(role),
+    )

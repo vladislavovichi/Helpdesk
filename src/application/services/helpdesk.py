@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
+from application.services.authorization import AuthorizationError, Permission
 from application.services.stats import HelpdeskOperationalStats, HelpdeskStatsService
 from application.use_cases.tickets import (
     AddMessageToTicketUseCase,
@@ -118,6 +119,29 @@ class HelpdeskService:
         init=False, repr=False
     )
     _stats_service: HelpdeskStatsService = field(init=False, repr=False)
+
+    async def _ensure_permission(
+        self,
+        *,
+        permission: Permission,
+        telegram_user_id: int | None,
+    ) -> None:
+        if telegram_user_id is None:
+            raise AuthorizationError(permission)
+
+        if permission == Permission.MANAGE_OPERATORS:
+            if telegram_user_id != self.super_admin_telegram_user_id:
+                raise AuthorizationError(permission)
+            return
+
+        if telegram_user_id == self.super_admin_telegram_user_id:
+            return
+
+        is_operator = await self.operator_repository.exists_active_by_telegram_user_id(
+            telegram_user_id=telegram_user_id
+        )
+        if not is_operator:
+            raise AuthorizationError(permission)
 
     async def _sync_sla_deadline(self, *, ticket_public_id: UUID) -> None:
         if self.sla_deadline_scheduler is None:
@@ -307,7 +331,13 @@ class HelpdeskService:
         telegram_user_id: int,
         display_name: str,
         username: str | None = None,
+        actor_telegram_user_id: int | None = None,
     ) -> TicketSummary | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         result = await self._assign_ticket_to_operator(
             ticket_public_id=ticket_public_id,
             telegram_user_id=telegram_user_id,
@@ -319,6 +349,21 @@ class HelpdeskService:
         return result
 
     async def close_ticket(self, *, ticket_public_id: UUID) -> TicketSummary | None:
+        result = await self._close_ticket(ticket_public_id=ticket_public_id)
+        if result is not None:
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
+        return result
+
+    async def close_ticket_as_operator(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor_telegram_user_id: int | None,
+    ) -> TicketSummary | None:
+        await self._ensure_permission(
+            permission=Permission.ACCESS_OPERATOR,
+            telegram_user_id=actor_telegram_user_id,
+        )
         result = await self._close_ticket(ticket_public_id=ticket_public_id)
         if result is not None:
             await self._sync_sla_deadline(ticket_public_id=result.public_id)
@@ -338,7 +383,13 @@ class HelpdeskService:
         *,
         limit: int | None = None,
         prioritize_priority: bool = False,
+        actor_telegram_user_id: int | None = None,
     ) -> Sequence[QueuedTicketSummary]:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._list_queued_tickets(
             limit=limit,
             prioritize_priority=prioritize_priority,
@@ -351,7 +402,13 @@ class HelpdeskService:
         display_name: str,
         username: str | None = None,
         prioritize_priority: bool = False,
+        actor_telegram_user_id: int | None = None,
     ) -> TicketSummary | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         result = await self._assign_next_queued_ticket(
             telegram_user_id=telegram_user_id,
             display_name=display_name,
@@ -366,7 +423,13 @@ class HelpdeskService:
         self,
         *,
         ticket_public_id: UUID,
+        actor_telegram_user_id: int | None = None,
     ) -> TicketDetailsSummary | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._get_ticket_details(ticket_public_id=ticket_public_id)
 
     async def reply_to_ticket_as_operator(
@@ -378,7 +441,13 @@ class HelpdeskService:
         username: str | None,
         telegram_message_id: int,
         text: str,
+        actor_telegram_user_id: int | None = None,
     ) -> OperatorReplyResult | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         result = await self._reply_to_ticket_as_operator(
             ticket_public_id=ticket_public_id,
             telegram_user_id=telegram_user_id,
@@ -391,10 +460,28 @@ class HelpdeskService:
             await self._sync_sla_deadline(ticket_public_id=result.ticket.public_id)
         return result
 
-    async def list_macros(self) -> Sequence[MacroSummary]:
+    async def list_macros(
+        self,
+        *,
+        actor_telegram_user_id: int | None = None,
+    ) -> Sequence[MacroSummary]:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._list_macros()
 
-    async def list_operators(self) -> Sequence[OperatorSummary]:
+    async def list_operators(
+        self,
+        *,
+        actor_telegram_user_id: int | None = None,
+    ) -> Sequence[OperatorSummary]:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.MANAGE_OPERATORS,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._list_operators()
 
     async def promote_operator(
@@ -403,7 +490,13 @@ class HelpdeskService:
         telegram_user_id: int,
         display_name: str,
         username: str | None = None,
+        actor_telegram_user_id: int | None = None,
     ) -> OperatorRoleMutationResult:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.MANAGE_OPERATORS,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._promote_operator(
             telegram_user_id=telegram_user_id,
             display_name=display_name,
@@ -414,7 +507,13 @@ class HelpdeskService:
         self,
         *,
         telegram_user_id: int,
+        actor_telegram_user_id: int | None = None,
     ) -> OperatorRoleMutationResult | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.MANAGE_OPERATORS,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._revoke_operator(telegram_user_id=telegram_user_id)
 
     async def apply_macro_to_ticket(
@@ -425,7 +524,13 @@ class HelpdeskService:
         telegram_user_id: int,
         display_name: str,
         username: str | None,
+        actor_telegram_user_id: int | None = None,
     ) -> MacroApplicationResult | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         result = await self._apply_macro_to_ticket(
             ticket_public_id=ticket_public_id,
             macro_id=macro_id,
@@ -441,10 +546,25 @@ class HelpdeskService:
         self,
         *,
         ticket_public_id: UUID,
+        actor_telegram_user_id: int | None = None,
     ) -> TicketTagsSummary | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._list_ticket_tags(ticket_public_id=ticket_public_id)
 
-    async def list_available_tags(self) -> Sequence[str]:
+    async def list_available_tags(
+        self,
+        *,
+        actor_telegram_user_id: int | None = None,
+    ) -> Sequence[str]:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._list_available_tags()
 
     async def add_tag_to_ticket(
@@ -452,7 +572,13 @@ class HelpdeskService:
         *,
         ticket_public_id: UUID,
         tag_name: str,
+        actor_telegram_user_id: int | None = None,
     ) -> TicketTagMutationResult | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         result = await self._add_tag_to_ticket(
             ticket_public_id=ticket_public_id,
             tag_name=tag_name,
@@ -466,7 +592,13 @@ class HelpdeskService:
         *,
         ticket_public_id: UUID,
         tag_name: str,
+        actor_telegram_user_id: int | None = None,
     ) -> TicketTagMutationResult | None:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         result = await self._remove_tag_from_ticket(
             ticket_public_id=ticket_public_id,
             tag_name=tag_name,
@@ -481,10 +613,34 @@ class HelpdeskService:
             await self._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
 
+    async def escalate_ticket_as_operator(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor_telegram_user_id: int | None,
+    ) -> TicketSummary | None:
+        await self._ensure_permission(
+            permission=Permission.ACCESS_OPERATOR,
+            telegram_user_id=actor_telegram_user_id,
+        )
+        result = await self._escalate_ticket(ticket_public_id=ticket_public_id)
+        if result is not None:
+            await self._sync_sla_deadline(ticket_public_id=result.public_id)
+        return result
+
     async def get_basic_stats(self) -> TicketStats:
         return await self._get_basic_stats()
 
-    async def get_operational_stats(self) -> HelpdeskOperationalStats:
+    async def get_operational_stats(
+        self,
+        *,
+        actor_telegram_user_id: int | None = None,
+    ) -> HelpdeskOperationalStats:
+        if actor_telegram_user_id is not None:
+            await self._ensure_permission(
+                permission=Permission.ACCESS_OPERATOR,
+                telegram_user_id=actor_telegram_user_id,
+            )
         return await self._stats_service.get_operational_stats()
 
     async def evaluate_ticket_sla_state(

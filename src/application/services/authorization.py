@@ -30,6 +30,24 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
 }
 
 
+def get_permission_denied_message(permission: Permission) -> str:
+    if permission in {Permission.MANAGE_OPERATORS, Permission.ACCESS_ADMIN}:
+        return "Это действие доступно только супер администратору."
+    return "Это действие доступно только операторам и супер администратору."
+
+
+class AuthorizationError(Exception):
+    """Raised when the caller lacks required authorization."""
+
+    def __init__(
+        self,
+        permission: Permission,
+        message: str | None = None,
+    ) -> None:
+        self.permission = permission
+        super().__init__(message or get_permission_denied_message(permission))
+
+
 @dataclass(slots=True, frozen=True)
 class AuthorizationContext:
     telegram_user_id: int

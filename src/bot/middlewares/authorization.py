@@ -48,6 +48,7 @@ class AuthorizationMiddleware(BaseMiddleware):
                 await deny_event_access(
                     event,
                     permission=required_permission,
+                    role=role,
                 )
                 return None
 

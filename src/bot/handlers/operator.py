@@ -156,7 +156,8 @@ async def handle_ticket_details(
 
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
-            ticket_public_id=ticket_public_id
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None,
         )
 
     if ticket_details is None:
@@ -194,12 +195,16 @@ async def handle_macros(
     if message.from_user is not None:
         await operator_presence.touch(operator_id=message.from_user.id)
 
+    actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
     async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros()
+        macros = await helpdesk_service.list_macros(
+            actor_telegram_user_id=actor_telegram_user_id
+        )
         ticket_details = None
         if ticket_public_id is not None:
             ticket_details = await helpdesk_service.get_ticket_details(
-                ticket_public_id=ticket_public_id
+                ticket_public_id=ticket_public_id,
+                actor_telegram_user_id=actor_telegram_user_id,
             )
 
     if ticket_public_id is not None and ticket_details is None:
@@ -245,8 +250,14 @@ async def handle_ticket_tags(
         await operator_presence.touch(operator_id=message.from_user.id)
 
     async with helpdesk_service_factory() as helpdesk_service:
-        tags_result = await helpdesk_service.list_ticket_tags(ticket_public_id=ticket_public_id)
-        available_tags = await helpdesk_service.list_available_tags()
+        actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
+        tags_result = await helpdesk_service.list_ticket_tags(
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        available_tags = await helpdesk_service.list_available_tags(
+            actor_telegram_user_id=actor_telegram_user_id
+        )
 
     if tags_result is None:
         await message.answer("Заявка не найдена.")
@@ -276,7 +287,9 @@ async def handle_all_tags(
         await operator_presence.touch(operator_id=message.from_user.id)
 
     async with helpdesk_service_factory() as helpdesk_service:
-        available_tags = await helpdesk_service.list_available_tags()
+        available_tags = await helpdesk_service.list_available_tags(
+            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None
+        )
 
     if not available_tags:
         await message.answer("Теги пока не созданы.")
@@ -307,6 +320,7 @@ async def handle_add_tag(
     if message.from_user is not None:
         await operator_presence.touch(operator_id=message.from_user.id)
 
+    actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
     lock = ticket_lock_manager.for_ticket(str(ticket_public_id))
     if not await lock.acquire():
         await message.answer("Заявка сейчас обрабатывается другим оператором.")
@@ -317,6 +331,7 @@ async def handle_add_tag(
             result = await helpdesk_service.add_tag_to_ticket(
                 ticket_public_id=ticket_public_id,
                 tag_name=tag_name,
+                actor_telegram_user_id=actor_telegram_user_id,
             )
     finally:
         await lock.release()
@@ -360,6 +375,7 @@ async def handle_remove_tag(
     if message.from_user is not None:
         await operator_presence.touch(operator_id=message.from_user.id)
 
+    actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
     lock = ticket_lock_manager.for_ticket(str(ticket_public_id))
     if not await lock.acquire():
         await message.answer("Заявка сейчас обрабатывается другим оператором.")
@@ -370,6 +386,7 @@ async def handle_remove_tag(
             result = await helpdesk_service.remove_tag_from_ticket(
                 ticket_public_id=ticket_public_id,
                 tag_name=tag_name,
+                actor_telegram_user_id=actor_telegram_user_id,
             )
     finally:
         await lock.release()
@@ -487,17 +504,21 @@ async def handle_add_operator(
     if message.from_user is not None:
         await operator_presence.touch(operator_id=message.from_user.id)
 
+    actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
     async with helpdesk_service_factory() as helpdesk_service:
         try:
             result = await helpdesk_service.promote_operator(
                 telegram_user_id=telegram_user_id,
                 display_name=display_name,
+                actor_telegram_user_id=actor_telegram_user_id,
             )
         except OperatorManagementError as exc:
             await message.answer(str(exc))
             return
 
-        operators = await helpdesk_service.list_operators()
+        operators = await helpdesk_service.list_operators(
+            actor_telegram_user_id=actor_telegram_user_id
+        )
 
     if result.changed:
         result_text = (
@@ -541,16 +562,20 @@ async def handle_remove_operator(
     if message.from_user is not None:
         await operator_presence.touch(operator_id=message.from_user.id)
 
+    actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
     async with helpdesk_service_factory() as helpdesk_service:
         try:
             result = await helpdesk_service.revoke_operator(
-                telegram_user_id=telegram_user_id
+                telegram_user_id=telegram_user_id,
+                actor_telegram_user_id=actor_telegram_user_id,
             )
         except OperatorManagementError as exc:
             await message.answer(str(exc))
             return
 
-        operators = await helpdesk_service.list_operators()
+        operators = await helpdesk_service.list_operators(
+            actor_telegram_user_id=actor_telegram_user_id
+        )
 
     if result is None:
         await message.answer("Активный оператор с таким Telegram ID не найден.")
@@ -587,7 +612,9 @@ async def handle_refresh_operators(
     await operator_presence.touch(operator_id=callback.from_user.id)
 
     async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators()
+        operators = await helpdesk_service.list_operators(
+            actor_telegram_user_id=callback.from_user.id
+        )
 
     await callback.answer("Список операторов обновлен.")
     if callback.message is not None:
@@ -639,13 +666,16 @@ async def handle_confirm_revoke_operator(
     async with helpdesk_service_factory() as helpdesk_service:
         try:
             result = await helpdesk_service.revoke_operator(
-                telegram_user_id=callback_data.telegram_user_id
+                telegram_user_id=callback_data.telegram_user_id,
+                actor_telegram_user_id=callback.from_user.id,
             )
         except OperatorManagementError as exc:
             await _respond_to_operator(callback, str(exc))
             return
 
-        operators = await helpdesk_service.list_operators()
+        operators = await helpdesk_service.list_operators(
+            actor_telegram_user_id=callback.from_user.id
+        )
 
     if result is None:
         answer_text = "Активный оператор с таким Telegram ID не найден."
@@ -699,7 +729,8 @@ async def handle_view_action(
 
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
-            ticket_public_id=ticket_public_id
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=callback.from_user.id,
         )
 
     if ticket_details is None:
@@ -747,10 +778,12 @@ async def handle_take_action(
                     telegram_user_id=callback.from_user.id,
                     display_name=callback.from_user.full_name,
                     username=callback.from_user.username,
+                    actor_telegram_user_id=callback.from_user.id,
                 )
                 if ticket is not None:
                     ticket_details = await helpdesk_service.get_ticket_details(
-                        ticket_public_id=ticket.public_id
+                        ticket_public_id=ticket.public_id,
+                        actor_telegram_user_id=callback.from_user.id,
                     )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)
@@ -807,7 +840,8 @@ async def handle_reply_action(
 
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
-            ticket_public_id=ticket_public_id
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=callback.from_user.id,
         )
 
     if ticket_details is None:
@@ -867,10 +901,12 @@ async def handle_apply_macro(
                     telegram_user_id=callback.from_user.id,
                     display_name=callback.from_user.full_name,
                     username=callback.from_user.username,
+                    actor_telegram_user_id=callback.from_user.id,
                 )
                 if macro_result is not None:
                     ticket_details = await helpdesk_service.get_ticket_details(
-                        ticket_public_id=ticket_public_id
+                        ticket_public_id=ticket_public_id,
+                        actor_telegram_user_id=callback.from_user.id,
                     )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)
@@ -968,6 +1004,7 @@ async def handle_reply_message(
                     username=message.from_user.username,
                     telegram_message_id=message.message_id,
                     text=message.text,
+                    actor_telegram_user_id=message.from_user.id,
                 )
             except InvalidTicketTransitionError as exc:
                 await state.clear()
@@ -980,7 +1017,8 @@ async def handle_reply_message(
                 return
 
             ticket_details = await helpdesk_service.get_ticket_details(
-                ticket_public_id=ticket_public_id
+                ticket_public_id=ticket_public_id,
+                actor_telegram_user_id=message.from_user.id,
             )
     finally:
         await lock.release()
@@ -1039,7 +1077,8 @@ async def handle_reassign_action(
 
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
-            ticket_public_id=ticket_public_id
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=callback.from_user.id,
         )
 
     if ticket_details is None:
@@ -1102,6 +1141,7 @@ async def handle_reassign_message(
         await message.answer("Контекст переназначения потерян. Запустите действие заново.")
         return
 
+    actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
     lock = ticket_lock_manager.for_ticket(str(ticket_public_id))
     if not await lock.acquire():
         await message.answer("Заявка сейчас обрабатывается другим оператором.")
@@ -1115,6 +1155,7 @@ async def handle_reassign_message(
                     telegram_user_id=target[0],
                     display_name=target[1],
                     username=None,
+                    actor_telegram_user_id=actor_telegram_user_id,
                 )
             except InvalidTicketTransitionError as exc:
                 await state.clear()
@@ -1127,7 +1168,8 @@ async def handle_reassign_message(
                 return
 
             ticket_details = await helpdesk_service.get_ticket_details(
-                ticket_public_id=ticket_public_id
+                ticket_public_id=ticket_public_id,
+                actor_telegram_user_id=actor_telegram_user_id,
             )
     finally:
         await lock.release()
@@ -1178,10 +1220,14 @@ async def handle_close_action(
 
         async with helpdesk_service_factory() as helpdesk_service:
             try:
-                ticket = await helpdesk_service.close_ticket(ticket_public_id=ticket_public_id)
+                ticket = await helpdesk_service.close_ticket_as_operator(
+                    ticket_public_id=ticket_public_id,
+                    actor_telegram_user_id=callback.from_user.id,
+                )
                 if ticket is not None:
                     ticket_details = await helpdesk_service.get_ticket_details(
-                        ticket_public_id=ticket_public_id
+                        ticket_public_id=ticket_public_id,
+                        actor_telegram_user_id=callback.from_user.id,
                     )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)
@@ -1233,10 +1279,14 @@ async def handle_escalate_action(
 
         async with helpdesk_service_factory() as helpdesk_service:
             try:
-                ticket = await helpdesk_service.escalate_ticket(ticket_public_id=ticket_public_id)
+                ticket = await helpdesk_service.escalate_ticket_as_operator(
+                    ticket_public_id=ticket_public_id,
+                    actor_telegram_user_id=callback.from_user.id,
+                )
                 if ticket is not None:
                     ticket_details = await helpdesk_service.get_ticket_details(
-                        ticket_public_id=ticket_public_id
+                        ticket_public_id=ticket_public_id,
+                        actor_telegram_user_id=callback.from_user.id,
                     )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)
@@ -1290,7 +1340,10 @@ async def _send_queue(
         await operator_presence.touch(operator_id=message.from_user.id)
 
     async with helpdesk_service_factory() as helpdesk_service:
-        queued_tickets = await helpdesk_service.list_queued_tickets(limit=10)
+        queued_tickets = await helpdesk_service.list_queued_tickets(
+            limit=10,
+            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None,
+        )
 
     if not queued_tickets:
         await message.answer("Очередь пуста.")
@@ -1336,11 +1389,13 @@ async def _take_next_ticket(
                 telegram_user_id=message.from_user.id,
                 display_name=message.from_user.full_name,
                 username=message.from_user.username,
+                actor_telegram_user_id=message.from_user.id,
             )
             ticket_details = None
             if ticket is not None:
                 ticket_details = await helpdesk_service.get_ticket_details(
-                    ticket_public_id=ticket.public_id
+                    ticket_public_id=ticket.public_id,
+                    actor_telegram_user_id=message.from_user.id,
                 )
     finally:
         await queue_lock.release()
@@ -1380,7 +1435,9 @@ async def _send_operational_stats(
         await operator_presence.touch(operator_id=message.from_user.id)
 
     async with helpdesk_service_factory() as helpdesk_service:
-        stats = await helpdesk_service.get_operational_stats()
+        stats = await helpdesk_service.get_operational_stats(
+            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None
+        )
 
     await message.answer(_format_operational_stats(stats))
 
@@ -1401,7 +1458,9 @@ async def _send_operator_list(
         await operator_presence.touch(operator_id=message.from_user.id)
 
     async with helpdesk_service_factory() as helpdesk_service:
-        operators = await helpdesk_service.list_operators()
+        operators = await helpdesk_service.list_operators(
+            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None
+        )
 
     await message.answer(
         _format_operator_list_response(

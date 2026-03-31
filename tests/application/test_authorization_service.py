@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from application.services.authorization import AuthorizationService, Permission
+from application.services.authorization import (
+    AuthorizationError,
+    AuthorizationService,
+    Permission,
+    get_permission_denied_message,
+)
 from domain.enums.roles import UserRole
 
 
@@ -110,6 +115,21 @@ async def test_regular_user_has_no_protected_permissions() -> None:
             permission=Permission.ACCESS_OPERATOR,
         )
         is False
+    )
+
+
+def test_get_permission_denied_message_returns_russian_text() -> None:
+    assert get_permission_denied_message(Permission.ACCESS_OPERATOR) == (
+        "Это действие доступно только операторам и супер администратору."
+    )
+    assert get_permission_denied_message(Permission.MANAGE_OPERATORS) == (
+        "Это действие доступно только супер администратору."
+    )
+
+
+def test_authorization_error_uses_permission_specific_message() -> None:
+    assert str(AuthorizationError(Permission.ACCESS_OPERATOR)) == (
+        "Это действие доступно только операторам и супер администратору."
     )
 
 

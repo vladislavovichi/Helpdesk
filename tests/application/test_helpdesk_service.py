@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
+from application.services.authorization import AuthorizationError
 from application.services.helpdesk import HelpdeskService
 from application.use_cases.tickets import (
     OperatorManagementError,
@@ -724,6 +725,31 @@ async def test_list_operators_returns_active_operator_summaries() -> None:
     ]
 
 
+async def test_list_operators_rejects_non_admin_actor_when_actor_is_provided() -> None:
+    operator_repository = StubOperatorManagementRepository(
+        active_operator_ids={1001},
+        display_names={1001: "Иван"},
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(
+                ticket_id=1,
+                public_id=uuid4(),
+                status=TicketStatus.NEW,
+            )
+        ),
+        operator_repository=operator_repository,
+        super_admin_telegram_user_id=42,
+    )
+
+    try:
+        await service.list_operators(actor_telegram_user_id=1001)
+    except AuthorizationError as exc:
+        assert str(exc) == "Это действие доступно только супер администратору."
+    else:
+        raise AssertionError("expected AuthorizationError")
+
+
 async def test_promote_operator_marks_user_as_operator() -> None:
     operator_repository = StubOperatorManagementRepository()
     service = build_service(
@@ -833,6 +859,29 @@ async def test_assign_next_ticket_to_operator_assigns_oldest_queued_ticket() -> 
     assert result.status == TicketStatus.ASSIGNED
     assert first_ticket.assigned_operator_id == 7
     assert event_repository.added_events[0]["event_type"] == TicketEventType.ASSIGNED
+
+
+async def test_assign_next_ticket_to_operator_rejects_regular_user_actor() -> None:
+    queued_ticket = build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.QUEUED)
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=2, public_id=uuid4(), status=TicketStatus.NEW),
+            queued_tickets=[queued_ticket],
+        ),
+        operator_repository=StubOperatorManagementRepository(active_operator_ids=set()),
+        super_admin_telegram_user_id=42,
+    )
+
+    try:
+        await service.assign_next_ticket_to_operator(
+            telegram_user_id=2002,
+            display_name="Regular User",
+            actor_telegram_user_id=2002,
+        )
+    except AuthorizationError as exc:
+        assert str(exc) == "Это действие доступно только операторам и супер администратору."
+    else:
+        raise AssertionError("expected AuthorizationError")
 
 
 async def test_get_operational_stats_returns_aggregated_metrics() -> None:
