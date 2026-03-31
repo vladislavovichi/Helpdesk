@@ -1,17 +1,17 @@
 # tg-helpdesk
 
-`tg-helpdesk` is a production-minded starter template for a Telegram helpdesk platform.
+`tg-helpdesk` is a Telegram helpdesk service.
 Clients send messages to a bot, those messages create support tickets, and operators work with tickets through Telegram commands and callback actions.
 
 The repository already includes:
 
 - async `aiogram` bootstrap and router separation
 - SQLAlchemy 2.x async models, repositories, and Alembic migrations
-- Redis primitives for locks, rate limiting, operator presence, streams, and SLA placeholders
+- Redis primitives for locks, rate limiting, operator presence, streams, and SLA deadline coordination
 - explicit `domain -> application -> infrastructure -> bot` layering
 - Poetry, Docker Compose, Ruff, mypy, pytest, and pre-commit integration
 
-The project is intentionally still early-stage. It is meant to be a strong starter template that is pleasant to extend, not a finished helpdesk product.
+The project is still early-stage. It already covers the main ticket workflow, but it is not a finished helpdesk product.
 
 ## Project Purpose
 
@@ -24,8 +24,10 @@ The long-term goal is a Telegram-native helpdesk where:
 The current codebase already supports:
 
 - client message -> persisted ticket creation
-- operator placeholder actions for taking and closing tickets
-- Redis-backed coordination primitives prepared for future workflow expansion
+- queued ticket routing inside Telegram
+- operator take, reply, close, escalate, reassign, macro, and tag flows
+- SLA evaluation and deadline scheduling hooks
+- operational `/stats` reporting for operators and admins
 
 ## Architecture
 
@@ -48,7 +50,7 @@ Request flow today:
 2. Thin bot handlers delegate work to the application service layer.
 3. Application services execute use cases against repository contracts.
 4. SQLAlchemy repositories persist data in PostgreSQL.
-5. Redis primitives support rate limiting, locks, stream publishing, presence, and SLA deadline placeholders.
+5. Redis primitives support rate limiting, locks, stream publishing, presence, and SLA deadline scheduling.
 
 ## Local Startup
 
@@ -249,14 +251,16 @@ make pre-commit-run
 
 ## Current Starter Capabilities
 
-- client text messages create persisted tickets
-- operator actions can assign and close tickets
-- repository and service layers are already split cleanly
-- Redis abstractions are ready for future queue, lock, and SLA workflow expansion
+- client text messages create and enqueue persisted tickets
+- operators can inspect the queue, take tickets, reply, close, escalate, and reassign
+- macros and tags are available in operator flows
+- SLA evaluation, auto-escalation, auto-reassignment hooks, and deadline scheduling are implemented in the service layer
+- `/stats` shows operational counts, current operator load, and simple average response and resolution times
+- repository and service layers remain split cleanly
 
 ## Suggested Next Steps
 
-- add real operator reply flows and FSM support
 - introduce background workers for Redis streams and SLA timeout handling
+- expand historical analytics beyond current-status and current-assignee reporting
 - add integration tests against a dedicated PostgreSQL test database
 - expand operator tooling and audit/event processing

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any, cast
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,59 +24,67 @@ from infrastructure.db.repositories import (
 )
 
 
-@dataclass
-class FakeResult:
-    scalar: Any = None
-    rows: list[tuple[Any, Any]] = field(default_factory=list)
-    scalar_items: list[Any] = field(default_factory=list)
+def build_result(
+    *,
+    scalar: Any = None,
+    rows: list[tuple[Any, ...]] | None = None,
+    scalar_items: list[Any] | None = None,
+) -> Mock:
+    result = Mock()
+    active_rows = [] if rows is None else rows
+    active_scalar_items = [] if scalar_items is None else scalar_items
+    result.scalar_one_or_none.return_value = scalar
+    result.all.return_value = active_scalar_items if active_scalar_items else active_rows
 
-    def scalar_one_or_none(self) -> Any:
-        return self.scalar
-
-    def all(self) -> list[Any]:
-        if self.scalar_items:
-            return self.scalar_items
-        return self.rows
-
-    def scalars(self) -> FakeResult:
-        return self
-
-    def first(self) -> Any:
-        if self.scalar_items:
-            return self.scalar_items[0]
-        if self.rows:
-            return self.rows[0]
-        return None
+    scalars_result = Mock()
+    scalars_result.all.return_value = active_scalar_items
+    result.scalars.return_value = scalars_result
+    result.first.return_value = (
+        active_scalar_items[0]
+        if active_scalar_items
+        else (active_rows[0] if active_rows else None)
+    )
+    return result
 
 
-@dataclass
-class FakeAsyncSession:
-    result: FakeResult = field(default_factory=FakeResult)
-    queued_results: list[FakeResult] = field(default_factory=list)
-    added: list[Any] = field(default_factory=list)
-    deleted: list[Any] = field(default_factory=list)
-    flush_count: int = 0
-    executed_statements: list[Any] = field(default_factory=list)
+def build_session(
+    *queued_results: Mock,
+    result: Mock | None = None,
+) -> Any:
+    session = Mock(spec=AsyncSession)
+    default_result = result or build_result()
+    result_queue = list(queued_results)
 
-    def add(self, value: Any) -> None:
-        self.added.append(value)
+    session.added = []
+    session.deleted = []
+    session.flush_count = 0
+    session.executed_statements = []
 
-    async def delete(self, value: Any) -> None:
-        self.deleted.append(value)
+    def add(value: Any) -> None:
+        session.added.append(value)
 
-    async def flush(self) -> None:
-        self.flush_count += 1
+    async def delete(value: Any) -> None:
+        session.deleted.append(value)
 
-    async def execute(self, statement: Any) -> FakeResult:
-        self.executed_statements.append(statement)
-        if self.queued_results:
-            return self.queued_results.pop(0)
-        return self.result
+    async def flush() -> None:
+        session.flush_count += 1
+
+    async def execute(statement: Any) -> Mock:
+        session.executed_statements.append(statement)
+        if result_queue:
+            return result_queue.pop(0)
+        return default_result
+
+    session.add.side_effect = add
+    session.delete = AsyncMock(side_effect=delete)
+    session.flush = AsyncMock(side_effect=flush)
+    session.execute = AsyncMock(side_effect=execute)
+    return session
 
 
 async def test_create_adds_ticket_to_session() -> None:
-    session = FakeAsyncSession()
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session()
+    repository = SqlAlchemyTicketRepository(session)
 
     ticket = await repository.create(
         client_chat_id=100,
@@ -98,8 +106,8 @@ async def test_enqueue_updates_ticket_status() -> None:
         priority=TicketPriority.NORMAL,
         public_id=uuid4(),
     )
-    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.enqueue(ticket_public_id=ticket.public_id)
 
@@ -116,8 +124,8 @@ async def test_assign_queued_to_operator_only_updates_queued_tickets() -> None:
         public_id=uuid4(),
         status=TicketStatus.ASSIGNED,
     )
-    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.assign_queued_to_operator(
         ticket_public_id=ticket.public_id,
@@ -136,8 +144,8 @@ async def test_assign_to_operator_updates_ticket_status() -> None:
         priority=TicketPriority.NORMAL,
         public_id=uuid4(),
     )
-    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.assign_to_operator(
         ticket_public_id=ticket.public_id,
@@ -157,8 +165,8 @@ async def test_escalate_updates_ticket_status() -> None:
         priority=TicketPriority.NORMAL,
         public_id=uuid4(),
     )
-    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.escalate(ticket_public_id=ticket.public_id)
 
@@ -174,8 +182,8 @@ async def test_close_sets_closed_status_and_timestamp() -> None:
         priority=TicketPriority.NORMAL,
         public_id=uuid4(),
     )
-    session = FakeAsyncSession(result=FakeResult(scalar=ticket))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.close(ticket_public_id=ticket.public_id)
 
@@ -186,15 +194,15 @@ async def test_close_sets_closed_status_and_timestamp() -> None:
 
 
 async def test_count_by_status_returns_mapping() -> None:
-    session = FakeAsyncSession(
-        result=FakeResult(
+    session = build_session(
+        result=build_result(
             rows=[
                 (TicketStatus.NEW, 2),
                 (TicketStatus.CLOSED, 1),
             ]
         )
     )
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.count_by_status()
 
@@ -205,15 +213,15 @@ async def test_count_by_status_returns_mapping() -> None:
 
 
 async def test_count_active_tickets_per_operator_returns_grouped_load() -> None:
-    session = FakeAsyncSession(
-        result=FakeResult(
+    session = build_session(
+        result=build_result(
             rows=[
                 (7, "Operator One", 3),
                 (9, "Operator Two", 1),
             ]
         )
     )
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.count_active_tickets_per_operator()
 
@@ -224,8 +232,8 @@ async def test_count_active_tickets_per_operator_returns_grouped_load() -> None:
 
 
 async def test_get_average_first_response_time_seconds_returns_float() -> None:
-    session = FakeAsyncSession(result=FakeResult(scalar=125.5))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=125.5))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.get_average_first_response_time_seconds()
 
@@ -233,8 +241,8 @@ async def test_get_average_first_response_time_seconds_returns_float() -> None:
 
 
 async def test_get_average_resolution_time_seconds_returns_float() -> None:
-    session = FakeAsyncSession(result=FakeResult(scalar=3600))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=3600))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.get_average_resolution_time_seconds()
 
@@ -251,15 +259,13 @@ async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags()
         assigned_operator_id=77,
     )
     ticket.id = 1
-    session = FakeAsyncSession(
-        queued_results=[
-            FakeResult(scalar=ticket),
-            FakeResult(scalar="Operator One"),
-            FakeResult(rows=[("Latest client message", TicketMessageSenderType.CLIENT)]),
-            FakeResult(scalar_items=["billing", "vip"]),
-        ]
+    session = build_session(
+        build_result(scalar=ticket),
+        build_result(scalar="Operator One"),
+        build_result(rows=[("Latest client message", TicketMessageSenderType.CLIENT)]),
+        build_result(scalar_items=["billing", "vip"]),
     )
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.get_details_by_public_id(ticket.public_id)
 
@@ -278,8 +284,8 @@ async def test_get_next_queued_ticket_returns_first_matching_ticket() -> None:
         public_id=uuid4(),
         status=TicketStatus.QUEUED,
     )
-    session = FakeAsyncSession(result=FakeResult(scalar=first_ticket))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=first_ticket))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.get_next_queued_ticket()
 
@@ -301,8 +307,8 @@ async def test_list_queued_tickets_returns_ordered_sequence() -> None:
         public_id=uuid4(),
         status=TicketStatus.QUEUED,
     )
-    session = FakeAsyncSession(result=FakeResult(scalar_items=[first_ticket, second_ticket]))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar_items=[first_ticket, second_ticket]))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.list_queued_tickets(limit=2)
 
@@ -317,17 +323,18 @@ async def test_list_open_tickets_returns_only_non_closed_items() -> None:
         public_id=uuid4(),
         status=TicketStatus.ASSIGNED,
     )
-    session = FakeAsyncSession(result=FakeResult(scalar_items=[open_ticket]))
-    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar_items=[open_ticket]))
+    repository = SqlAlchemyTicketRepository(session)
 
     result = await repository.list_open_tickets(limit=5)
 
-    assert result == [open_ticket]
+    assert len(result) == 1
+    assert cast(object, result[0]) is open_ticket
 
 
 async def test_ticket_message_repository_allocates_negative_internal_ids() -> None:
-    session = FakeAsyncSession(result=FakeResult(scalar=-4))
-    repository = SqlAlchemyTicketMessageRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=-4))
+    repository = SqlAlchemyTicketMessageRepository(session)
 
     result = await repository.allocate_internal_telegram_message_id(
         ticket_id=10,
@@ -338,8 +345,8 @@ async def test_ticket_message_repository_allocates_negative_internal_ids() -> No
 
 
 async def test_ticket_event_repository_persists_event_rows() -> None:
-    session = FakeAsyncSession()
-    repository = SqlAlchemyTicketEventRepository(cast(AsyncSession, session))
+    session = build_session()
+    repository = SqlAlchemyTicketEventRepository(session)
 
     await repository.add(
         ticket_id=10,
@@ -356,8 +363,8 @@ async def test_ticket_event_repository_persists_event_rows() -> None:
 
 
 async def test_ticket_event_repository_exists_checks_for_prior_event() -> None:
-    session = FakeAsyncSession(result=FakeResult(scalar=10))
-    repository = SqlAlchemyTicketEventRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=10))
+    repository = SqlAlchemyTicketEventRepository(session)
 
     result = await repository.exists(
         ticket_id=10,
@@ -375,8 +382,8 @@ async def test_sla_policy_repository_prefers_priority_specific_policy() -> None:
         priority=TicketPriority.URGENT,
     )
     policy.id = 1
-    session = FakeAsyncSession(result=FakeResult(scalar=policy))
-    repository = SqlAlchemySLAPolicyRepository(cast(AsyncSession, session))
+    session = build_session(result=build_result(scalar=policy))
+    repository = SqlAlchemySLAPolicyRepository(session)
 
     result = await repository.get_for_priority(priority=TicketPriority.URGENT)
 
@@ -388,13 +395,11 @@ async def test_macro_repository_lists_and_fetches_macros() -> None:
     first_macro.id = 1
     second_macro = Macro(title="Second", body="World")
     second_macro.id = 2
-    session = FakeAsyncSession(
-        queued_results=[
-            FakeResult(scalar_items=[first_macro, second_macro]),
-            FakeResult(scalar=second_macro),
-        ]
+    session = build_session(
+        build_result(scalar_items=[first_macro, second_macro]),
+        build_result(scalar=second_macro),
     )
-    repository = SqlAlchemyMacroRepository(cast(AsyncSession, session))
+    repository = SqlAlchemyMacroRepository(session)
 
     listed = await repository.list_all()
     fetched = await repository.get_by_id(macro_id=2)
@@ -406,14 +411,12 @@ async def test_macro_repository_lists_and_fetches_macros() -> None:
 async def test_tag_repository_normalizes_and_lists_tags() -> None:
     existing_tag = Tag(name="vip")
     existing_tag.id = 3
-    session = FakeAsyncSession(
-        queued_results=[
-            FakeResult(scalar=existing_tag),
-            FakeResult(scalar=existing_tag),
-            FakeResult(scalar_items=[existing_tag]),
-        ]
+    session = build_session(
+        build_result(scalar=existing_tag),
+        build_result(scalar=existing_tag),
+        build_result(scalar_items=[existing_tag]),
     )
-    repository = SqlAlchemyTagRepository(cast(AsyncSession, session))
+    repository = SqlAlchemyTagRepository(session)
 
     created_id = await repository.get_or_create(name=" VIP ")
     fetched = await repository.get_by_name(name="vip")
@@ -428,14 +431,12 @@ async def test_ticket_tag_repository_add_remove_and_list_links() -> None:
     first_tag = Tag(name="billing")
     first_tag.id = 10
     existing_link = TicketTag(ticket_id=5, tag_id=10)
-    session = FakeAsyncSession(
-        queued_results=[
-            FakeResult(scalar=None),
-            FakeResult(scalar=existing_link),
-            FakeResult(scalar_items=[first_tag]),
-        ]
+    session = build_session(
+        build_result(scalar=None),
+        build_result(scalar=existing_link),
+        build_result(scalar_items=[first_tag]),
     )
-    repository = SqlAlchemyTicketTagRepository(cast(AsyncSession, session))
+    repository = SqlAlchemyTicketTagRepository(session)
 
     added = await repository.add(ticket_id=5, tag_id=10)
     removed = await repository.remove(ticket_id=5, tag_id=10)

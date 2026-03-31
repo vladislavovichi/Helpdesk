@@ -113,9 +113,17 @@ class OperatorRepository(Protocol):
 
 
 class OperatorTicketLoadRecord(Protocol):
-    operator_id: int
-    display_name: str
-    ticket_count: int
+    @property
+    def operator_id(self) -> int:
+        """Operator identifier."""
+
+    @property
+    def display_name(self) -> str:
+        """Operator display name."""
+
+    @property
+    def ticket_count(self) -> int:
+        """Current active ticket count."""
 
 
 class MacroRecord(Protocol):

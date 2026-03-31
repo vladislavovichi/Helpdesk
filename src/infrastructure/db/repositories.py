@@ -13,6 +13,7 @@ from sqlalchemy.sql import Select
 from domain.contracts.repositories import (
     MacroRepository,
     OperatorRepository,
+    OperatorTicketLoadRecord,
     SLAPolicyRepository,
     TagRepository,
     TicketEventRepository,
@@ -277,7 +278,7 @@ class SqlAlchemyTicketRepository(TicketRepository):
         result = await self.session.execute(statement)
         return {status: count for status, count in result.all()}
 
-    async def count_active_tickets_per_operator(self) -> Sequence[OperatorTicketLoadRow]:
+    async def count_active_tickets_per_operator(self) -> Sequence[OperatorTicketLoadRecord]:
         statement = (
             select(
                 Operator.id,

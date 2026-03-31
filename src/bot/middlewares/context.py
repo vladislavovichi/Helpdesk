@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 
 
 class UpdateContextMiddleware(BaseMiddleware):
-    """Minimal per-update context reserved for future FSM and service wiring."""
+    """Attach the current chat and user ids to handler context."""
 
     async def __call__(
         self,
