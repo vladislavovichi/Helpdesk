@@ -26,8 +26,30 @@ The current codebase already supports:
 - client message -> persisted ticket creation
 - queued ticket routing inside Telegram
 - operator take, reply, close, escalate, reassign, macro, and tag flows
+- role-based `/start`, `/help`, and reply keyboards for regular users, operators, and the super admin
+- operator management commands for the super admin
 - SLA evaluation and deadline scheduling hooks
 - operational `/stats` reporting for operators and admins
+
+## Roles And Access
+
+The bot currently distinguishes three Telegram roles:
+
+- regular user: can start the bot, view user-safe help, and create or continue tickets by sending messages
+- operator: can use the operator menu, queue commands, ticket actions, macros, tags, and stats
+- super admin: keeps all operator capabilities and can manage operators
+
+The super admin is configured through:
+
+```dotenv
+AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_ID=123456789
+```
+
+Operator management commands:
+
+- `/operators`
+- `/add_operator <telegram_user_id> [display_name]`
+- `/remove_operator <telegram_user_id>`
 
 ## Architecture
 
@@ -131,6 +153,7 @@ Configuration uses `pydantic-settings` with nested groups. The canonical groups 
 
 - `app`
 - `bot`
+- `authorization`
 - `database`
 - `redis`
 - `logging`
@@ -143,6 +166,8 @@ APP__ENVIRONMENT=dev
 APP__DRY_RUN=true
 
 BOT__TOKEN=
+
+AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_ID=123456789
 
 DATABASE__URL=
 DATABASE__HOST=postgres
@@ -252,10 +277,13 @@ make pre-commit-run
 ## Current Starter Capabilities
 
 - client text messages create and enqueue persisted tickets
+- regular users see user-safe `/start`, `/help`, and a minimal reply keyboard
 - operators can inspect the queue, take tickets, reply, close, escalate, and reassign
+- the super admin can promote and revoke operators from Telegram commands
 - macros and tags are available in operator flows
 - SLA evaluation, auto-escalation, auto-reassignment hooks, and deadline scheduling are implemented in the service layer
 - `/stats` shows operational counts, current operator load, and simple average response and resolution times
+- operator and admin commands, callbacks, and protected FSM states are guarded by centralized authorization middleware
 - repository and service layers remain split cleanly
 
 ## Suggested Next Steps

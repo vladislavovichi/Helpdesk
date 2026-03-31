@@ -44,17 +44,6 @@ PROTECTED_STATE_PERMISSIONS: Mapping[str, Permission] = {
     "OperatorTicketStates:reassigning": Permission.ACCESS_OPERATOR,
 }
 
-OPERATOR_COMMANDS = frozenset(
-    command_name
-    for command_name, permission in PROTECTED_COMMAND_PERMISSIONS.items()
-    if permission == Permission.ACCESS_OPERATOR
-)
-SUPER_ADMIN_COMMANDS = frozenset(
-    command_name
-    for command_name, permission in PROTECTED_COMMAND_PERMISSIONS.items()
-    if permission == Permission.MANAGE_OPERATORS
-)
-
 
 def extract_command_name(text: str | None) -> str | None:
     if text is None:

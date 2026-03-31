@@ -2,6 +2,7 @@
 
 from application.services.authorization import (
     AuthorizationContext,
+    AuthorizationError,
     AuthorizationService,
     AuthorizationServiceFactory,
     Permission,
@@ -15,6 +16,7 @@ from application.services.stats import (
 
 __all__ = [
     "AuthorizationContext",
+    "AuthorizationError",
     "AuthorizationService",
     "AuthorizationServiceFactory",
     "HelpdeskService",
