@@ -12,7 +12,15 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models import Macro, SLAPolicy, Tag, Ticket, TicketEvent, TicketTag
+from infrastructure.db.models import (
+    Macro,
+    Operator,
+    SLAPolicy,
+    Tag,
+    Ticket,
+    TicketEvent,
+    TicketTag,
+)
 from infrastructure.db.repositories import (
     SqlAlchemyMacroRepository,
     SqlAlchemyOperatorRepository,
@@ -264,6 +272,60 @@ async def test_operator_exists_active_by_telegram_user_id_returns_false() -> Non
     result = await repository.exists_active_by_telegram_user_id(telegram_user_id=1001)
 
     assert result is False
+
+
+async def test_list_active_operators_returns_sequence() -> None:
+    first_operator = Operator(
+        telegram_user_id=1001,
+        username="anna",
+        display_name="Анна",
+        is_active=True,
+    )
+    second_operator = Operator(
+        telegram_user_id=1002,
+        username=None,
+        display_name="Борис",
+        is_active=True,
+    )
+    session = build_session(result=build_result(scalar_items=[first_operator, second_operator]))
+    repository = SqlAlchemyOperatorRepository(session)
+
+    result = await repository.list_active()
+
+    assert [operator.telegram_user_id for operator in result] == [1001, 1002]
+
+
+async def test_promote_operator_creates_new_record() -> None:
+    session = build_session(build_result(scalar=None))
+    repository = SqlAlchemyOperatorRepository(session)
+
+    operator = await repository.promote(
+        telegram_user_id=2001,
+        display_name="Оператор 2001",
+        username=None,
+    )
+
+    assert operator.telegram_user_id == 2001
+    assert operator.display_name == "Оператор 2001"
+    assert operator.is_active is True
+    assert session.flush_count == 1
+
+
+async def test_revoke_operator_marks_record_inactive() -> None:
+    operator = Operator(
+        telegram_user_id=2001,
+        username="user2001",
+        display_name="Оператор 2001",
+        is_active=True,
+    )
+    session = build_session(result=build_result(scalar=operator))
+    repository = SqlAlchemyOperatorRepository(session)
+
+    result = await repository.revoke(telegram_user_id=2001)
+
+    assert result is operator
+    assert operator.is_active is False
+    assert session.flush_count == 1
 
 
 async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags() -> None:

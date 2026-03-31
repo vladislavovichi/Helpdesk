@@ -56,6 +56,12 @@ def _build_help_text(role: UserRole) -> str:
         )
 
     if role == UserRole.SUPER_ADMIN:
-        lines.append("Команды управления операторами будут доступны после следующего этапа.")
+        lines.extend(
+            [
+                "/operators - показать список операторов",
+                "/add_operator <telegram_user_id> [display_name] - выдать права оператора",
+                "/remove_operator <telegram_user_id> - снять права оператора",
+            ]
+        )
 
     return "\n".join(lines)

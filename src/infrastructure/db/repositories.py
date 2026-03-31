@@ -421,6 +421,61 @@ class SqlAlchemyOperatorRepository(OperatorRepository):
         result = await self.session.execute(statement)
         return result.scalar_one_or_none() is not None
 
+    async def list_active(self) -> Sequence[Operator]:
+        statement = (
+            select(Operator)
+            .where(Operator.is_active.is_(True))
+            .order_by(Operator.display_name.asc(), Operator.id.asc())
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().all()
+
+    async def promote(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> Operator:
+        statement = select(Operator).where(Operator.telegram_user_id == telegram_user_id)
+        result = await self.session.execute(statement)
+        operator = result.scalar_one_or_none()
+
+        if operator is None:
+            operator = Operator(
+                telegram_user_id=telegram_user_id,
+                username=username,
+                display_name=display_name,
+                is_active=True,
+            )
+            self.session.add(operator)
+        else:
+            operator.display_name = display_name
+            if username is not None:
+                operator.username = username
+            operator.is_active = True
+
+        await self.session.flush()
+        return operator
+
+    async def revoke(self, *, telegram_user_id: int) -> Operator | None:
+        statement = (
+            select(Operator)
+            .where(
+                Operator.telegram_user_id == telegram_user_id,
+                Operator.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        result = await self.session.execute(statement)
+        operator = result.scalar_one_or_none()
+        if operator is None:
+            return None
+
+        operator.is_active = False
+        await self.session.flush()
+        return operator
+
     async def get_or_create(
         self,
         *,

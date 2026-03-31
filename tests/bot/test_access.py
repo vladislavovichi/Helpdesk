@@ -34,3 +34,17 @@ def test_resolve_required_permission_returns_none_for_regular_help() -> None:
     result = resolve_required_permission(message_text="/help")
 
     assert result is None
+
+
+def test_resolve_required_permission_for_super_admin_command() -> None:
+    result = resolve_required_permission(message_text="/operators")
+
+    assert result == Permission.MANAGE_OPERATORS
+
+
+def test_resolve_required_permission_for_super_admin_callback() -> None:
+    result = resolve_required_permission(
+        callback_data="admin_operator:revoke:1001",
+    )
+
+    assert result == Permission.MANAGE_OPERATORS

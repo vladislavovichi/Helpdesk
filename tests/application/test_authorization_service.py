@@ -111,3 +111,17 @@ async def test_regular_user_has_no_protected_permissions() -> None:
         )
         is False
     )
+
+
+async def test_revoked_operator_loses_operator_permissions() -> None:
+    repository = FakeOperatorRepository(active_operator_ids={1001})
+    service = AuthorizationService(
+        operator_repository=repository,
+        super_admin_telegram_user_id=42,
+    )
+
+    repository.active_operator_ids.remove(1001)
+
+    result = await service.resolve_role(telegram_user_id=1001)
+
+    assert result == UserRole.USER

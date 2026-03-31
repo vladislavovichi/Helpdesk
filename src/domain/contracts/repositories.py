@@ -103,6 +103,21 @@ class OperatorRepository(Protocol):
     async def exists_active_by_telegram_user_id(self, *, telegram_user_id: int) -> bool:
         """Return whether the Telegram user is an active operator."""
 
+    async def list_active(self) -> Sequence[OperatorRecord]:
+        """Return active operators ordered for admin-facing views."""
+
+    async def promote(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> OperatorRecord:
+        """Grant operator rights to a Telegram user, creating or reactivating the record."""
+
+    async def revoke(self, *, telegram_user_id: int) -> OperatorRecord | None:
+        """Revoke operator rights from an active operator."""
+
     async def get_or_create(
         self,
         *,
@@ -125,6 +140,14 @@ class OperatorTicketLoadRecord(Protocol):
     @property
     def ticket_count(self) -> int:
         """Current active ticket count."""
+
+
+class OperatorRecord(Protocol):
+    id: int
+    telegram_user_id: int
+    username: str | None
+    display_name: str
+    is_active: bool
 
 
 class MacroRecord(Protocol):

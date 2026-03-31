@@ -9,7 +9,10 @@ from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 from application.services.helpdesk import HelpdeskService
-from application.use_cases.tickets import SLAAutoReassignmentTarget
+from application.use_cases.tickets import (
+    OperatorManagementError,
+    SLAAutoReassignmentTarget,
+)
 from domain.entities.ticket import TicketDetails
 from domain.enums.tickets import (
     TicketEventType,
@@ -317,6 +320,77 @@ def build_operator_repository_mock(operator_ids: dict[int, int]) -> Mock:
     return repository
 
 
+@dataclass
+class StubOperatorManagementRepository:
+    active_operator_ids: set[int] = field(default_factory=set)
+    display_names: dict[int, str] = field(default_factory=dict)
+    usernames: dict[int, str | None] = field(default_factory=dict)
+
+    async def exists_active_by_telegram_user_id(self, *, telegram_user_id: int) -> bool:
+        return telegram_user_id in self.active_operator_ids
+
+    async def list_active(self) -> list[SimpleNamespace]:
+        return [
+            SimpleNamespace(
+                id=index,
+                telegram_user_id=telegram_user_id,
+                username=self.usernames.get(telegram_user_id),
+                display_name=self.display_names.get(
+                    telegram_user_id, f"Оператор {telegram_user_id}"
+                ),
+                is_active=True,
+            )
+            for index, telegram_user_id in enumerate(sorted(self.active_operator_ids), start=1)
+        ]
+
+    async def promote(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> SimpleNamespace:
+        self.active_operator_ids.add(telegram_user_id)
+        self.display_names[telegram_user_id] = display_name
+        if username is not None or telegram_user_id not in self.usernames:
+            self.usernames[telegram_user_id] = username
+        return SimpleNamespace(
+            id=len(self.active_operator_ids),
+            telegram_user_id=telegram_user_id,
+            username=self.usernames.get(telegram_user_id),
+            display_name=display_name,
+            is_active=True,
+        )
+
+    async def revoke(self, *, telegram_user_id: int) -> SimpleNamespace | None:
+        if telegram_user_id not in self.active_operator_ids:
+            return None
+
+        self.active_operator_ids.remove(telegram_user_id)
+        return SimpleNamespace(
+            id=1,
+            telegram_user_id=telegram_user_id,
+            username=self.usernames.get(telegram_user_id),
+            display_name=self.display_names.get(
+                telegram_user_id, f"Оператор {telegram_user_id}"
+            ),
+            is_active=False,
+        )
+
+    async def get_or_create(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> int:
+        self.active_operator_ids.add(telegram_user_id)
+        self.display_names[telegram_user_id] = display_name
+        if username is not None or telegram_user_id not in self.usernames:
+            self.usernames[telegram_user_id] = username
+        return telegram_user_id
+
+
 def build_macro_repository_mock(
     macros: list[SimpleNamespace] | None = None,
 ) -> Mock:
@@ -472,6 +546,7 @@ def build_service(
     sla_policy_repository: Any | None = None,
     tag_repository: StubTagRepository | None = None,
     ticket_tag_repository: StubTicketTagRepository | None = None,
+    super_admin_telegram_user_id: int = 42,
 ) -> HelpdeskService:
     active_tag_repository = tag_repository or StubTagRepository()
     return HelpdeskService(
@@ -496,6 +571,7 @@ def build_service(
         tag_repository=active_tag_repository,
         ticket_tag_repository=ticket_tag_repository
         or StubTicketTagRepository(tag_repository=active_tag_repository),
+        super_admin_telegram_user_id=super_admin_telegram_user_id,
     )
 
 
@@ -621,6 +697,98 @@ async def test_assign_and_reassign_ticket_create_distinct_events() -> None:
         TicketEventType.ASSIGNED,
         TicketEventType.REASSIGNED,
     ]
+
+
+async def test_list_operators_returns_active_operator_summaries() -> None:
+    operator_repository = StubOperatorManagementRepository(
+        active_operator_ids={1001, 1002},
+        display_names={1001: "Иван", 1002: "Мария"},
+        usernames={1001: "ivan", 1002: None},
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(
+                ticket_id=1,
+                public_id=uuid4(),
+                status=TicketStatus.NEW,
+            )
+        ),
+        operator_repository=operator_repository,
+    )
+
+    result = await service.list_operators()
+
+    assert [(operator.telegram_user_id, operator.display_name) for operator in result] == [
+        (1001, "Иван"),
+        (1002, "Мария"),
+    ]
+
+
+async def test_promote_operator_marks_user_as_operator() -> None:
+    operator_repository = StubOperatorManagementRepository()
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(
+                ticket_id=1,
+                public_id=uuid4(),
+                status=TicketStatus.NEW,
+            )
+        ),
+        operator_repository=operator_repository,
+    )
+
+    result = await service.promote_operator(
+        telegram_user_id=3001,
+        display_name="Новый оператор",
+    )
+
+    assert result.changed is True
+    assert result.operator.telegram_user_id == 3001
+    assert 3001 in operator_repository.active_operator_ids
+
+
+async def test_revoke_operator_removes_operator_rights() -> None:
+    operator_repository = StubOperatorManagementRepository(
+        active_operator_ids={3001},
+        display_names={3001: "Оператор 3001"},
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(
+                ticket_id=1,
+                public_id=uuid4(),
+                status=TicketStatus.NEW,
+            )
+        ),
+        operator_repository=operator_repository,
+    )
+
+    result = await service.revoke_operator(telegram_user_id=3001)
+
+    assert result is not None
+    assert result.operator.is_active is False
+    assert 3001 not in operator_repository.active_operator_ids
+
+
+async def test_revoke_operator_rejects_super_admin_target() -> None:
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(
+                ticket_id=1,
+                public_id=uuid4(),
+                status=TicketStatus.NEW,
+            )
+        ),
+        operator_repository=StubOperatorManagementRepository(),
+        super_admin_telegram_user_id=42,
+    )
+
+    try:
+        await service.revoke_operator(telegram_user_id=42)
+    except OperatorManagementError as exc:
+        assert str(exc) == "Нельзя снять права у супер администратора."
+    else:
+        raise AssertionError("expected OperatorManagementError")
 
 
 async def test_get_and_list_queued_tickets_follow_queue_order() -> None:

@@ -111,6 +111,7 @@ def build_authorization_service_factory(
 def build_helpdesk_service(
     session: AsyncSession,
     *,
+    super_admin_telegram_user_id: int,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskService:
     return HelpdeskService(
@@ -123,12 +124,14 @@ def build_helpdesk_service(
         tag_repository=SqlAlchemyTagRepository(session),
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
         sla_deadline_scheduler=sla_deadline_scheduler,
+        super_admin_telegram_user_id=super_admin_telegram_user_id,
     )
 
 
 def build_helpdesk_service_factory(
     session_factory: async_sessionmaker[AsyncSession],
     *,
+    super_admin_telegram_user_id: int,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskServiceFactory:
     @asynccontextmanager
@@ -136,6 +139,7 @@ def build_helpdesk_service_factory(
         async with session_scope(session_factory) as session:
             yield build_helpdesk_service(
                 session,
+                super_admin_telegram_user_id=super_admin_telegram_user_id,
                 sla_deadline_scheduler=sla_deadline_scheduler,
             )
 
@@ -167,6 +171,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     )
     helpdesk_service_factory = build_helpdesk_service_factory(
         db_session_factory,
+        super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
         sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
     )
     bot: Bot | None = None

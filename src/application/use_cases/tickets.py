@@ -8,6 +8,7 @@ from uuid import UUID
 
 from domain.contracts.repositories import (
     MacroRepository,
+    OperatorRecord,
     OperatorRepository,
     SLAPolicyRecord,
     SLAPolicyRepository,
@@ -184,6 +185,29 @@ class OperatorReplyResult:
 
 
 @dataclass(slots=True)
+class OperatorSummary:
+    telegram_user_id: int
+    display_name: str
+    username: str | None
+    is_active: bool
+
+
+def build_operator_summary(operator: OperatorRecord) -> OperatorSummary:
+    return OperatorSummary(
+        telegram_user_id=operator.telegram_user_id,
+        display_name=operator.display_name,
+        username=operator.username,
+        is_active=operator.is_active,
+    )
+
+
+@dataclass(slots=True)
+class OperatorRoleMutationResult:
+    operator: OperatorSummary
+    changed: bool
+
+
+@dataclass(slots=True)
 class MacroSummary:
     id: int
     title: str
@@ -260,6 +284,10 @@ class SLABatchProcessingResult:
     evaluated_count: int
     auto_escalated_count: int
     auto_reassigned_count: int
+
+
+class OperatorManagementError(Exception):
+    """Raised when an operator management action is not allowed."""
 
 
 def build_sla_approaching_window(*, total_minutes: int) -> timedelta:
@@ -823,6 +851,93 @@ class ListMacrosUseCase:
             MacroSummary(id=macro.id, title=macro.title, body=macro.body)
             for macro in macros
         ]
+
+
+class ListOperatorsUseCase:
+    def __init__(
+        self,
+        operator_repository: OperatorRepository,
+        *,
+        super_admin_telegram_user_id: int,
+    ) -> None:
+        self.operator_repository = operator_repository
+        self.super_admin_telegram_user_id = super_admin_telegram_user_id
+
+    async def __call__(self) -> Sequence[OperatorSummary]:
+        operators = await self.operator_repository.list_active()
+        return [
+            build_operator_summary(operator)
+            for operator in operators
+            if operator.telegram_user_id != self.super_admin_telegram_user_id
+        ]
+
+
+class PromoteOperatorUseCase:
+    def __init__(
+        self,
+        operator_repository: OperatorRepository,
+        *,
+        super_admin_telegram_user_id: int,
+    ) -> None:
+        self.operator_repository = operator_repository
+        self.super_admin_telegram_user_id = super_admin_telegram_user_id
+
+    async def __call__(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> OperatorRoleMutationResult:
+        if telegram_user_id == self.super_admin_telegram_user_id:
+            raise OperatorManagementError(
+                "Супер администратор уже имеет все необходимые права."
+            )
+
+        was_active = await self.operator_repository.exists_active_by_telegram_user_id(
+            telegram_user_id=telegram_user_id
+        )
+        operator = await self.operator_repository.promote(
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+        )
+        return OperatorRoleMutationResult(
+            operator=build_operator_summary(operator),
+            changed=not was_active,
+        )
+
+
+class RevokeOperatorUseCase:
+    def __init__(
+        self,
+        operator_repository: OperatorRepository,
+        *,
+        super_admin_telegram_user_id: int,
+    ) -> None:
+        self.operator_repository = operator_repository
+        self.super_admin_telegram_user_id = super_admin_telegram_user_id
+
+    async def __call__(
+        self,
+        *,
+        telegram_user_id: int,
+    ) -> OperatorRoleMutationResult | None:
+        if telegram_user_id == self.super_admin_telegram_user_id:
+            raise OperatorManagementError(
+                "Нельзя снять права у супер администратора."
+            )
+
+        operator = await self.operator_repository.revoke(
+            telegram_user_id=telegram_user_id
+        )
+        if operator is None:
+            return None
+
+        return OperatorRoleMutationResult(
+            operator=build_operator_summary(operator),
+            changed=True,
+        )
 
 
 class ApplyMacroToTicketUseCase:

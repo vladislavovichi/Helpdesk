@@ -14,10 +14,17 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.services.helpdesk import HelpdeskServiceFactory
 from application.services.stats import HelpdeskOperationalStats
-from application.use_cases.tickets import MacroSummary, QueuedTicketSummary, TicketDetailsSummary
-from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
+from application.use_cases.tickets import (
+    MacroSummary,
+    OperatorManagementError,
+    OperatorSummary,
+    QueuedTicketSummary,
+    TicketDetailsSummary,
+)
+from bot.callbacks import AdminOperatorCallback, OperatorActionCallback, OperatorMacroCallback
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 from domain.tickets import InvalidTicketTransitionError, format_status_for_humans
+from infrastructure.config import Settings
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
     OperatorPresenceHelper,
@@ -414,6 +421,243 @@ async def handle_stats(
         stats = await helpdesk_service.get_operational_stats()
 
     await message.answer(_format_operational_stats(stats))
+
+
+@router.message(Command("operators"))
+async def handle_operators(
+    message: Message,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        operators = await helpdesk_service.list_operators()
+
+    await message.answer(
+        _format_operator_list_response(
+            operators=operators,
+            super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+        ),
+        reply_markup=_build_operator_management_markup(operators=operators),
+    )
+
+
+@router.message(Command("add_operator"))
+async def handle_add_operator(
+    message: Message,
+    command: CommandObject,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    parsed = _parse_operator_argument_with_optional_name(command.args)
+    if parsed is None:
+        await message.answer("Использование: /add_operator <telegram_user_id> [display_name]")
+        return
+
+    telegram_user_id, display_name = parsed
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        try:
+            result = await helpdesk_service.promote_operator(
+                telegram_user_id=telegram_user_id,
+                display_name=display_name,
+            )
+        except OperatorManagementError as exc:
+            await message.answer(str(exc))
+            return
+
+        operators = await helpdesk_service.list_operators()
+
+    if result.changed:
+        result_text = (
+            f"Права оператора выданы пользователю {result.operator.display_name} "
+            f"(Telegram ID: {result.operator.telegram_user_id})."
+        )
+    else:
+        result_text = (
+            f"Пользователь {result.operator.display_name} "
+            f"(Telegram ID: {result.operator.telegram_user_id}) уже является оператором."
+        )
+
+    await message.answer(result_text)
+    await message.answer(
+        _format_operator_list_response(
+            operators=operators,
+            super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+        ),
+        reply_markup=_build_operator_management_markup(operators=operators),
+    )
+
+
+@router.message(Command("remove_operator"))
+async def handle_remove_operator(
+    message: Message,
+    command: CommandObject,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    telegram_user_id = _parse_telegram_user_id(command.args)
+    if telegram_user_id is None:
+        await message.answer("Использование: /remove_operator <telegram_user_id>")
+        return
+
+    if not await global_rate_limiter.allow():
+        await message.answer("Сервис временно недоступен. Попробуйте чуть позже.")
+        return
+
+    if message.from_user is not None:
+        await operator_presence.touch(operator_id=message.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        try:
+            result = await helpdesk_service.revoke_operator(
+                telegram_user_id=telegram_user_id
+            )
+        except OperatorManagementError as exc:
+            await message.answer(str(exc))
+            return
+
+        operators = await helpdesk_service.list_operators()
+
+    if result is None:
+        await message.answer("Активный оператор с таким Telegram ID не найден.")
+    else:
+        await message.answer(
+            f"Права оператора сняты у пользователя {result.operator.display_name} "
+            f"(Telegram ID: {result.operator.telegram_user_id})."
+        )
+
+    await message.answer(
+        _format_operator_list_response(
+            operators=operators,
+            super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+        ),
+        reply_markup=_build_operator_management_markup(operators=operators),
+    )
+
+
+@router.callback_query(AdminOperatorCallback.filter(F.action == "refresh"))
+async def handle_refresh_operators(
+    callback: CallbackQuery,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await _respond_to_operator(
+            callback,
+            "Сервис временно недоступен. Попробуйте чуть позже.",
+        )
+        return
+
+    await operator_presence.touch(operator_id=callback.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        operators = await helpdesk_service.list_operators()
+
+    await callback.answer("Список операторов обновлен.")
+    if callback.message is not None:
+        await callback.message.answer(
+            _format_operator_list_response(
+                operators=operators,
+                super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+            ),
+            reply_markup=_build_operator_management_markup(operators=operators),
+        )
+
+
+@router.callback_query(AdminOperatorCallback.filter(F.action == "revoke"))
+async def handle_revoke_operator_prompt(
+    callback: CallbackQuery,
+    callback_data: AdminOperatorCallback,
+) -> None:
+    await callback.answer("Подтвердите снятие прав оператора.")
+    if callback.message is not None:
+        await callback.message.answer(
+            (
+                "Подтвердите снятие прав оператора "
+                f"у пользователя с Telegram ID {callback_data.telegram_user_id}."
+            ),
+            reply_markup=_build_operator_revoke_confirmation_markup(
+                telegram_user_id=callback_data.telegram_user_id
+            ),
+        )
+
+
+@router.callback_query(AdminOperatorCallback.filter(F.action == "confirm_revoke"))
+async def handle_confirm_revoke_operator(
+    callback: CallbackQuery,
+    callback_data: AdminOperatorCallback,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+) -> None:
+    if not await global_rate_limiter.allow():
+        await _respond_to_operator(
+            callback,
+            "Сервис временно недоступен. Попробуйте чуть позже.",
+        )
+        return
+
+    await operator_presence.touch(operator_id=callback.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        try:
+            result = await helpdesk_service.revoke_operator(
+                telegram_user_id=callback_data.telegram_user_id
+            )
+        except OperatorManagementError as exc:
+            await _respond_to_operator(callback, str(exc))
+            return
+
+        operators = await helpdesk_service.list_operators()
+
+    if result is None:
+        answer_text = "Активный оператор с таким Telegram ID не найден."
+    else:
+        answer_text = (
+            f"Права оператора сняты у пользователя {result.operator.display_name} "
+            f"(Telegram ID: {result.operator.telegram_user_id})."
+        )
+
+    await callback.answer(answer_text)
+    if callback.message is not None:
+        await callback.message.answer(
+            _format_operator_list_response(
+                operators=operators,
+                super_admin_telegram_user_id=settings.authorization.super_admin_telegram_user_id,
+            ),
+            reply_markup=_build_operator_management_markup(operators=operators),
+        )
+
+
+@router.callback_query(AdminOperatorCallback.filter(F.action == "cancel_revoke"))
+async def handle_cancel_revoke_operator(
+    callback: CallbackQuery,
+) -> None:
+    await callback.answer("Снятие прав оператора отменено.")
+    if callback.message is not None:
+        await callback.message.edit_reply_markup(reply_markup=None)
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "view"))
@@ -1129,7 +1373,56 @@ def _build_macro_actions_markup(
                     macro_id=macro.id,
                 ).pack(),
             )
+    )
+    return builder.as_markup()
+
+
+def _build_operator_management_markup(
+    *,
+    operators: Sequence[OperatorSummary],
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for operator in operators:
+        builder.row(
+            _build_callback_button(
+                f"Снять права: {_format_operator_button_text(operator)}",
+                AdminOperatorCallback(
+                    action="revoke",
+                    telegram_user_id=operator.telegram_user_id,
+                ).pack(),
+            )
         )
+
+    builder.row(
+        _build_callback_button(
+            "Обновить список",
+            AdminOperatorCallback(action="refresh", telegram_user_id=0).pack(),
+        )
+    )
+    return builder.as_markup()
+
+
+def _build_operator_revoke_confirmation_markup(
+    *,
+    telegram_user_id: int,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        _build_callback_button(
+            "Подтвердить",
+            AdminOperatorCallback(
+                action="confirm_revoke",
+                telegram_user_id=telegram_user_id,
+            ).pack(),
+        ),
+        _build_callback_button(
+            "Отмена",
+            AdminOperatorCallback(
+                action="cancel_revoke",
+                telegram_user_id=telegram_user_id,
+            ).pack(),
+        ),
+    )
     return builder.as_markup()
 
 
@@ -1191,6 +1484,35 @@ def _format_macro_list(
     return "\n".join(lines)
 
 
+def _format_operator_list_response(
+    *,
+    operators: Sequence[OperatorSummary],
+    super_admin_telegram_user_id: int,
+) -> str:
+    lines = [
+        "Управление операторами:",
+        f"Супер администратор: {super_admin_telegram_user_id}",
+        "",
+        "Активные операторы:",
+    ]
+
+    if not operators:
+        lines.append("- список операторов пуст")
+    else:
+        for operator in operators:
+            lines.append(f"- {_format_operator_line(operator)}")
+
+    lines.extend(
+        [
+            "",
+            "Команды:",
+            "/add_operator <telegram_user_id> [display_name]",
+            "/remove_operator <telegram_user_id>",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _format_ticket_tags_response(
     public_number: str,
     ticket_tags: Sequence[str],
@@ -1240,6 +1562,18 @@ def _format_macro_button_text(macro: MacroSummary) -> str:
     if len(label) > 32:
         return f"{label[:29]}..."
     return label
+
+
+def _format_operator_button_text(operator: OperatorSummary) -> str:
+    label = operator.display_name.strip() or str(operator.telegram_user_id)
+    if len(label) > 24:
+        label = f"{label[:21]}..."
+    return f"{label} ({operator.telegram_user_id})"
+
+
+def _format_operator_line(operator: OperatorSummary) -> str:
+    username = f" @{operator.username}" if operator.username else ""
+    return f"{operator.display_name} (Telegram ID: {operator.telegram_user_id}){username}"
 
 
 def _format_operational_stats(stats: HelpdeskOperationalStats) -> str:
@@ -1350,6 +1684,39 @@ def _parse_ticket_argument_with_text(args: str | None) -> tuple[UUID, str] | Non
 
 def _parse_reassign_target(text: str) -> tuple[int, str] | None:
     parts = text.strip().split(maxsplit=1)
+    if not parts:
+        return None
+
+    try:
+        telegram_user_id = int(parts[0])
+    except ValueError:
+        return None
+
+    display_name = parts[1].strip() if len(parts) > 1 else f"Оператор {telegram_user_id}"
+    if not display_name:
+        display_name = f"Оператор {telegram_user_id}"
+    return telegram_user_id, display_name
+
+
+def _parse_telegram_user_id(value: str | None) -> int | None:
+    if value is None:
+        return None
+
+    stripped = value.strip()
+    if not stripped:
+        return None
+
+    try:
+        return int(stripped)
+    except ValueError:
+        return None
+
+
+def _parse_operator_argument_with_optional_name(args: str | None) -> tuple[int, str] | None:
+    if args is None:
+        return None
+
+    parts = args.strip().split(maxsplit=1)
     if not parts:
         return None
 

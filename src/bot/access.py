@@ -18,7 +18,15 @@ OPERATOR_COMMANDS = frozenset(
         "stats",
     }
 )
+SUPER_ADMIN_COMMANDS = frozenset(
+    {
+        "operators",
+        "add_operator",
+        "remove_operator",
+    }
+)
 OPERATOR_CALLBACK_PREFIXES = frozenset({"operator:", "operator_macro:"})
+SUPER_ADMIN_CALLBACK_PREFIXES = frozenset({"admin_operator:"})
 OPERATOR_STATE_NAMES = frozenset(
     {
         "OperatorTicketStates:replying",
@@ -52,8 +60,16 @@ def resolve_required_permission(
     state_name: str | None = None,
 ) -> Permission | None:
     command_name = extract_command_name(message_text)
+    if command_name in SUPER_ADMIN_COMMANDS:
+        return Permission.MANAGE_OPERATORS
+
     if command_name in OPERATOR_COMMANDS:
         return Permission.ACCESS_OPERATOR
+
+    if callback_data is not None and any(
+        callback_data.startswith(prefix) for prefix in SUPER_ADMIN_CALLBACK_PREFIXES
+    ):
+        return Permission.MANAGE_OPERATORS
 
     if callback_data is not None and any(
         callback_data.startswith(prefix) for prefix in OPERATOR_CALLBACK_PREFIXES

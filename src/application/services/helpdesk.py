@@ -24,14 +24,19 @@ from application.use_cases.tickets import (
     GetTicketDetailsUseCase,
     ListAvailableTagsUseCase,
     ListMacrosUseCase,
+    ListOperatorsUseCase,
     ListQueuedTicketsUseCase,
     ListTicketTagsUseCase,
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
+    OperatorRoleMutationResult,
+    OperatorSummary,
+    PromoteOperatorUseCase,
     QueuedTicketSummary,
     RemoveTagFromTicketUseCase,
     ReplyToTicketAsOperatorUseCase,
+    RevokeOperatorUseCase,
     RunTicketSLAChecksUseCase,
     SLAAutoReassignmentTarget,
     SLABatchProcessingResult,
@@ -69,6 +74,7 @@ class HelpdeskService:
     tag_repository: TagRepository
     ticket_tag_repository: TicketTagRepository
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
+    super_admin_telegram_user_id: int | None = None
     _create_ticket_from_client_message: CreateTicketFromClientMessageUseCase = field(
         init=False,
         repr=False,
@@ -87,6 +93,9 @@ class HelpdeskService:
         init=False,
         repr=False,
     )
+    _list_operators: ListOperatorsUseCase = field(init=False, repr=False)
+    _promote_operator: PromoteOperatorUseCase = field(init=False, repr=False)
+    _revoke_operator: RevokeOperatorUseCase = field(init=False, repr=False)
     _list_macros: ListMacrosUseCase = field(init=False, repr=False)
     _apply_macro_to_ticket: ApplyMacroToTicketUseCase = field(init=False, repr=False)
     _list_ticket_tags: ListTicketTagsUseCase = field(init=False, repr=False)
@@ -178,6 +187,20 @@ class HelpdeskService:
             ticket_message_repository=self.ticket_message_repository,
             ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,
+        )
+        if self.super_admin_telegram_user_id is None:
+            raise RuntimeError("Не настроен Telegram user id супер администратора.")
+        self._list_operators = ListOperatorsUseCase(
+            operator_repository=self.operator_repository,
+            super_admin_telegram_user_id=self.super_admin_telegram_user_id,
+        )
+        self._promote_operator = PromoteOperatorUseCase(
+            operator_repository=self.operator_repository,
+            super_admin_telegram_user_id=self.super_admin_telegram_user_id,
+        )
+        self._revoke_operator = RevokeOperatorUseCase(
+            operator_repository=self.operator_repository,
+            super_admin_telegram_user_id=self.super_admin_telegram_user_id,
         )
         self._list_macros = ListMacrosUseCase(macro_repository=self.macro_repository)
         self._apply_macro_to_ticket = ApplyMacroToTicketUseCase(
@@ -370,6 +393,29 @@ class HelpdeskService:
 
     async def list_macros(self) -> Sequence[MacroSummary]:
         return await self._list_macros()
+
+    async def list_operators(self) -> Sequence[OperatorSummary]:
+        return await self._list_operators()
+
+    async def promote_operator(
+        self,
+        *,
+        telegram_user_id: int,
+        display_name: str,
+        username: str | None = None,
+    ) -> OperatorRoleMutationResult:
+        return await self._promote_operator(
+            telegram_user_id=telegram_user_id,
+            display_name=display_name,
+            username=username,
+        )
+
+    async def revoke_operator(
+        self,
+        *,
+        telegram_user_id: int,
+    ) -> OperatorRoleMutationResult | None:
+        return await self._revoke_operator(telegram_user_id=telegram_user_id)
 
     async def apply_macro_to_ticket(
         self,
