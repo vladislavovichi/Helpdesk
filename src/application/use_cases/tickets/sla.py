@@ -67,9 +67,8 @@ def evaluate_deadline(
             remaining_seconds=remaining_seconds,
         )
 
-    if (
-        approaching_window is not None
-        and remaining_seconds <= int(approaching_window.total_seconds())
+    if approaching_window is not None and remaining_seconds <= int(
+        approaching_window.total_seconds()
     ):
         status = SLADeadlineStatus.APPROACHING
     else:
@@ -133,9 +132,7 @@ def evaluate_ticket_sla(
 
     resolution_deadline_at: datetime | None = None
     if ticket.closed_at is None:
-        resolution_deadline_at = ticket.created_at + timedelta(
-            minutes=policy.resolution_minutes
-        )
+        resolution_deadline_at = ticket.created_at + timedelta(minutes=policy.resolution_minutes)
 
     stale_assignment_deadline_at: datetime | None = None
     if (
@@ -162,12 +159,9 @@ def evaluate_ticket_sla(
         now=now,
     )
 
-    should_auto_escalate = (
-        ticket.status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}
-        and (
-            first_response.status == SLADeadlineStatus.BREACHED
-            or resolution.status == SLADeadlineStatus.BREACHED
-        )
+    should_auto_escalate = ticket.status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED} and (
+        first_response.status == SLADeadlineStatus.BREACHED
+        or resolution.status == SLADeadlineStatus.BREACHED
     )
     should_auto_reassign = (
         ticket.status == TicketStatus.ASSIGNED
@@ -410,9 +404,7 @@ class RunTicketSLAChecksUseCase:
     ) -> SLABatchProcessingResult:
         checked_at = now or utcnow()
         tickets = await self.ticket_repository.list_open_tickets(limit=limit)
-        target_by_public_id = {
-            target.ticket_public_id: target for target in reassignment_targets
-        }
+        target_by_public_id = {target.ticket_public_id: target for target in reassignment_targets}
 
         processed: list[TicketSLAProcessingSummary] = []
         auto_escalated_count = 0

@@ -128,9 +128,7 @@ class StubTicketRepository:
             }
         )
         tickets = [
-            ticket
-            for ticket in self.queued_tickets or []
-            if ticket.status == TicketStatus.QUEUED
+            ticket for ticket in self.queued_tickets or [] if ticket.status == TicketStatus.QUEUED
         ]
         if limit is None:
             return tickets
@@ -138,9 +136,7 @@ class StubTicketRepository:
 
     async def list_open_tickets(self, *, limit: int | None = None) -> list[SimpleNamespace]:
         tickets = [
-            ticket
-            for ticket in self.tickets.values()
-            if ticket.status != TicketStatus.CLOSED
+            ticket for ticket in self.tickets.values() if ticket.status != TicketStatus.CLOSED
         ]
         tickets.sort(key=lambda ticket: (ticket.updated_at, ticket.id))
         if limit is None:
@@ -372,9 +368,7 @@ class StubOperatorManagementRepository:
             id=1,
             telegram_user_id=telegram_user_id,
             username=self.usernames.get(telegram_user_id),
-            display_name=self.display_names.get(
-                telegram_user_id, f"Оператор {telegram_user_id}"
-            ),
+            display_name=self.display_names.get(telegram_user_id, f"Оператор {telegram_user_id}"),
             is_active=False,
         )
 
@@ -552,8 +546,7 @@ def build_service(
     active_tag_repository = tag_repository or StubTagRepository()
     return HelpdeskService(
         ticket_repository=ticket_repository,
-        ticket_message_repository=message_repository
-        or build_message_repository_mock(),
+        ticket_message_repository=message_repository or build_message_repository_mock(),
         ticket_event_repository=event_repository or build_event_repository_mock(),
         operator_repository=operator_repository or build_operator_repository_mock({}),
         macro_repository=macro_repository or build_macro_repository_mock(),

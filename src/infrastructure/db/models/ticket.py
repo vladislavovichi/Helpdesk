@@ -73,9 +73,7 @@ class Ticket(TimestampMixin, Base):
     first_response_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    closed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     assigned_operator: Mapped[Operator | None] = relationship(
         back_populates="assigned_tickets",

@@ -232,9 +232,7 @@ async def handle_macros(
 
     actor_telegram_user_id = message.from_user.id if message.from_user is not None else None
     async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(
-            actor_telegram_user_id=actor_telegram_user_id
-        )
+        macros = await helpdesk_service.list_macros(actor_telegram_user_id=actor_telegram_user_id)
         ticket_details = None
         if ticket_public_id is not None:
             ticket_details = await helpdesk_service.get_ticket_details(

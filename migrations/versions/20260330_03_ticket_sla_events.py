@@ -17,12 +17,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'sla_breached_first_response'"
-    )
-    op.execute(
-        "ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'sla_breached_resolution'"
-    )
+    op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'sla_breached_first_response'")
+    op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'sla_breached_resolution'")
     op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'auto_escalated'")
     op.execute("ALTER TYPE ticket_event_type ADD VALUE IF NOT EXISTS 'auto_reassigned'")
 

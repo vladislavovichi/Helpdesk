@@ -70,9 +70,7 @@ def upgrade() -> None:
         sa.Column("telegram_user_id", sa.BigInteger(), nullable=False),
         sa.Column("username", sa.String(length=64), nullable=True),
         sa.Column("display_name", sa.String(length=255), nullable=False),
-        sa.Column(
-            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
-        ),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -80,9 +78,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_operators")),
-        sa.UniqueConstraint(
-            "telegram_user_id", name=op.f("uq_operators_telegram_user_id")
-        ),
+        sa.UniqueConstraint("telegram_user_id", name=op.f("uq_operators_telegram_user_id")),
     )
     op.create_index(
         op.f("ix_operators_telegram_user_id"),
@@ -90,9 +86,7 @@ def upgrade() -> None:
         ["telegram_user_id"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_operators_username"), "operators", ["username"], unique=False
-    )
+    op.create_index(op.f("ix_operators_username"), "operators", ["username"], unique=False)
 
     op.create_table(
         "macros",
@@ -127,9 +121,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_sla_policies")),
         sa.UniqueConstraint("name", name=op.f("uq_sla_policies_name")),
     )
-    op.create_index(
-        op.f("ix_sla_policies_priority"), "sla_policies", ["priority"], unique=False
-    )
+    op.create_index(op.f("ix_sla_policies_priority"), "sla_policies", ["priority"], unique=False)
 
     op.create_table(
         "tags",
@@ -150,9 +142,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), sa.Identity(), nullable=False),
         sa.Column("public_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("client_chat_id", sa.BigInteger(), nullable=False),
-        sa.Column(
-            "status", ticket_status, server_default=sa.text("'new'"), nullable=False
-        ),
+        sa.Column("status", ticket_status, server_default=sa.text("'new'"), nullable=False),
         sa.Column(
             "priority",
             ticket_priority,
@@ -190,9 +180,7 @@ def upgrade() -> None:
         ["assigned_operator_id"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_tickets_client_chat_id"), "tickets", ["client_chat_id"], unique=False
-    )
+    op.create_index(op.f("ix_tickets_client_chat_id"), "tickets", ["client_chat_id"], unique=False)
     op.create_index(op.f("ix_tickets_priority"), "tickets", ["priority"], unique=False)
     op.create_index(op.f("ix_tickets_status"), "tickets", ["status"], unique=False)
 
@@ -201,9 +189,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), sa.Identity(), nullable=False),
         sa.Column("ticket_id", sa.BigInteger(), nullable=False),
         sa.Column("event_type", ticket_event_type, nullable=False),
-        sa.Column(
-            "payload_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
-        ),
+        sa.Column("payload_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

@@ -171,9 +171,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     redis = build_redis_client(settings.redis)
     fsm_storage = build_fsm_storage(redis)
     redis_workflow = build_redis_workflow_runtime(redis)
-    super_admin_telegram_user_ids = frozenset(
-        settings.authorization.super_admin_telegram_user_ids
-    )
+    super_admin_telegram_user_ids = frozenset(settings.authorization.super_admin_telegram_user_ids)
     authorization_service_factory = build_authorization_service_factory(
         db_session_factory,
         super_admin_telegram_user_ids=super_admin_telegram_user_ids,

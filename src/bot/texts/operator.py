@@ -21,9 +21,7 @@ REPLY_MODE_COMMAND_BLOCK_TEXT = (
 REASSIGN_MODE_COMMAND_BLOCK_TEXT = (
     "Сейчас активен режим переназначения. Отправьте данные оператора\nили используйте /cancel."
 )
-REASSIGN_TARGET_PROMPT_TEXT = (
-    "Отправьте идентификатор пользователя Telegram целевого оператора."
-)
+REASSIGN_TARGET_PROMPT_TEXT = "Отправьте идентификатор пользователя Telegram целевого оператора."
 APPLY_MACRO_FAILED_TEXT = "Не удалось применить макрос."
 OPERATORS_EMPTY_TEXT = "Активный оператор с таким Telegram ID не найден."
 OPERATORS_REFRESHED_TEXT = "Список операторов обновлен."
@@ -175,24 +173,14 @@ def build_promote_operator_result_text(
 ) -> str:
     if changed:
         return (
-            f"Права оператора выданы пользователю {display_name} "
-            f"(Telegram ID: {telegram_user_id})."
+            f"Права оператора выданы пользователю {display_name} (Telegram ID: {telegram_user_id})."
         )
-    return (
-        f"Пользователь {display_name} "
-        f"(Telegram ID: {telegram_user_id}) уже является оператором."
-    )
+    return f"Пользователь {display_name} (Telegram ID: {telegram_user_id}) уже является оператором."
 
 
 def build_revoke_operator_result_text(display_name: str, telegram_user_id: int) -> str:
-    return (
-        f"Права оператора сняты у пользователя {display_name} "
-        f"(Telegram ID: {telegram_user_id})."
-    )
+    return f"Права оператора сняты у пользователя {display_name} (Telegram ID: {telegram_user_id})."
 
 
 def build_revoke_confirm_message(telegram_user_id: int) -> str:
-    return (
-        "Подтвердите снятие прав оператора "
-        f"у пользователя с Telegram ID {telegram_user_id}."
-    )
+    return f"Подтвердите снятие прав оператора у пользователя с Telegram ID {telegram_user_id}."

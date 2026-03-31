@@ -22,10 +22,7 @@ PROTECTED_COMMAND_PERMISSIONS: Mapping[str, Permission] = {
 }
 PROTECTED_MESSAGE_TEXT_PERMISSIONS: Mapping[str, Permission] = {
     **{button_text: Permission.ACCESS_OPERATOR for button_text in OPERATOR_NAVIGATION_BUTTONS},
-    **{
-        button_text: Permission.MANAGE_OPERATORS
-        for button_text in SUPER_ADMIN_NAVIGATION_BUTTONS
-    },
+    **{button_text: Permission.MANAGE_OPERATORS for button_text in SUPER_ADMIN_NAVIGATION_BUTTONS},
 }
 PROTECTED_CALLBACK_PREFIX_PERMISSIONS: tuple[tuple[str, Permission], ...] = (
     ("admin_operator:", Permission.MANAGE_OPERATORS),

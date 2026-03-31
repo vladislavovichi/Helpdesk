@@ -20,9 +20,7 @@ class RedisFixedWindowRateLimiter:
 
 
 class RedisGlobalRateLimiter(GlobalRateLimiter):
-    def __init__(
-        self, redis: Redis, *, limit: int = 30, window_seconds: int = 1
-    ) -> None:
+    def __init__(self, redis: Redis, *, limit: int = 30, window_seconds: int = 1) -> None:
         self._limiter = RedisFixedWindowRateLimiter(
             redis,
             limit=limit,
@@ -34,9 +32,7 @@ class RedisGlobalRateLimiter(GlobalRateLimiter):
 
 
 class RedisChatRateLimiter(ChatRateLimiter):
-    def __init__(
-        self, redis: Redis, *, limit: int = 5, window_seconds: int = 10
-    ) -> None:
+    def __init__(self, redis: Redis, *, limit: int = 5, window_seconds: int = 10) -> None:
         self._limiter = RedisFixedWindowRateLimiter(
             redis,
             limit=limit,

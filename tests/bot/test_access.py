@@ -56,8 +56,7 @@ def test_protected_command_permissions_cover_admin_commands() -> None:
 def test_protected_message_permissions_cover_navigation_buttons() -> None:
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[QUEUE_BUTTON_TEXT] == Permission.ACCESS_OPERATOR
     assert (
-        PROTECTED_MESSAGE_TEXT_PERMISSIONS[ADD_OPERATOR_BUTTON_TEXT]
-        == Permission.MANAGE_OPERATORS
+        PROTECTED_MESSAGE_TEXT_PERMISSIONS[ADD_OPERATOR_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
     )
 
 

@@ -51,9 +51,7 @@ class HelpdeskStatsService:
 
         return HelpdeskOperationalStats(
             total_open_tickets=sum(
-                count
-                for status, count in by_status.items()
-                if status != TicketStatus.CLOSED
+                count for status, count in by_status.items() if status != TicketStatus.CLOSED
             ),
             queued_tickets_count=by_status.get(TicketStatus.QUEUED, 0),
             assigned_tickets_count=by_status.get(TicketStatus.ASSIGNED, 0),
@@ -70,7 +68,5 @@ class HelpdeskStatsService:
             average_first_response_time_seconds=_normalize_average_seconds(
                 average_first_response_seconds
             ),
-            average_resolution_time_seconds=_normalize_average_seconds(
-                average_resolution_seconds
-            ),
+            average_resolution_time_seconds=_normalize_average_seconds(average_resolution_seconds),
         )

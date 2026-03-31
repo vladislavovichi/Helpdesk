@@ -20,6 +20,8 @@ from infrastructure.db.models.catalog import Tag
 from infrastructure.db.models.operator import Operator
 from infrastructure.db.models.ticket import (
     Ticket as TicketModel,
+)
+from infrastructure.db.models.ticket import (
     TicketEvent,
     TicketMessage,
     TicketTag,

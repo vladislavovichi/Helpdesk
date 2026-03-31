@@ -85,9 +85,7 @@ class GetNextQueuedTicketUseCase:
     def __init__(self, ticket_repository: TicketRepository) -> None:
         self.ticket_repository = ticket_repository
 
-    async def __call__(
-        self, *, prioritize_priority: bool = False
-    ) -> QueuedTicketSummary | None:
+    async def __call__(self, *, prioritize_priority: bool = False) -> QueuedTicketSummary | None:
         ticket = await self.ticket_repository.get_next_queued_ticket(
             prioritize_priority=prioritize_priority
         )

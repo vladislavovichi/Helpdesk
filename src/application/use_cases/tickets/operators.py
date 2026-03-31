@@ -48,9 +48,7 @@ class PromoteOperatorUseCase:
         username: str | None = None,
     ) -> OperatorRoleMutationResult:
         if telegram_user_id in self.super_admin_telegram_user_ids:
-            raise OperatorManagementError(
-                "Супер администратор уже имеет все необходимые права."
-            )
+            raise OperatorManagementError("Супер администратор уже имеет все необходимые права.")
 
         was_active = await self.operator_repository.exists_active_by_telegram_user_id(
             telegram_user_id=telegram_user_id

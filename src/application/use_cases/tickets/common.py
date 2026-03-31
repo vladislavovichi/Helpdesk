@@ -15,9 +15,7 @@ def utcnow() -> datetime:
 
 def build_ticket_subject(message_text: str) -> str:
     first_line = (
-        message_text.strip().splitlines()[0]
-        if message_text.strip()
-        else "Обращение клиента"
+        message_text.strip().splitlines()[0] if message_text.strip() else "Обращение клиента"
     )
     return first_line[:255]
 

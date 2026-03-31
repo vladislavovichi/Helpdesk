@@ -34,9 +34,7 @@ class CreateTicketFromClientMessageUseCase:
         telegram_message_id: int,
         text: str,
     ) -> TicketSummary:
-        active_ticket = await self.ticket_repository.get_active_by_client_chat_id(
-            client_chat_id
-        )
+        active_ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
         if active_ticket is not None:
             if active_ticket.id is None:
                 raise RuntimeError("Не найден идентификатор активной заявки.")

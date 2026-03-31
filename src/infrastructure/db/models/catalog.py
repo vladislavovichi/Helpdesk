@@ -24,9 +24,7 @@ class Macro(CreatedAtMixin, Base):
 class SLAPolicy(Base):
     __tablename__ = "sla_policies"
     __table_args__ = (
-        CheckConstraint(
-            "first_response_minutes > 0", name="first_response_minutes_positive"
-        ),
+        CheckConstraint("first_response_minutes > 0", name="first_response_minutes_positive"),
         CheckConstraint("resolution_minutes > 0", name="resolution_minutes_positive"),
     )
 

@@ -35,11 +35,7 @@ def test_super_admin_ids_are_loaded_from_settings(sample_settings: Settings) -> 
 
 def test_super_admin_ids_are_parsed_from_comma_separated_env_style_value() -> None:
     settings = Settings.model_validate(
-        {
-            "authorization": {
-                "super_admin_telegram_user_ids": "12345, 67890, , 12345, 11111"
-            }
-        }
+        {"authorization": {"super_admin_telegram_user_ids": "12345, 67890, , 12345, 11111"}}
     )
 
     assert settings.authorization.super_admin_telegram_user_ids == (12345, 67890, 11111)
@@ -47,6 +43,4 @@ def test_super_admin_ids_are_parsed_from_comma_separated_env_style_value() -> No
 
 def test_super_admin_ids_reject_non_positive_values() -> None:
     with pytest.raises(ValueError):
-        Settings.model_validate(
-            {"authorization": {"super_admin_telegram_user_ids": "123,0,-5"}}
-        )
+        Settings.model_validate({"authorization": {"super_admin_telegram_user_ids": "123,0,-5"}})

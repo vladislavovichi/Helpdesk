@@ -96,13 +96,9 @@ class HelpdeskService:
     _assign_ticket_to_operator: AssignTicketToOperatorUseCase = field(init=False, repr=False)
     _get_next_queued_ticket: GetNextQueuedTicketUseCase = field(init=False, repr=False)
     _list_queued_tickets: ListQueuedTicketsUseCase = field(init=False, repr=False)
-    _assign_next_queued_ticket: AssignNextQueuedTicketUseCase = field(
-        init=False, repr=False
-    )
+    _assign_next_queued_ticket: AssignNextQueuedTicketUseCase = field(init=False, repr=False)
     _get_ticket_details: GetTicketDetailsUseCase = field(init=False, repr=False)
-    _reply_to_ticket_as_operator: ReplyToTicketAsOperatorUseCase = field(
-        init=False, repr=False
-    )
+    _reply_to_ticket_as_operator: ReplyToTicketAsOperatorUseCase = field(init=False, repr=False)
     _list_operators: ListOperatorsUseCase = field(init=False, repr=False)
     _promote_operator: PromoteOperatorUseCase = field(init=False, repr=False)
     _revoke_operator: RevokeOperatorUseCase = field(init=False, repr=False)
@@ -115,15 +111,9 @@ class HelpdeskService:
     _escalate_ticket: EscalateTicketUseCase = field(init=False, repr=False)
     _close_ticket: CloseTicketUseCase = field(init=False, repr=False)
     _get_basic_stats: BasicStatsUseCase = field(init=False, repr=False)
-    _evaluate_ticket_sla_state: EvaluateTicketSLAStateUseCase = field(
-        init=False, repr=False
-    )
-    _auto_escalate_ticket_by_sla: AutoEscalateTicketBySLAUseCase = field(
-        init=False, repr=False
-    )
-    _auto_reassign_ticket_by_sla: AutoReassignTicketBySLAUseCase = field(
-        init=False, repr=False
-    )
+    _evaluate_ticket_sla_state: EvaluateTicketSLAStateUseCase = field(init=False, repr=False)
+    _auto_escalate_ticket_by_sla: AutoEscalateTicketBySLAUseCase = field(init=False, repr=False)
+    _auto_reassign_ticket_by_sla: AutoReassignTicketBySLAUseCase = field(init=False, repr=False)
     _run_ticket_sla_checks: RunTicketSLAChecksUseCase = field(init=False, repr=False)
     _stats_service: HelpdeskStatsService = field(init=False, repr=False)
 
