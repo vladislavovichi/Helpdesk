@@ -204,6 +204,43 @@ async def test_count_by_status_returns_mapping() -> None:
     }
 
 
+async def test_count_active_tickets_per_operator_returns_grouped_load() -> None:
+    session = FakeAsyncSession(
+        result=FakeResult(
+            rows=[
+                (7, "Operator One", 3),
+                (9, "Operator Two", 1),
+            ]
+        )
+    )
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.count_active_tickets_per_operator()
+
+    assert [(item.operator_id, item.display_name, item.ticket_count) for item in result] == [
+        (7, "Operator One", 3),
+        (9, "Operator Two", 1),
+    ]
+
+
+async def test_get_average_first_response_time_seconds_returns_float() -> None:
+    session = FakeAsyncSession(result=FakeResult(scalar=125.5))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.get_average_first_response_time_seconds()
+
+    assert result == 125.5
+
+
+async def test_get_average_resolution_time_seconds_returns_float() -> None:
+    session = FakeAsyncSession(result=FakeResult(scalar=3600))
+    repository = SqlAlchemyTicketRepository(cast(AsyncSession, session))
+
+    result = await repository.get_average_resolution_time_seconds()
+
+    assert result == 3600.0
+
+
 async def test_get_details_by_public_id_returns_enriched_ticket_view_with_tags() -> None:
     ticket = Ticket(
         client_chat_id=100,

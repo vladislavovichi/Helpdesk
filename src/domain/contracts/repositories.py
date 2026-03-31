@@ -70,6 +70,15 @@ class TicketRepository(Protocol):
     async def count_by_status(self) -> Mapping[TicketStatus, int]:
         """Return ticket counts grouped by status."""
 
+    async def count_active_tickets_per_operator(self) -> Sequence[OperatorTicketLoadRecord]:
+        """Return current non-closed ticket counts grouped by assigned operator."""
+
+    async def get_average_first_response_time_seconds(self) -> float | None:
+        """Return the average first response time in seconds using ticket timestamps."""
+
+    async def get_average_resolution_time_seconds(self) -> float | None:
+        """Return the average resolution time in seconds using ticket timestamps."""
+
 
 class TicketMessageRepository(Protocol):
     async def add(
@@ -101,6 +110,12 @@ class OperatorRepository(Protocol):
         username: str | None = None,
     ) -> int:
         """Return an operator identifier, creating or refreshing the operator record if needed."""
+
+
+class OperatorTicketLoadRecord(Protocol):
+    operator_id: int
+    display_name: str
+    ticket_count: int
 
 
 class MacroRecord(Protocol):

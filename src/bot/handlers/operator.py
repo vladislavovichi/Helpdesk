@@ -13,6 +13,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.services.helpdesk import HelpdeskServiceFactory
+from application.services.stats import HelpdeskOperationalStats
 from application.use_cases.tickets import MacroSummary, QueuedTicketSummary, TicketDetailsSummary
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
@@ -410,17 +411,9 @@ async def handle_stats(
         await operator_presence.touch(operator_id=message.from_user.id)
 
     async with helpdesk_service_factory() as helpdesk_service:
-        stats = await helpdesk_service.get_basic_stats()
+        stats = await helpdesk_service.get_operational_stats()
 
-    lines = [
-        "Статистика по заявкам:",
-        f"всего={stats.total}",
-        f"открыто={stats.open_total}",
-    ]
-    for status, count in sorted(stats.by_status.items(), key=lambda item: item[0].value):
-        lines.append(f"{_format_status(status)}={count}")
-
-    await message.answer("\n".join(lines))
+    await message.answer(_format_operational_stats(stats))
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "view"))
@@ -1249,6 +1242,38 @@ def _format_macro_button_text(macro: MacroSummary) -> str:
     return label
 
 
+def _format_operational_stats(stats: HelpdeskOperationalStats) -> str:
+    lines = [
+        "Операционная статистика:",
+        f"Открытые заявки: {stats.total_open_tickets}",
+        f"В очереди: {stats.queued_tickets_count}",
+        f"Назначенные: {stats.assigned_tickets_count}",
+        f"Эскалированные: {stats.escalated_tickets_count}",
+        f"Закрытые: {stats.closed_tickets_count}",
+        "",
+        "Нагрузка по операторам:",
+    ]
+
+    if not stats.tickets_per_operator:
+        lines.append("- нет активных назначений")
+    else:
+        for item in stats.tickets_per_operator:
+            lines.append(f"- {item.display_name} (id={item.operator_id}): {item.ticket_count}")
+
+    lines.extend(
+        [
+            "",
+            "Средние времена:",
+            (
+                "Первый ответ: "
+                f"{_format_duration(stats.average_first_response_time_seconds)}"
+            ),
+            f"Решение: {_format_duration(stats.average_resolution_time_seconds)}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _format_status(status: TicketStatus) -> str:
     return format_status_for_humans(status)
 
@@ -1270,6 +1295,28 @@ def _format_sender_type(sender_type: TicketMessageSenderType) -> str:
         TicketMessageSenderType.SYSTEM: "система",
     }
     return sender_labels.get(sender_type, sender_type.value)
+
+
+def _format_duration(seconds: int | None) -> str:
+    if seconds is None:
+        return "нет данных"
+    if seconds < 60:
+        return f"{seconds} сек"
+
+    minutes, remaining_seconds = divmod(seconds, 60)
+    hours, remaining_minutes = divmod(minutes, 60)
+    days, remaining_hours = divmod(hours, 24)
+
+    parts: list[str] = []
+    if days > 0:
+        parts.append(f"{days} д")
+    if remaining_hours > 0:
+        parts.append(f"{remaining_hours} ч")
+    if remaining_minutes > 0:
+        parts.append(f"{remaining_minutes} мин")
+    if not parts:
+        parts.append(f"{remaining_seconds} сек")
+    return " ".join(parts[:2])
 
 
 def _parse_ticket_public_id(value: str | None) -> UUID | None:

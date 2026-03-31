@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
@@ -67,6 +68,13 @@ def apply_queue_ordering(
         TicketModel.created_at.asc(),
         TicketModel.id.asc(),
     )
+
+
+@dataclass(slots=True, frozen=True)
+class OperatorTicketLoadRow:
+    operator_id: int
+    display_name: str
+    ticket_count: int
 
 
 class SqlAlchemyTicketRepository(TicketRepository):
@@ -268,6 +276,69 @@ class SqlAlchemyTicketRepository(TicketRepository):
         )
         result = await self.session.execute(statement)
         return {status: count for status, count in result.all()}
+
+    async def count_active_tickets_per_operator(self) -> Sequence[OperatorTicketLoadRow]:
+        statement = (
+            select(
+                Operator.id,
+                Operator.display_name,
+                func.count(TicketModel.id),
+            )
+            .join(TicketModel, TicketModel.assigned_operator_id == Operator.id)
+            .where(TicketModel.status != TicketStatus.CLOSED)
+            .group_by(Operator.id, Operator.display_name)
+            .order_by(
+                func.count(TicketModel.id).desc(),
+                Operator.display_name.asc(),
+                Operator.id.asc(),
+            )
+        )
+        result = await self.session.execute(statement)
+        return [
+            OperatorTicketLoadRow(
+                operator_id=operator_id,
+                display_name=display_name,
+                ticket_count=ticket_count,
+            )
+            for operator_id, display_name, ticket_count in result.all()
+        ]
+
+    async def get_average_first_response_time_seconds(self) -> float | None:
+        statement = select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    TicketModel.first_response_at - TicketModel.created_at,
+                )
+            )
+        ).where(
+            TicketModel.first_response_at.is_not(None),
+            TicketModel.first_response_at >= TicketModel.created_at,
+        )
+        result = await self.session.execute(statement)
+        average_seconds = result.scalar_one_or_none()
+        if average_seconds is None:
+            return None
+        return float(average_seconds)
+
+    async def get_average_resolution_time_seconds(self) -> float | None:
+        statement = select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    TicketModel.closed_at - TicketModel.created_at,
+                )
+            )
+        ).where(
+            TicketModel.status == TicketStatus.CLOSED,
+            TicketModel.closed_at.is_not(None),
+            TicketModel.closed_at >= TicketModel.created_at,
+        )
+        result = await self.session.execute(statement)
+        average_seconds = result.scalar_one_or_none()
+        if average_seconds is None:
+            return None
+        return float(average_seconds)
 
 
 class SqlAlchemyTicketMessageRepository(TicketMessageRepository):

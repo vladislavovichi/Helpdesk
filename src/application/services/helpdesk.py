@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
+from application.services.stats import HelpdeskOperationalStats, HelpdeskStatsService
 from application.use_cases.tickets import (
     AddMessageToTicketUseCase,
     AddTagToTicketUseCase,
@@ -107,6 +108,7 @@ class HelpdeskService:
     _run_ticket_sla_checks: RunTicketSLAChecksUseCase = field(
         init=False, repr=False
     )
+    _stats_service: HelpdeskStatsService = field(init=False, repr=False)
 
     async def _sync_sla_deadline(self, *, ticket_public_id: UUID) -> None:
         if self.sla_deadline_scheduler is None:
@@ -235,6 +237,9 @@ class HelpdeskService:
             ticket_event_repository=self.ticket_event_repository,
             operator_repository=self.operator_repository,
             sla_policy_repository=self.sla_policy_repository,
+        )
+        self._stats_service = HelpdeskStatsService(
+            ticket_repository=self.ticket_repository,
         )
 
     async def create_ticket_from_client_message(
@@ -432,6 +437,9 @@ class HelpdeskService:
 
     async def get_basic_stats(self) -> TicketStats:
         return await self._get_basic_stats()
+
+    async def get_operational_stats(self) -> HelpdeskOperationalStats:
+        return await self._stats_service.get_operational_stats()
 
     async def evaluate_ticket_sla_state(
         self,

@@ -26,6 +26,9 @@ class StubTicketRepository:
     active_ticket: SimpleNamespace | None = None
     queued_tickets: list[SimpleNamespace] | None = None
     by_status: dict[TicketStatus, int] | None = None
+    active_operator_ticket_loads: list[SimpleNamespace] | None = None
+    average_first_response_time_seconds: float | None = None
+    average_resolution_time_seconds: float | None = None
 
     def __post_init__(self) -> None:
         self.create_calls: list[dict[str, object]] = []
@@ -37,6 +40,9 @@ class StubTicketRepository:
         self.assign_calls: list[dict[str, object]] = []
         self.escalate_calls: list[UUID] = []
         self.close_calls: list[UUID] = []
+        self.count_active_tickets_per_operator_calls = 0
+        self.average_first_response_calls = 0
+        self.average_resolution_calls = 0
         self.tickets: dict[UUID, SimpleNamespace] = {
             self.created_ticket.public_id: self.created_ticket,
         }
@@ -44,6 +50,8 @@ class StubTicketRepository:
             self.tickets[self.active_ticket.public_id] = self.active_ticket
         if self.queued_tickets is None:
             self.queued_tickets = []
+        if self.active_operator_ticket_loads is None:
+            self.active_operator_ticket_loads = []
         for ticket in self.queued_tickets:
             self.tickets[ticket.public_id] = ticket
 
@@ -196,6 +204,18 @@ class StubTicketRepository:
 
     async def count_by_status(self) -> dict[TicketStatus, int]:
         return self.by_status or {}
+
+    async def count_active_tickets_per_operator(self) -> list[SimpleNamespace]:
+        self.count_active_tickets_per_operator_calls += 1
+        return list(self.active_operator_ticket_loads or [])
+
+    async def get_average_first_response_time_seconds(self) -> float | None:
+        self.average_first_response_calls += 1
+        return self.average_first_response_time_seconds
+
+    async def get_average_resolution_time_seconds(self) -> float | None:
+        self.average_resolution_calls += 1
+        return self.average_resolution_time_seconds
 
 
 @dataclass
@@ -629,6 +649,40 @@ async def test_assign_next_ticket_to_operator_assigns_oldest_queued_ticket() -> 
     assert result.status == TicketStatus.ASSIGNED
     assert first_ticket.assigned_operator_id == 7
     assert event_repository.added_events[0]["event_type"] == TicketEventType.ASSIGNED
+
+
+async def test_get_operational_stats_returns_aggregated_metrics() -> None:
+    ticket_repository = StubTicketRepository(
+        created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW),
+        by_status={
+            TicketStatus.QUEUED: 2,
+            TicketStatus.ASSIGNED: 3,
+            TicketStatus.ESCALATED: 1,
+            TicketStatus.CLOSED: 4,
+        },
+        active_operator_ticket_loads=[
+            SimpleNamespace(operator_id=7, display_name="Operator One", ticket_count=3),
+            SimpleNamespace(operator_id=9, display_name="Operator Two", ticket_count=1),
+        ],
+        average_first_response_time_seconds=125.6,
+        average_resolution_time_seconds=7260.4,
+    )
+    service = build_service(ticket_repository=ticket_repository)
+
+    stats = await service.get_operational_stats()
+
+    assert stats.total_open_tickets == 6
+    assert stats.queued_tickets_count == 2
+    assert stats.assigned_tickets_count == 3
+    assert stats.escalated_tickets_count == 1
+    assert stats.closed_tickets_count == 4
+    assert stats.tickets_per_operator[0].display_name == "Operator One"
+    assert stats.tickets_per_operator[0].ticket_count == 3
+    assert stats.average_first_response_time_seconds == 126
+    assert stats.average_resolution_time_seconds == 7260
+    assert ticket_repository.count_active_tickets_per_operator_calls == 1
+    assert ticket_repository.average_first_response_calls == 1
+    assert ticket_repository.average_resolution_calls == 1
 
 
 async def test_get_ticket_details_returns_operator_facing_summary_with_tags() -> None:
