@@ -6,7 +6,8 @@ from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.enums.tickets import TicketPriority
-from infrastructure.db.models import Macro, SLAPolicy, Tag, TicketTag
+from infrastructure.db.models.catalog import Macro, SLAPolicy, Tag
+from infrastructure.db.models.ticket import TicketTag
 from infrastructure.db.repositories.base import normalize_tag_name
 
 

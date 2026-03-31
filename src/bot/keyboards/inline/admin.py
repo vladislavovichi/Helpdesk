@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from application.use_cases.tickets import OperatorSummary
+from application.use_cases.tickets.summaries import OperatorSummary
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator import format_operator_button_text
 

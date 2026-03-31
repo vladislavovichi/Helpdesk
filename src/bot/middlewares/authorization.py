@@ -8,7 +8,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from application.services.authorization import Permission
-from bot.access import deny_event_access, resolve_required_permission
+from bot.access.policies import resolve_required_permission
+from bot.access.responses import deny_event_access
 from domain.enums.roles import UserRole
 
 

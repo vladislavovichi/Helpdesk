@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from application.services.authorization import Permission
-from bot.access import (
+from bot.access.policies import (
     PROTECTED_CALLBACK_PREFIX_PERMISSIONS,
     PROTECTED_COMMAND_PERMISSIONS,
     PROTECTED_MESSAGE_TEXT_PERMISSIONS,

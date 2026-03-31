@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from application.services.stats import HelpdeskOperationalStats
-from application.use_cases.tickets import (
+from application.use_cases.tickets.summaries import (
     MacroSummary,
     OperatorSummary,
     QueuedTicketSummary,

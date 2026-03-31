@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 from application.services.authorization import AuthorizationError
-from application.services.helpdesk import HelpdeskService
-from application.use_cases.tickets import (
+from application.services.helpdesk.service import HelpdeskService
+from application.use_cases.tickets.summaries import (
     OperatorManagementError,
     SLAAutoReassignmentTarget,
 )

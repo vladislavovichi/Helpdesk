@@ -6,7 +6,7 @@ from uuid import UUID
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from application.use_cases.tickets import MacroSummary
+from application.use_cases.tickets.summaries import MacroSummary
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
 from bot.formatters.operator import format_macro_button_text
 from domain.enums.tickets import TicketStatus

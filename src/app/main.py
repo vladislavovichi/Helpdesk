@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from app.bootstrap import build_runtime, close_runtime
-from infrastructure.config import get_settings
+from infrastructure.config.settings import get_settings
 from infrastructure.logging import configure_logging
 
 

@@ -4,8 +4,8 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk import HelpdeskServiceFactory
-from application.use_cases.tickets import OperatorManagementError
+from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.use_cases.tickets.summaries import OperatorManagementError
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator import format_operator_list_response
 from bot.handlers.operator.common import respond_to_operator
@@ -36,7 +36,7 @@ from bot.texts.operator import (
     invalid_remove_operator_usage_text,
     remove_operator_guidance,
 )
-from infrastructure.config import Settings
+from infrastructure.config.settings import Settings
 from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_operators")

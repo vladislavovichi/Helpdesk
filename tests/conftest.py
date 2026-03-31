@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from infrastructure.config import Settings
+from infrastructure.config.settings import Settings
 
 
 @pytest.fixture

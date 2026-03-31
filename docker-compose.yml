@@ -2,7 +2,7 @@ services:
   app:
     build:
       context: .
-    command: ["python", "-m", "app.main"]
+    command: ["sh", "/app/docker/entrypoint.sh"]
     environment:
       PYTHONPATH: /app/src
     env_file:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import Message
 
-from application.services.helpdesk import HelpdeskServiceFactory
+from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.texts.client import build_ticket_created_text, build_ticket_message_added_text
 from bot.texts.common import CHAT_RATE_LIMIT_TEXT, SERVICE_UNAVAILABLE_TEXT
 from domain.tickets import InvalidTicketTransitionError

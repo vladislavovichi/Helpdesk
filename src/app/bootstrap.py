@@ -13,18 +13,20 @@ from application.services.authorization import (
     AuthorizationService,
     AuthorizationServiceFactory,
 )
-from application.services.helpdesk import HelpdeskService, HelpdeskServiceFactory
+from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from bot.dispatcher import build_bot, build_dispatcher
-from infrastructure.config import Settings
-from infrastructure.db.repositories import (
+from infrastructure.config.settings import Settings
+from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
-    SqlAlchemyOperatorRepository,
     SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
+    SqlAlchemyTicketTagRepository,
+)
+from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
+from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
-    SqlAlchemyTicketTagRepository,
 )
 from infrastructure.db.session import (
     build_engine,

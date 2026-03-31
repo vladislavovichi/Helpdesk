@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from redis.asyncio import Redis
 
-from infrastructure.config import RedisConfig
+from infrastructure.config.settings import RedisConfig
 
 
 def build_redis_client(config: RedisConfig) -> Redis:

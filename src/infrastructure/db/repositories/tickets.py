@@ -16,8 +16,14 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models import Operator, Tag, TicketEvent, TicketMessage, TicketTag
-from infrastructure.db.models import Ticket as TicketModel
+from infrastructure.db.models.catalog import Tag
+from infrastructure.db.models.operator import Operator
+from infrastructure.db.models.ticket import (
+    Ticket as TicketModel,
+    TicketEvent,
+    TicketMessage,
+    TicketTag,
+)
 from infrastructure.db.repositories.base import (
     OperatorTicketLoadRow,
     apply_queue_ordering,

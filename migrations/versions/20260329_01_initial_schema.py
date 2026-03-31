@@ -18,28 +18,31 @@ branch_labels = None
 depends_on = None
 
 
-ticket_status = sa.Enum(
+ticket_status = postgresql.ENUM(
     "new",
     "queued",
     "assigned",
     "escalated",
     "closed",
     name="ticket_status",
+    create_type=False,
 )
-ticket_priority = sa.Enum(
+ticket_priority = postgresql.ENUM(
     "low",
     "normal",
     "high",
     "urgent",
     name="ticket_priority",
+    create_type=False,
 )
-ticket_message_sender_type = sa.Enum(
+ticket_message_sender_type = postgresql.ENUM(
     "client",
     "operator",
     "system",
     name="ticket_message_sender_type",
+    create_type=False,
 )
-ticket_event_type = sa.Enum(
+ticket_event_type = postgresql.ENUM(
     "created",
     "status_changed",
     "assigned",
@@ -49,6 +52,7 @@ ticket_event_type = sa.Enum(
     "escalated",
     "closed",
     name="ticket_event_type",
+    create_type=False,
 )
 
 

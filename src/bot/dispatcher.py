@@ -6,9 +6,10 @@ from typing import Any
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.base import BaseStorage
 
-from bot.middlewares import AuthorizationMiddleware, UpdateContextMiddleware
+from bot.middlewares.authorization import AuthorizationMiddleware
+from bot.middlewares.context import UpdateContextMiddleware
 from bot.routers import build_root_router
-from infrastructure.config import BotConfig, Settings
+from infrastructure.config.settings import BotConfig, Settings
 
 
 def build_bot(config: BotConfig) -> Bot:

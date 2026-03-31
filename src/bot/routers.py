@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from aiogram import Router
 
-from bot.handlers import admin_router, client_router, operator_router, system_router
+from bot.handlers.admin.operators import router as admin_router
+from bot.handlers.common.system import router as system_router
+from bot.handlers.operator.router import router as operator_router
+from bot.handlers.user.client import router as client_router
 
 
 def build_root_router() -> Router:

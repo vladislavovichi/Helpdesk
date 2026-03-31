@@ -168,7 +168,7 @@ make docker-down
 - `postgres`
 - `redis`
 
-Контейнер использует тот же entrypoint, что и локальный запуск: `python -m app.main`.
+Контейнер перед запуском бота автоматически применяет миграции через `alembic upgrade head`, а затем запускает приложение.
 
 ## Redis и FSM
 

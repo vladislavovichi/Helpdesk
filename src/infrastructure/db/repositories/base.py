@@ -7,7 +7,7 @@ from sqlalchemy import case
 from sqlalchemy.sql import Select
 
 from domain.enums.tickets import TicketPriority
-from infrastructure.db.models import Ticket as TicketModel
+from infrastructure.db.models.ticket import Ticket as TicketModel
 
 
 def utcnow() -> datetime:

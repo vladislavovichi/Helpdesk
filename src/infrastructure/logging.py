@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from infrastructure.config import AppConfig, LoggingConfig
+from infrastructure.config.settings import AppConfig, LoggingConfig
 
 PLAIN_LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 

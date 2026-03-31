@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from infrastructure.config import Settings
+from infrastructure.config.settings import Settings
 
 
 def test_database_url_is_built_from_parts(sample_settings: Settings) -> None:

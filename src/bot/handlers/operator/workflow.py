@@ -6,7 +6,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk import HelpdeskServiceFactory
+from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
 from bot.formatters.operator import format_ticket_details
 from bot.handlers.operator.common import operator_ticket_action, respond_to_operator

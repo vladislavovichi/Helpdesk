@@ -19,6 +19,7 @@ RUN poetry install --only main --no-root
 
 COPY alembic.ini ./
 COPY migrations ./migrations
+COPY docker ./docker
 COPY src ./src
 
-CMD ["python", "-m", "app.main"]
+CMD ["sh", "/app/docker/entrypoint.sh"]

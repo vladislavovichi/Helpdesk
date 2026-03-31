@@ -12,24 +12,20 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
-from infrastructure.db.models import (
-    Macro,
-    Operator,
-    SLAPolicy,
-    Tag,
-    Ticket,
-    TicketEvent,
-    TicketTag,
-)
-from infrastructure.db.repositories import (
+from infrastructure.db.models.catalog import Macro, SLAPolicy, Tag
+from infrastructure.db.models.operator import Operator
+from infrastructure.db.models.ticket import Ticket, TicketEvent, TicketTag
+from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
-    SqlAlchemyOperatorRepository,
     SqlAlchemySLAPolicyRepository,
     SqlAlchemyTagRepository,
+    SqlAlchemyTicketTagRepository,
+)
+from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
+from infrastructure.db.repositories.tickets import (
     SqlAlchemyTicketEventRepository,
     SqlAlchemyTicketMessageRepository,
     SqlAlchemyTicketRepository,
-    SqlAlchemyTicketTagRepository,
 )
 
 

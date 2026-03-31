@@ -5,7 +5,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from application.services.helpdesk import HelpdeskServiceFactory
+from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.formatters.operator import (
     format_macro_list,
     format_queued_ticket,

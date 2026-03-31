@@ -9,37 +9,37 @@ from uuid import UUID
 from application.services.authorization import Permission
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskOperationalStats, HelpdeskStatsService
-from application.use_cases.tickets import (
+from application.use_cases.tickets.creation import CreateTicketFromClientMessageUseCase
+from application.use_cases.tickets.macros import ApplyMacroToTicketUseCase, ListMacrosUseCase
+from application.use_cases.tickets.messaging import (
     AddMessageToTicketUseCase,
-    AddTagToTicketUseCase,
-    ApplyMacroToTicketUseCase,
+    ReplyToTicketAsOperatorUseCase,
+)
+from application.use_cases.tickets.operators import (
+    ListOperatorsUseCase,
+    PromoteOperatorUseCase,
+    RevokeOperatorUseCase,
+)
+from application.use_cases.tickets.queue import (
     AssignNextQueuedTicketUseCase,
     AssignTicketToOperatorUseCase,
-    AutoEscalateTicketBySLAUseCase,
-    AutoReassignTicketBySLAUseCase,
-    BasicStatsUseCase,
-    CloseTicketUseCase,
-    CreateTicketFromClientMessageUseCase,
-    EscalateTicketUseCase,
-    EvaluateTicketSLAStateUseCase,
     GetNextQueuedTicketUseCase,
     GetTicketDetailsUseCase,
-    ListAvailableTagsUseCase,
-    ListMacrosUseCase,
-    ListOperatorsUseCase,
     ListQueuedTicketsUseCase,
-    ListTicketTagsUseCase,
+)
+from application.use_cases.tickets.sla import (
+    AutoEscalateTicketBySLAUseCase,
+    AutoReassignTicketBySLAUseCase,
+    EvaluateTicketSLAStateUseCase,
+    RunTicketSLAChecksUseCase,
+)
+from application.use_cases.tickets.summaries import (
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
     OperatorRoleMutationResult,
     OperatorSummary,
-    PromoteOperatorUseCase,
     QueuedTicketSummary,
-    RemoveTagFromTicketUseCase,
-    ReplyToTicketAsOperatorUseCase,
-    RevokeOperatorUseCase,
-    RunTicketSLAChecksUseCase,
     SLAAutoReassignmentTarget,
     SLABatchProcessingResult,
     TicketDetailsSummary,
@@ -48,6 +48,17 @@ from application.use_cases.tickets import (
     TicketSummary,
     TicketTagMutationResult,
     TicketTagsSummary,
+)
+from application.use_cases.tickets.tags import (
+    AddTagToTicketUseCase,
+    ListAvailableTagsUseCase,
+    ListTicketTagsUseCase,
+    RemoveTagFromTicketUseCase,
+)
+from application.use_cases.tickets.workflow import (
+    BasicStatsUseCase,
+    CloseTicketUseCase,
+    EscalateTicketUseCase,
 )
 from domain.contracts.repositories import (
     MacroRepository,

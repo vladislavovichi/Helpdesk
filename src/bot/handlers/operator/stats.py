@@ -4,7 +4,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from application.services.helpdesk import HelpdeskServiceFactory
+from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.formatters.operator import format_operational_stats
 from bot.texts.buttons import STATS_BUTTON_TEXT
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
