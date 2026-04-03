@@ -1,1 +1,0 @@
-"""Centralized Telegram-facing texts."""
