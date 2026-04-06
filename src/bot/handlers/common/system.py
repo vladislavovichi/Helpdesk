@@ -4,7 +4,8 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
-from bot.formatters.system import build_help_text, build_start_text
+from application.services.diagnostics import DiagnosticsService
+from bot.formatters.system import build_help_text, build_start_text, format_diagnostics_report
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import HELP_BUTTON_TEXT
 from bot.texts.system import PING_RESPONSE_TEXT
@@ -39,3 +40,16 @@ async def handle_help(
 @router.message(Command("ping"))
 async def handle_ping(message: Message) -> None:
     await message.answer(PING_RESPONSE_TEXT)
+
+
+@router.message(Command("health"))
+async def handle_health(
+    message: Message,
+    diagnostics_service: DiagnosticsService,
+    event_user_role: UserRole = UserRole.USER,
+) -> None:
+    report = await diagnostics_service.collect_report()
+    await message.answer(
+        format_diagnostics_report(report),
+        reply_markup=build_main_menu(event_user_role),
+    )

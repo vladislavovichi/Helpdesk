@@ -15,7 +15,7 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test check run migrate make-migration docker-up docker-down logs up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test check ci health migrate migration-check make-migration docker-up docker-down logs up down pre-commit-install pre-commit-run
 
 help:
 	@printf "Available targets:\n"
@@ -24,8 +24,11 @@ help:
 	@printf "  format             Auto-fix Ruff issues and format code\n"
 	@printf "  test               Run the test suite\n"
 	@printf "  check              Run lint and tests\n"
+	@printf "  ci                 Run lint, tests, and migration consistency checks\n"
+	@printf "  health             Run a local dependency and runtime health check\n"
 	@printf "  run                Start the application locally\n"
 	@printf "  migrate            Apply Alembic migrations\n"
+	@printf "  migration-check    Verify that migrations match the SQLAlchemy metadata\n"
 	@printf "  make-migration     Create a new Alembic revision (use name=...)\n"
 	@printf "  docker-up          Start the Docker Compose stack in the background\n"
 	@printf "  docker-down        Stop the Docker Compose stack\n"
@@ -55,6 +58,15 @@ test:
 	$(call ensure_poetry_env)
 	$(POETRY) run pytest
 
+health:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m app.healthcheck
+
+migration-check:
+	$(call ensure_poetry_env)
+	$(ALEMBIC) upgrade head
+	$(ALEMBIC) check
+
 run:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m $(APP_MODULE)
@@ -69,6 +81,8 @@ make-migration:
 	$(ALEMBIC) revision --autogenerate -m "$(name)"
 
 check: lint test
+
+ci: lint test migration-check
 
 docker-up:
 	$(COMPOSE) up --build -d

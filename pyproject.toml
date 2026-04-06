@@ -39,6 +39,7 @@ indent-style = "space"
 python_version = "3.12"
 mypy_path = "src"
 packages = ["app", "application", "bot", "domain", "infrastructure", "tests"]
+explicit_package_bases = true
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

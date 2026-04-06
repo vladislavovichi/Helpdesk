@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.types import Message
 
@@ -14,6 +16,7 @@ from infrastructure.redis.contracts import (
 )
 
 router = Router(name="client")
+logger = logging.getLogger(__name__)
 
 
 @router.message(F.text & ~F.text.startswith("/"))
@@ -45,6 +48,13 @@ async def handle_client_text(
     except InvalidTicketTransitionError as exc:
         await message.answer(str(exc))
         return
+
+    logger.info(
+        "Client ticket message processed client_chat_id=%s ticket=%s created=%s",
+        message.chat.id,
+        ticket.public_number,
+        ticket.created,
+    )
 
     if ticket.created:
         await ticket_stream_publisher.publish_new_ticket(

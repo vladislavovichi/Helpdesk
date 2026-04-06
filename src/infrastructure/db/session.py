@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -67,3 +68,9 @@ async def dispose_engine(engine: AsyncEngine | None = None) -> None:
     if engine is None:
         get_session_factory.cache_clear()
         get_engine.cache_clear()
+
+
+async def ping_database_engine(engine: AsyncEngine) -> bool:
+    async with engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))
+    return True

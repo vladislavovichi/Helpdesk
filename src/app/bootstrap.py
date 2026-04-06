@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from application.services.authorization import (
     AuthorizationService,
     AuthorizationServiceFactory,
 )
+from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from bot.dispatcher import build_bot, build_dispatcher
 from infrastructure.config.settings import Settings
@@ -32,6 +34,7 @@ from infrastructure.db.session import (
     build_engine,
     build_session_factory,
     dispose_engine,
+    ping_database_engine,
     session_scope,
 )
 from infrastructure.redis.client import (
@@ -82,6 +85,7 @@ class AppRuntime:
     redis_workflow: RedisWorkflowRuntime
     authorization_service_factory: AuthorizationServiceFactory
     helpdesk_service_factory: HelpdeskServiceFactory
+    diagnostics_service: DiagnosticsService
     dispatcher: Dispatcher | None = None
     bot: Bot | None = None
 
@@ -165,29 +169,126 @@ def build_redis_workflow_runtime(redis: Redis) -> RedisWorkflowRuntime:
     )
 
 
+def build_diagnostics_service(
+    *,
+    settings: Settings,
+    db_engine: AsyncEngine,
+    redis: Redis,
+    fsm_storage: BaseStorage,
+    redis_workflow: RedisWorkflowRuntime,
+    bot: Bot | None,
+    dispatcher: Dispatcher | None,
+) -> DiagnosticsService:
+    return DiagnosticsService(
+        database_check=lambda: ping_database_engine(db_engine),
+        redis_check=lambda: ping_redis_client(redis),
+        dry_run=settings.app.dry_run,
+        bot_configured=bool(settings.bot.token.strip()),
+        bot_initialized=bot is not None,
+        dispatcher_initialized=dispatcher is not None,
+        fsm_storage_initialized=fsm_storage is not None,
+        redis_workflow_initialized=redis_workflow is not None,
+    )
+
+
+def _validate_startup_settings(settings: Settings) -> None:
+    if settings.app.dry_run:
+        return
+
+    if not settings.bot.token.strip():
+        raise RuntimeError("Невозможно запустить polling: BOT__TOKEN не задан.")
+
+
+def _database_target(settings: Settings) -> str:
+    return (
+        settings.database.url
+        or f"{settings.database.host}:{settings.database.port}/{settings.database.database}"
+    )
+
+
+def _redis_target(settings: Settings) -> str:
+    return settings.redis.url or f"{settings.redis.host}:{settings.redis.port}/{settings.redis.db}"
+
+
+async def _close_runtime_resources(
+    *,
+    db_engine: AsyncEngine | None = None,
+    redis: Redis | None = None,
+    fsm_storage: BaseStorage | None = None,
+    bot: Bot | None = None,
+) -> None:
+    logger = logging.getLogger(__name__)
+
+    if bot is not None:
+        try:
+            await bot.session.close()
+        except Exception:
+            logger.exception("Failed to close Telegram bot session cleanly.")
+
+    if fsm_storage is not None:
+        try:
+            await fsm_storage.close()
+        except Exception:
+            logger.exception("Failed to close FSM storage cleanly.")
+
+    if redis is not None:
+        try:
+            await close_redis_client(redis)
+        except Exception:
+            logger.exception("Failed to close Redis client cleanly.")
+
+    if db_engine is not None:
+        try:
+            await dispose_engine(db_engine)
+        except Exception:
+            logger.exception("Failed to dispose SQLAlchemy engine cleanly.")
+
+
 async def build_runtime(settings: Settings) -> AppRuntime:
+    logger = logging.getLogger(__name__)
+    _validate_startup_settings(settings)
+    logger.info(
+        "Initializing runtime dependencies database=%s redis=%s dry_run=%s",
+        _database_target(settings),
+        _redis_target(settings),
+        settings.app.dry_run,
+    )
+
     db_engine = build_engine(settings.database)
     db_session_factory = build_session_factory(db_engine)
-    redis = build_redis_client(settings.redis)
-    fsm_storage = build_fsm_storage(redis)
-    redis_workflow = build_redis_workflow_runtime(redis)
     super_admin_telegram_user_ids = frozenset(settings.authorization.super_admin_telegram_user_ids)
     authorization_service_factory = build_authorization_service_factory(
         db_session_factory,
         super_admin_telegram_user_ids=super_admin_telegram_user_ids,
     )
-    helpdesk_service_factory = build_helpdesk_service_factory(
-        db_session_factory,
-        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-        sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
-    )
+    redis: Redis | None = None
+    fsm_storage: BaseStorage | None = None
+    redis_workflow: RedisWorkflowRuntime | None = None
+    helpdesk_service_factory: HelpdeskServiceFactory | None = None
+    diagnostics_service: DiagnosticsService | None = None
     bot: Bot | None = None
+    dispatcher: Dispatcher | None = None
 
     try:
-        await ping_redis_client(redis)
+        logger.info("Checking PostgreSQL connectivity.")
+        await ping_database_engine(db_engine)
+        logger.info("PostgreSQL connectivity check passed.")
 
-        dispatcher: Dispatcher | None = None
-        if settings.bot.token:
+        redis = build_redis_client(settings.redis)
+        logger.info("Checking Redis connectivity.")
+        await ping_redis_client(redis)
+        logger.info("Redis connectivity check passed.")
+
+        fsm_storage = build_fsm_storage(redis)
+        redis_workflow = build_redis_workflow_runtime(redis)
+        helpdesk_service_factory = build_helpdesk_service_factory(
+            db_session_factory,
+            super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+            sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
+        )
+
+        if settings.bot.token.strip():
+            logger.info("Initializing Telegram bot runtime.")
             bot = build_bot(settings.bot)
             dispatcher = build_dispatcher(
                 storage=fsm_storage,
@@ -200,6 +301,25 @@ async def build_runtime(settings: Settings) -> AppRuntime:
                 ticket_lock_manager=redis_workflow.ticket_lock_manager,
                 ticket_stream_publisher=redis_workflow.ticket_stream_publisher,
             )
+        else:
+            logger.info(
+                "Telegram bot runtime is skipped because BOT__TOKEN is empty "
+                "and dry-run mode is enabled."
+            )
+
+        diagnostics_service = build_diagnostics_service(
+            settings=settings,
+            db_engine=db_engine,
+            redis=redis,
+            fsm_storage=fsm_storage,
+            redis_workflow=redis_workflow,
+            bot=bot,
+            dispatcher=dispatcher,
+        )
+        if dispatcher is not None:
+            dispatcher.workflow_data["diagnostics_service"] = diagnostics_service
+
+        logger.info("Runtime dependencies initialized successfully.")
 
         return AppRuntime(
             settings=settings,
@@ -210,21 +330,28 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             redis_workflow=redis_workflow,
             authorization_service_factory=authorization_service_factory,
             helpdesk_service_factory=helpdesk_service_factory,
+            diagnostics_service=diagnostics_service,
             dispatcher=dispatcher,
             bot=bot,
         )
     except Exception:
-        if bot is not None:
-            await bot.session.close()
-        await close_redis_client(redis)
-        await dispose_engine(db_engine)
+        logger.exception("Runtime initialization failed.")
+        await _close_runtime_resources(
+            db_engine=db_engine,
+            redis=redis,
+            fsm_storage=fsm_storage,
+            bot=bot,
+        )
         raise
 
 
 async def close_runtime(runtime: AppRuntime) -> None:
-    if runtime.bot is not None:
-        await runtime.bot.session.close()
-
-    await runtime.fsm_storage.close()
-    await close_redis_client(runtime.redis)
-    await dispose_engine(runtime.db_engine)
+    logger = logging.getLogger(__name__)
+    logger.info("Closing runtime resources.")
+    await _close_runtime_resources(
+        db_engine=runtime.db_engine,
+        redis=runtime.redis,
+        fsm_storage=runtime.fsm_storage,
+        bot=runtime.bot,
+    )
+    logger.info("Runtime resources closed.")

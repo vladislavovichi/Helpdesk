@@ -10,7 +10,12 @@ from bot.texts.buttons import (
     STATS_BUTTON_TEXT,
     TAKE_NEXT_BUTTON_TEXT,
 )
-from bot.texts.system import get_command_hints, get_help_intro_lines, get_start_lines
+from bot.texts.system import (
+    format_diagnostics_report,
+    get_command_hints,
+    get_help_intro_lines,
+    get_start_lines,
+)
 from domain.enums.roles import UserRole
 
 
@@ -30,6 +35,9 @@ def build_help_text(role: UserRole) -> str:
         lines.extend(["", "Кнопки меню:", *navigation_lines])
 
     return "\n".join(lines)
+
+
+__all__ = ["build_help_text", "build_start_text", "format_diagnostics_report"]
 
 
 def _build_navigation_help(role: UserRole) -> list[str]:

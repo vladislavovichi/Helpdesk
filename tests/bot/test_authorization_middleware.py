@@ -184,3 +184,44 @@ async def test_authorization_middleware_marks_super_admin_context() -> None:
     handler.assert_awaited_once()
     assert data["event_user_role"] == UserRole.SUPER_ADMIN
     assert data["event_is_super_admin"] is True
+
+
+async def test_authorization_middleware_denies_revoked_operator_on_next_request() -> None:
+    active_operator_ids = {1001}
+    middleware = AuthorizationMiddleware()
+    handler = AsyncMock(return_value="handled")
+    authorization_service_factory = build_authorization_service_factory(
+        active_operator_ids=active_operator_ids
+    )
+
+    first_message = build_message(user_id=1001, text="/queue")
+    first_data = {
+        "authorization_service_factory": authorization_service_factory,
+        "event_user_id": 1001,
+        "state": None,
+    }
+
+    first_result = await middleware(handler, first_message, first_data)
+
+    assert first_result == "handled"
+    assert first_data["event_user_role"] == UserRole.OPERATOR
+
+    active_operator_ids.remove(1001)
+    handler.reset_mock()
+
+    second_message = build_message(user_id=1001, text="/queue")
+    second_data = {
+        "authorization_service_factory": authorization_service_factory,
+        "event_user_id": 1001,
+        "state": None,
+    }
+
+    second_result = await middleware(handler, second_message, second_data)
+
+    assert second_result is None
+    handler.assert_not_awaited()
+    assert second_data["event_user_role"] == UserRole.USER
+    message_answer_mock(second_message).assert_awaited_once_with(
+        "Это действие доступно только операторам и супер администраторам.",
+        reply_markup=build_main_menu(UserRole.USER),
+    )

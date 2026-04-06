@@ -9,6 +9,7 @@ PROTECTED_COMMAND_PERMISSIONS: Mapping[str, Permission] = {
     "queue": Permission.ACCESS_OPERATOR,
     "take": Permission.ACCESS_OPERATOR,
     "ticket": Permission.ACCESS_OPERATOR,
+    "health": Permission.ACCESS_OPERATOR,
     "macros": Permission.ACCESS_OPERATOR,
     "tags": Permission.ACCESS_OPERATOR,
     "alltags": Permission.ACCESS_OPERATOR,

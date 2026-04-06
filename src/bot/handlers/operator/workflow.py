@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import StateFilter
@@ -8,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
+from bot.delivery import send_message_with_retry
 from bot.formatters.operator import format_ticket_details
 from bot.handlers.operator.common import operator_ticket_action, respond_to_operator
 from bot.handlers.operator.parsers import parse_reassign_target, parse_ticket_public_id
@@ -52,6 +55,7 @@ from infrastructure.redis.contracts import (
 )
 
 router = Router(name="operator_workflow")
+logger = logging.getLogger(__name__)
 
 
 @router.callback_query(OperatorActionCallback.filter(F.action == "view"))
@@ -260,7 +264,13 @@ async def handle_apply_macro(
 
     delivery_error: str | None = None
     try:
-        await bot.send_message(macro_result.client_chat_id, macro_result.macro.body)
+        await send_message_with_retry(
+            bot,
+            chat_id=macro_result.client_chat_id,
+            text=macro_result.macro.body,
+            logger=logger,
+            operation="apply_macro",
+        )
     except TelegramAPIError as exc:
         delivery_error = str(exc)
 
@@ -357,12 +367,20 @@ async def handle_reply_message(
         await lock.release()
 
     await state.clear()
+    logger.info(
+        "Operator reply stored operator_id=%s ticket=%s",
+        message.from_user.id,
+        reply_result.ticket.public_number,
+    )
 
     delivery_error: str | None = None
     try:
-        await bot.send_message(
-            reply_result.client_chat_id,
-            build_client_reply_text(reply_result.ticket.public_number, message.text),
+        await send_message_with_retry(
+            bot,
+            chat_id=reply_result.client_chat_id,
+            text=build_client_reply_text(reply_result.ticket.public_number, message.text),
+            logger=logger,
+            operation="operator_reply",
         )
     except TelegramAPIError as exc:
         delivery_error = str(exc)

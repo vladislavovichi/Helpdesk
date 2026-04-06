@@ -22,7 +22,7 @@ async def run() -> None:
 
     runtime = await build_runtime(settings)
     try:
-        logger.info("Runtime resources initialized successfully.")
+        logger.info("Runtime bootstrapped successfully.")
 
         if settings.app.dry_run:
             logger.info(
@@ -40,6 +40,9 @@ async def run() -> None:
             runtime.bot,
             allowed_updates=runtime.dispatcher.resolve_used_update_types(),
         )
+    except Exception:
+        logger.exception("Application runtime failed.")
+        raise
     finally:
         await close_runtime(runtime)
 

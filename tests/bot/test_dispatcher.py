@@ -22,3 +22,4 @@ def test_build_dispatcher_uses_provided_storage() -> None:
     dispatcher = build_dispatcher(storage=storage)
 
     assert dispatcher.storage is storage
+    assert len(dispatcher.observers["error"].handlers) == 1

@@ -114,6 +114,8 @@ LOGGING__STRUCTURED=true
 - Python 3.12+
 - Poetry
 - PostgreSQL и Redis, либо Docker Compose
+- корректный список `AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS`
+- `BOT__TOKEN`, если `APP__DRY_RUN=false`
 
 Подготовка:
 
@@ -128,6 +130,12 @@ make install
 make migrate
 ```
 
+Проверить готовность зависимостей и runtime wiring:
+
+```bash
+make health
+```
+
 Запустить приложение локально:
 
 ```bash
@@ -140,7 +148,17 @@ make run
 PYTHONPATH=src poetry run python -m app.main
 ```
 
-Если `APP__DRY_RUN=true`, инфраструктура поднимется, но polling Telegram не запустится. Для реальной работы задайте `BOT__TOKEN` и `APP__DRY_RUN=false`.
+Поведение старта:
+
+- приложение централизованно проверяет конфигурацию, PostgreSQL и Redis до запуска polling;
+- при ошибке зависимости startup завершается сразу с понятной записью в логах;
+- если `APP__DRY_RUN=true`, инфраструктура поднимется, но polling Telegram не запустится;
+- для реальной работы задайте `BOT__TOKEN` и `APP__DRY_RUN=false`.
+
+Проверка из Telegram:
+
+- команда `/health` доступна операторам и супер администраторам;
+- команда показывает состояние bootstrap, PostgreSQL, Redis и Telegram runtime.
 
 ## Docker
 
@@ -156,6 +174,12 @@ make docker-up
 make logs
 ```
 
+Проверить локальный healthcheck контейнера:
+
+```bash
+docker compose ps
+```
+
 Остановить стек:
 
 ```bash
@@ -168,7 +192,12 @@ make docker-down
 - `postgres`
 - `redis`
 
-Контейнер перед запуском бота автоматически применяет миграции через `alembic upgrade head`, а затем запускает приложение.
+Контейнер `app`:
+
+- ждет `postgres` и `redis` по healthcheck;
+- автоматически применяет миграции через `alembic upgrade head`;
+- запускает приложение;
+- публикует собственный healthcheck через `python -m app.healthcheck`.
 
 ## Redis и FSM
 
@@ -205,6 +234,12 @@ poetry run alembic history
 poetry run alembic upgrade head
 ```
 
+Проверить, что новых автогенерируемых миграций нет:
+
+```bash
+make migration-check
+```
+
 ## Проверки качества и разработка
 
 Форматирование:
@@ -231,9 +266,51 @@ make test
 make check
 ```
 
+Локальный прогон CI-проверок с проверкой согласованности миграций:
+
+```bash
+make ci
+```
+
+В GitHub Actions используются те же команды: `make lint`, `make test`, `make migration-check`.
+
 Pre-commit:
 
 ```bash
 make pre-commit-install
 make pre-commit-run
 ```
+
+## Эксплуатация и диагностика
+
+Основные операционные команды:
+
+```bash
+make health
+make run
+make docker-up
+make logs
+make docker-down
+```
+
+`make health` поднимает тот же bootstrap-контур без polling и проверяет:
+
+- конфигурацию запуска;
+- доступность PostgreSQL;
+- доступность Redis;
+- готовность Telegram runtime и Redis-backed FSM.
+
+Graceful shutdown:
+
+- при остановке приложения закрывается Telegram session;
+- закрывается FSM storage;
+- закрывается Redis client;
+- SQLAlchemy engine корректно dispose'ится;
+- ошибки закрытия логируются отдельно и не маскируют остальные cleanup-шаги.
+
+Типовые проблемы запуска:
+
+- `BOT__TOKEN не задан`: установите `BOT__TOKEN` или включите `APP__DRY_RUN=true`.
+- ошибка PostgreSQL readiness: проверьте `DATABASE__*`, доступность БД и примените `make migrate`.
+- ошибка Redis readiness: проверьте `REDIS__*` и доступность Redis.
+- приложение стартует, но polling не идет: проверьте, что `APP__DRY_RUN=false`.

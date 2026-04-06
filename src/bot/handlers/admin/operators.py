@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
@@ -40,6 +42,7 @@ from infrastructure.config.settings import Settings
 from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
 
 router = Router(name="admin_operators")
+logger = logging.getLogger(__name__)
 
 
 @router.message(Command("operators"))
@@ -127,6 +130,12 @@ async def handle_add_operator(
             changed=result.changed,
         )
     )
+    logger.info(
+        "Operator promoted actor_id=%s target_id=%s changed=%s",
+        actor_telegram_user_id,
+        result.operator.telegram_user_id,
+        result.changed,
+    )
     await message.answer(
         format_operator_list_response(
             operators=operators,
@@ -175,6 +184,11 @@ async def handle_remove_operator(
     if result is None:
         await message.answer(OPERATORS_EMPTY_TEXT)
     else:
+        logger.info(
+            "Operator revoked actor_id=%s target_id=%s",
+            actor_telegram_user_id,
+            result.operator.telegram_user_id,
+        )
         await message.answer(
             build_revoke_operator_result_text(
                 result.operator.display_name,
@@ -274,6 +288,12 @@ async def handle_confirm_revoke_operator(
         )
     )
 
+    if result is not None:
+        logger.info(
+            "Operator revoked actor_id=%s target_id=%s",
+            callback.from_user.id,
+            result.operator.telegram_user_id,
+        )
     await callback.answer(answer_text)
     if callback.message is not None:
         await callback.message.answer(

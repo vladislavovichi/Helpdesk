@@ -22,6 +22,12 @@ def test_resolve_required_permission_for_operator_command() -> None:
     assert result == Permission.ACCESS_OPERATOR
 
 
+def test_resolve_required_permission_for_health_command() -> None:
+    result = resolve_required_permission(message_text="/health")
+
+    assert result == Permission.ACCESS_OPERATOR
+
+
 def test_protected_command_permissions_cover_operator_commands() -> None:
     operator_commands = {
         command_name
@@ -30,6 +36,7 @@ def test_protected_command_permissions_cover_operator_commands() -> None:
     }
 
     assert operator_commands == {
+        "health",
         "queue",
         "take",
         "ticket",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from application.services.diagnostics import DiagnosticsReport
 from domain.enums.roles import UserRole
 
 PING_RESPONSE_TEXT = "понг"
@@ -21,6 +22,7 @@ OPERATOR_COMMAND_HINTS = (
     CommandHint("/queue", "показать ближайшие заявки в очереди"),
     CommandHint("/take", "взять следующую заявку"),
     CommandHint("/stats", "показать операционную статистику"),
+    CommandHint("/health", "показать статус зависимостей и runtime"),
     CommandHint("/ticket <ticket_public_id>", "открыть карточку заявки"),
     CommandHint("/macros [ticket_public_id]", "показать доступные макросы"),
     CommandHint("/tags <ticket_public_id>", "показать теги заявки"),
@@ -34,6 +36,16 @@ SUPER_ADMIN_COMMAND_HINTS = (
     CommandHint("/add_operator <telegram_user_id> [display_name]", "выдать права оператора"),
     CommandHint("/remove_operator <telegram_user_id>", "снять права оператора"),
 )
+
+
+def format_diagnostics_report(report: DiagnosticsReport) -> str:
+    status_line = "Статус сервиса: OK" if report.is_healthy else "Статус сервиса: DEGRADED"
+    lines = [status_line, ""]
+    lines.extend(
+        f"- {check.name}: {'OK' if check.ok else 'FAIL'} ({check.detail})"
+        for check in report.checks
+    )
+    return "\n".join(lines)
 
 
 def get_start_lines(role: UserRole) -> list[str]:

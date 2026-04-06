@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from aiogram.types import ReplyKeyboardMarkup
 
-from bot.formatters.system import build_help_text, build_start_text
+from application.services.diagnostics import DiagnosticsCheck, DiagnosticsReport
+from bot.formatters.system import build_help_text, build_start_text, format_diagnostics_report
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import (
     ADD_OPERATOR_BUTTON_TEXT,
@@ -48,12 +49,14 @@ def test_build_help_text_for_operator_includes_operator_commands_only() -> None:
     assert "/queue - показать ближайшие заявки в очереди" in result
     assert "/take - взять следующую заявку" in result
     assert "/stats - показать операционную статистику" in result
+    assert "/health - показать статус зависимостей и runtime" in result
     assert "/operators" not in result
 
 
 def test_build_help_text_for_super_admin_includes_admin_commands() -> None:
     result = build_help_text(UserRole.SUPER_ADMIN)
 
+    assert "/health - показать статус зависимостей и runtime" in result
     assert "/queue - показать ближайшие заявки в очереди" in result
     assert "/operators - показать список операторов" in result
     assert "/add_operator <telegram_user_id> [display_name] - выдать права оператора" in result
@@ -64,6 +67,7 @@ def test_build_main_menu_for_user_is_minimal() -> None:
     keyboard = build_main_menu(UserRole.USER)
 
     assert _keyboard_rows(keyboard) == ((HELP_BUTTON_TEXT,),)
+    assert keyboard.input_field_placeholder == "Опишите проблему одним сообщением"
 
 
 def test_build_main_menu_for_operator_contains_operator_navigation() -> None:
@@ -74,6 +78,7 @@ def test_build_main_menu_for_operator_contains_operator_navigation() -> None:
         (STATS_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
         (HELP_BUTTON_TEXT,),
     )
+    assert keyboard.input_field_placeholder == "Выберите действие"
 
 
 def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
@@ -86,6 +91,22 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
         (ADD_OPERATOR_BUTTON_TEXT, REMOVE_OPERATOR_BUTTON_TEXT),
         (HELP_BUTTON_TEXT,),
     )
+    assert keyboard.input_field_placeholder == "Выберите действие"
+
+
+def test_format_diagnostics_report_uses_compact_russian_output() -> None:
+    report = DiagnosticsReport(
+        checks=(
+            DiagnosticsCheck(name="bootstrap", ok=True, detail="runtime инициализирован"),
+            DiagnosticsCheck(name="redis", ok=False, detail="RuntimeError: timeout"),
+        )
+    )
+
+    result = format_diagnostics_report(report)
+
+    assert "Статус сервиса: DEGRADED" in result
+    assert "- bootstrap: OK (runtime инициализирован)" in result
+    assert "- redis: FAIL (RuntimeError: timeout)" in result
 
 
 def _keyboard_rows(keyboard: ReplyKeyboardMarkup) -> tuple[tuple[str, ...], ...]:

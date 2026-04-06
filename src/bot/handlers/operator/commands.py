@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -54,6 +56,7 @@ from infrastructure.redis.contracts import (
 )
 
 router = Router(name="operator_commands")
+logger = logging.getLogger(__name__)
 
 
 @router.message(Command("cancel"))
@@ -156,6 +159,11 @@ async def handle_take_next(
         )
         return
 
+    logger.info(
+        "Operator took next queued ticket operator_id=%s ticket=%s",
+        message.from_user.id,
+        ticket.public_number,
+    )
     await message.answer(
         format_ticket_details(ticket_details),
         reply_markup=build_ticket_actions_markup(
