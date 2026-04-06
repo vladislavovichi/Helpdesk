@@ -108,9 +108,7 @@ async def test_build_runtime_wires_same_redis_client_into_fsm_and_workflow(
     build_diagnostics_service_mock.assert_called_once()
     dispatcher_kwargs = build_dispatcher_mock.call_args.kwargs
     assert dispatcher_kwargs["storage"] is fake_storage
-    assert (
-        dispatcher_kwargs["global_rate_limiter"] is fake_workflow.global_rate_limiter
-    )
+    assert dispatcher_kwargs["global_rate_limiter"] is fake_workflow.global_rate_limiter
     assert dispatcher_kwargs["chat_rate_limiter"] is fake_workflow.chat_rate_limiter
     assert dispatcher_kwargs["operator_presence"] is fake_workflow.operator_presence
     assert fake_dispatcher.workflow_data["diagnostics_service"] is fake_diagnostics_service

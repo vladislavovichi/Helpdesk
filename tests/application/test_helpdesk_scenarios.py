@@ -506,9 +506,10 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
     )
 
     assert promotion.changed is True
-    assert await authorization_service.resolve_role(
-        telegram_user_id=operator_telegram_user_id
-    ) == UserRole.OPERATOR
+    assert (
+        await authorization_service.resolve_role(telegram_user_id=operator_telegram_user_id)
+        == UserRole.OPERATOR
+    )
 
     created_ticket = await service.create_ticket_from_client_message(
         client_chat_id=client_chat_id,
@@ -590,9 +591,10 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
         )
         is False
     )
-    assert await authorization_service.resolve_role(
-        telegram_user_id=operator_telegram_user_id
-    ) == UserRole.USER
+    assert (
+        await authorization_service.resolve_role(telegram_user_id=operator_telegram_user_id)
+        == UserRole.USER
+    )
 
     with pytest.raises(AuthorizationError):
         await service.list_queued_tickets(actor_telegram_user_id=operator_telegram_user_id)

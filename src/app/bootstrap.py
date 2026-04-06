@@ -1,200 +1,38 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.base import BaseStorage
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from application.services.authorization import (
-    AuthorizationService,
-    AuthorizationServiceFactory,
+from app.runtime import AppRuntime, RedisWorkflowRuntime
+from app.runtime_factories import (
+    build_authorization_service_factory,
+    build_diagnostics_service,
+    build_helpdesk_service_factory,
+    build_redis_workflow_runtime,
 )
-from application.services.diagnostics import DiagnosticsService
-from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from bot.dispatcher import build_bot, build_dispatcher
 from infrastructure.config.settings import Settings
-from infrastructure.db.repositories.catalog import (
-    SqlAlchemyMacroRepository,
-    SqlAlchemySLAPolicyRepository,
-    SqlAlchemyTagRepository,
-    SqlAlchemyTicketTagRepository,
-)
-from infrastructure.db.repositories.operators import SqlAlchemyOperatorRepository
-from infrastructure.db.repositories.tickets import (
-    SqlAlchemyTicketEventRepository,
-    SqlAlchemyTicketMessageRepository,
-    SqlAlchemyTicketRepository,
-)
 from infrastructure.db.session import (
     build_engine,
     build_session_factory,
     dispose_engine,
     ping_database_engine,
-    session_scope,
 )
 from infrastructure.redis.client import (
     build_redis_client,
     close_redis_client,
     ping_redis_client,
 )
-from infrastructure.redis.contracts import (
-    ChatRateLimiter,
-    GlobalRateLimiter,
-    OperatorPresenceHelper,
-    SLADeadlineScheduler,
-    SLATimeoutProcessor,
-    TicketLockManager,
-    TicketStreamConsumer,
-    TicketStreamPublisher,
-)
 from infrastructure.redis.fsm import build_fsm_storage
-from infrastructure.redis.locks import RedisTicketLockManager
-from infrastructure.redis.presence import RedisOperatorPresenceHelper
-from infrastructure.redis.rate_limit import RedisChatRateLimiter, RedisGlobalRateLimiter
-from infrastructure.redis.sla import RedisSLADeadlineScheduler, RedisSLATimeoutProcessor
-from infrastructure.redis.streams import (
-    RedisTicketStreamConsumer,
-    RedisTicketStreamPublisher,
-)
-
-
-@dataclass(slots=True)
-class RedisWorkflowRuntime:
-    ticket_lock_manager: TicketLockManager
-    global_rate_limiter: GlobalRateLimiter
-    chat_rate_limiter: ChatRateLimiter
-    operator_presence: OperatorPresenceHelper
-    sla_deadline_scheduler: SLADeadlineScheduler
-    ticket_stream_publisher: TicketStreamPublisher
-    ticket_stream_consumer: TicketStreamConsumer
-    sla_timeout_processor: SLATimeoutProcessor
-
-
-@dataclass(slots=True)
-class AppRuntime:
-    settings: Settings
-    db_engine: AsyncEngine
-    db_session_factory: async_sessionmaker[AsyncSession]
-    redis: Redis
-    fsm_storage: BaseStorage
-    redis_workflow: RedisWorkflowRuntime
-    authorization_service_factory: AuthorizationServiceFactory
-    helpdesk_service_factory: HelpdeskServiceFactory
-    diagnostics_service: DiagnosticsService
-    dispatcher: Dispatcher | None = None
-    bot: Bot | None = None
-
-
-def build_authorization_service(
-    session: AsyncSession,
-    *,
-    super_admin_telegram_user_ids: frozenset[int],
-) -> AuthorizationService:
-    return AuthorizationService(
-        operator_repository=SqlAlchemyOperatorRepository(session),
-        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-    )
-
-
-def build_authorization_service_factory(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    super_admin_telegram_user_ids: frozenset[int],
-) -> AuthorizationServiceFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[AuthorizationService]:
-        async with session_scope(session_factory) as session:
-            yield build_authorization_service(
-                session,
-                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-            )
-
-    return provide
-
-
-def build_helpdesk_service(
-    session: AsyncSession,
-    *,
-    super_admin_telegram_user_ids: frozenset[int],
-    sla_deadline_scheduler: SLADeadlineScheduler | None = None,
-) -> HelpdeskService:
-    return HelpdeskService(
-        ticket_repository=SqlAlchemyTicketRepository(session),
-        ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
-        ticket_event_repository=SqlAlchemyTicketEventRepository(session),
-        operator_repository=SqlAlchemyOperatorRepository(session),
-        macro_repository=SqlAlchemyMacroRepository(session),
-        sla_policy_repository=SqlAlchemySLAPolicyRepository(session),
-        tag_repository=SqlAlchemyTagRepository(session),
-        ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
-        sla_deadline_scheduler=sla_deadline_scheduler,
-        super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-    )
-
-
-def build_helpdesk_service_factory(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    super_admin_telegram_user_ids: frozenset[int],
-    sla_deadline_scheduler: SLADeadlineScheduler | None = None,
-) -> HelpdeskServiceFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator[HelpdeskService]:
-        async with session_scope(session_factory) as session:
-            yield build_helpdesk_service(
-                session,
-                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
-                sla_deadline_scheduler=sla_deadline_scheduler,
-            )
-
-    return provide
-
-
-def build_redis_workflow_runtime(redis: Redis) -> RedisWorkflowRuntime:
-    sla_deadline_scheduler = RedisSLADeadlineScheduler(redis)
-    return RedisWorkflowRuntime(
-        ticket_lock_manager=RedisTicketLockManager(redis),
-        global_rate_limiter=RedisGlobalRateLimiter(redis),
-        chat_rate_limiter=RedisChatRateLimiter(redis),
-        operator_presence=RedisOperatorPresenceHelper(redis),
-        sla_deadline_scheduler=sla_deadline_scheduler,
-        ticket_stream_publisher=RedisTicketStreamPublisher(redis),
-        ticket_stream_consumer=RedisTicketStreamConsumer(redis),
-        sla_timeout_processor=RedisSLATimeoutProcessor(sla_deadline_scheduler),
-    )
-
-
-def build_diagnostics_service(
-    *,
-    settings: Settings,
-    db_engine: AsyncEngine,
-    redis: Redis,
-    fsm_storage: BaseStorage,
-    redis_workflow: RedisWorkflowRuntime,
-    bot: Bot | None,
-    dispatcher: Dispatcher | None,
-) -> DiagnosticsService:
-    return DiagnosticsService(
-        database_check=lambda: ping_database_engine(db_engine),
-        redis_check=lambda: ping_redis_client(redis),
-        dry_run=settings.app.dry_run,
-        bot_configured=bool(settings.bot.token.strip()),
-        bot_initialized=bot is not None,
-        dispatcher_initialized=dispatcher is not None,
-        fsm_storage_initialized=fsm_storage is not None,
-        redis_workflow_initialized=redis_workflow is not None,
-    )
 
 
 def _validate_startup_settings(settings: Settings) -> None:
     if settings.app.dry_run:
         return
-
     if not settings.bot.token.strip():
         raise RuntimeError("Невозможно запустить polling: BOT__TOKEN не задан.")
 
@@ -261,11 +99,12 @@ async def build_runtime(settings: Settings) -> AppRuntime:
         db_session_factory,
         super_admin_telegram_user_ids=super_admin_telegram_user_ids,
     )
+
     redis: Redis | None = None
     fsm_storage: BaseStorage | None = None
     redis_workflow: RedisWorkflowRuntime | None = None
-    helpdesk_service_factory: HelpdeskServiceFactory | None = None
-    diagnostics_service: DiagnosticsService | None = None
+    helpdesk_service_factory = None
+    diagnostics_service = None
     bot: Bot | None = None
     dispatcher: Dispatcher | None = None
 
@@ -320,7 +159,6 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             dispatcher.workflow_data["diagnostics_service"] = diagnostics_service
 
         logger.info("Runtime dependencies initialized successfully.")
-
         return AppRuntime(
             settings=settings,
             db_engine=db_engine,

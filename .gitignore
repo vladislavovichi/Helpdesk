@@ -17,9 +17,12 @@ env/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+.hypothesis/
+.pyre/
 .coverage
 .coverage.*
 htmlcov/
+coverage.xml
 
 # Packaging
 build/
@@ -36,6 +39,9 @@ dist/
 
 # Logs
 *.log
+*.sqlite3
+*.db
+*.pid
 
 # Local Docker data
 postgres_data/
