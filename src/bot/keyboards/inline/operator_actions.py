@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Literal
 from uuid import UUID
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -90,7 +91,7 @@ def build_ticket_actions_markup(
 def build_ticket_list_markup(
     *,
     tickets: Sequence[QueuedTicketSummary | OperatorTicketSummary],
-    scope: str,
+    scope: Literal["queue", "mine"],
     current_page: int,
     total_pages: int,
 ) -> InlineKeyboardMarkup:

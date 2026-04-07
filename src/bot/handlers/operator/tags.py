@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
@@ -202,7 +204,7 @@ async def handle_back_to_ticket(
 
 
 def _find_tag(
-    available_tags: list[TagSummary] | tuple[TagSummary, ...],
+    available_tags: Sequence[TagSummary],
     tag_id: int,
 ) -> TagSummary | None:
     return next((tag for tag in available_tags if tag.id == tag_id), None)

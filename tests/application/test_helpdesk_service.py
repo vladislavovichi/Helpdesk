@@ -149,6 +149,24 @@ class StubTicketRepository:
             return tickets
         return tickets[:limit]
 
+    async def list_open_tickets_for_operator(
+        self,
+        *,
+        operator_telegram_user_id: int,
+        limit: int | None = None,
+    ) -> list[SimpleNamespace]:
+        tickets = [
+            ticket
+            for ticket in self.tickets.values()
+            if ticket.status != TicketStatus.CLOSED
+            and getattr(ticket, "assigned_operator_telegram_user_id", None)
+            == operator_telegram_user_id
+        ]
+        tickets.sort(key=lambda ticket: (ticket.updated_at, ticket.id), reverse=True)
+        if limit is None:
+            return tickets
+        return tickets[:limit]
+
     async def get_by_public_id(self, public_id: UUID) -> SimpleNamespace | None:
         return self.tickets.get(public_id)
 

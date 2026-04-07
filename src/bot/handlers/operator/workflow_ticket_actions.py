@@ -259,7 +259,7 @@ async def _answer_with_ticket_details(
     fallback_text: str,
     include_history: bool = False,
 ) -> None:
-    if callback.message is None or ticket_details is None:
+    if not isinstance(callback.message, Message) or ticket_details is None:
         await respond_to_operator(callback, fallback_text)
         return
 
