@@ -416,6 +416,55 @@ async def handle_more_action(
     )
 
 
+@router.callback_query(OperatorActionCallback.filter(F.action == "back"))
+async def handle_back_from_more_action(
+    callback: CallbackQuery,
+    callback_data: OperatorActionCallback,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
+    operator_active_ticket_store: OperatorActiveTicketStore,
+    ticket_live_session_store: TicketLiveSessionStore,
+) -> None:
+    ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
+    if ticket_public_id is None:
+        await respond_to_operator(callback, INVALID_TICKET_ID_TEXT)
+        return
+    if not await global_rate_limiter.allow():
+        await respond_to_operator(callback, SERVICE_UNAVAILABLE_TEXT)
+        return
+
+    await operator_presence.touch(operator_id=callback.from_user.id)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        ticket_details = await helpdesk_service.get_ticket_details(
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=callback.from_user.id,
+        )
+
+    if ticket_details is None:
+        await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
+        return
+
+    is_active_context = await activate_ticket_for_operator(
+        active_ticket_store=operator_active_ticket_store,
+        operator_telegram_user_id=callback.from_user.id,
+        ticket_details=ticket_details,
+        ticket_live_session_store=ticket_live_session_store,
+    )
+
+    await _answer_with_ticket_details(
+        callback=callback,
+        ticket_details=ticket_details,
+        fallback_text=(
+            build_active_ticket_opened_text(ticket_details.public_number)
+            if is_active_context
+            else build_view_opened_text(ticket_details.public_number)
+        ),
+        is_active_context=is_active_context,
+    )
+
+
 async def _answer_with_ticket_details(
     *,
     callback: CallbackQuery,

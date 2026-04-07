@@ -35,3 +35,4 @@ def build_ticket_already_closed_text(public_number: str) -> str:
 
 FINISH_TICKET_CANCELLED_TEXT = "Обращение остаётся открытым."
 FINISH_TICKET_LOCKED_TEXT = "Обращение сейчас обновляется. Попробуйте ещё раз."
+FINISH_TICKET_STALE_TEXT = "Эта кнопка уже неактуальна. Если нужно, просто напишите в чат."

@@ -13,6 +13,7 @@ class OperatorActionCallback(CallbackData, prefix="operator"):
         "escalate",
         "reassign",
         "view",
+        "back",
         "macros",
         "tags",
         "more",
@@ -21,7 +22,7 @@ class OperatorActionCallback(CallbackData, prefix="operator"):
     ticket_public_id: str
 
 
-class ClientTicketCallback(CallbackData, prefix="client_ticket"):
+class ClientTicketCallback(CallbackData, prefix="client"):
     action: Literal["finish", "finish_confirm", "finish_cancel"]
     ticket_public_id: str
 

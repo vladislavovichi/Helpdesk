@@ -24,6 +24,7 @@ from bot.keyboards.inline.operator_actions import (
     build_ticket_actions_markup,
     build_ticket_more_actions_markup,
 )
+from bot.keyboards.inline.client_actions import build_client_ticket_finish_confirmation_markup
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import (
     CANCEL_BUTTON_TEXT,
@@ -219,7 +220,14 @@ def test_build_ticket_more_actions_markup_groups_secondary_actions() -> None:
     )
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert rows == (("Метки", "Передать"), ("Эскалация", "Карточка"))
+    assert rows == (("Метки", "Передать"), ("Эскалация", "Карточка"), ("Назад",))
+
+
+def test_build_client_ticket_finish_confirmation_markup_fits_telegram_callback_limit() -> None:
+    markup = build_client_ticket_finish_confirmation_markup(ticket_public_id=uuid4())
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert rows == (("Завершить", "Продолжить"),)
 
 
 def test_format_active_ticket_context_stays_compact_and_obvious() -> None:

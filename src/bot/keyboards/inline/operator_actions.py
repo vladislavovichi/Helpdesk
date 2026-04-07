@@ -100,6 +100,12 @@ def build_ticket_more_actions_markup(
         )
     )
     builder.row(*status_row)
+    builder.row(
+        _build_callback_button(
+            "Назад",
+            OperatorActionCallback(action="back", ticket_public_id=callback_value).pack(),
+        )
+    )
     return builder.as_markup()
 
 

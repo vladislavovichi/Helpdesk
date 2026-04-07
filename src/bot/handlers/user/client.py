@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import MagicData
 from aiogram.types import CallbackQuery, Message
 
@@ -19,6 +20,7 @@ from bot.keyboards.inline.operator_actions import build_ticket_actions_markup, b
 from bot.texts.client import (
     FINISH_TICKET_CANCELLED_TEXT,
     FINISH_TICKET_LOCKED_TEXT,
+    FINISH_TICKET_STALE_TEXT,
     build_finish_ticket_prompt_text,
     build_ticket_already_closed_text,
     build_ticket_closed_text,
@@ -159,7 +161,7 @@ async def handle_finish_ticket_prompt(
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
-        await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
+        await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
         return
     if not await global_rate_limiter.allow():
         await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
@@ -169,7 +171,7 @@ async def handle_finish_ticket_prompt(
         ticket_details = await helpdesk_service.get_ticket_details(ticket_public_id=ticket_public_id)
 
     if ticket_details is None:
-        await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
+        await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
         return
     if ticket_details.status == TicketStatus.CLOSED:
         await callback.answer(
@@ -178,12 +180,15 @@ async def handle_finish_ticket_prompt(
         )
         return
 
-    if isinstance(callback.message, Message):
-        await callback.message.edit_reply_markup(
-            reply_markup=build_client_ticket_finish_confirmation_markup(
-                ticket_public_id=ticket_public_id
-            )
+    if not await _try_edit_client_ticket_markup(
+        callback=callback,
+        reply_markup=build_client_ticket_finish_confirmation_markup(
+            ticket_public_id=ticket_public_id
         )
+    ):
+        await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
+        return
+
     await callback.answer(build_finish_ticket_prompt_text(ticket_details.public_number))
 
 
@@ -197,13 +202,16 @@ async def handle_finish_ticket_cancel(
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
-        await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
+        await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
         return
 
-    if isinstance(callback.message, Message):
-        await callback.message.edit_reply_markup(
-            reply_markup=build_client_ticket_markup(ticket_public_id=ticket_public_id)
-        )
+    if not await _try_edit_client_ticket_markup(
+        callback=callback,
+        reply_markup=build_client_ticket_markup(ticket_public_id=ticket_public_id),
+    ):
+        await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
+        return
+
     await callback.answer(FINISH_TICKET_CANCELLED_TEXT)
 
 
@@ -223,7 +231,7 @@ async def handle_finish_ticket_confirm(
 ) -> None:
     ticket_public_id = parse_ticket_public_id(callback_data.ticket_public_id)
     if ticket_public_id is None:
-        await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
+        await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
         return
     if not await global_rate_limiter.allow():
         await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
@@ -240,7 +248,7 @@ async def handle_finish_ticket_confirm(
         async with helpdesk_service_factory() as helpdesk_service:
             ticket_details = await helpdesk_service.get_ticket_details(ticket_public_id=ticket_public_id)
             if ticket_details is None:
-                await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
+                await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
                 return
             if ticket_details.status == TicketStatus.CLOSED:
                 await callback.answer(
@@ -249,12 +257,28 @@ async def handle_finish_ticket_confirm(
                 )
                 return
 
-            closed_ticket = await helpdesk_service.close_ticket(ticket_public_id=ticket_public_id)
+            try:
+                closed_ticket = await helpdesk_service.close_ticket(ticket_public_id=ticket_public_id)
+            except InvalidTicketTransitionError:
+                refreshed_ticket_details = await helpdesk_service.get_ticket_details(
+                    ticket_public_id=ticket_public_id
+                )
+                if (
+                    refreshed_ticket_details is not None
+                    and refreshed_ticket_details.status == TicketStatus.CLOSED
+                ):
+                    await callback.answer(
+                        build_ticket_already_closed_text(refreshed_ticket_details.public_number),
+                        show_alert=True,
+                    )
+                    return
+                await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
+                return
     finally:
         await lock.release()
 
     if closed_ticket is None or ticket_details is None:
-        await callback.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
+        await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
         return
 
     await delete_live_session_for_ticket(
@@ -282,7 +306,25 @@ async def handle_finish_ticket_confirm(
                 delivery_error,
             )
 
-    if isinstance(callback.message, Message):
-        await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer(build_ticket_closed_text(ticket_details.public_number))
-    await callback.answer()
+    if await _try_edit_client_ticket_markup(callback=callback, reply_markup=None):
+        if isinstance(callback.message, Message):
+            await callback.message.answer(build_ticket_closed_text(ticket_details.public_number))
+        await callback.answer()
+        return
+
+    await callback.answer(build_ticket_closed_text(ticket_details.public_number), show_alert=True)
+
+
+async def _try_edit_client_ticket_markup(
+    *,
+    callback: CallbackQuery,
+    reply_markup: object | None,
+) -> bool:
+    if not isinstance(callback.message, Message):
+        return False
+
+    try:
+        await callback.message.edit_reply_markup(reply_markup=reply_markup)
+    except TelegramBadRequest:
+        return False
+    return True
