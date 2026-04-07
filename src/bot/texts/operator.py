@@ -21,12 +21,12 @@ REPLY_MODE_COMMAND_BLOCK_TEXT = (
 REASSIGN_MODE_COMMAND_BLOCK_TEXT = (
     "Сейчас открыт режим передачи. Отправьте Telegram ID\nили используйте /cancel."
 )
-REASSIGN_TARGET_PROMPT_TEXT = "Укажите Telegram ID оператора."
+REASSIGN_TARGET_PROMPT_TEXT = "Укажите Telegram ID нового оператора."
 APPLY_MACRO_FAILED_TEXT = "Не удалось применить макрос."
 OPERATORS_EMPTY_TEXT = "Оператор не найден."
-OPERATORS_REFRESHED_TEXT = "Список обновлён."
-REVOKE_CONFIRM_PROMPT_TEXT = "Подтвердите снятие прав."
-REVOKE_CANCELLED_TEXT = "Снятие прав отменено."
+OPERATORS_REFRESHED_TEXT = "Команда обновлена."
+REVOKE_CONFIRM_PROMPT_TEXT = "Подтвердите снятие роли."
+REVOKE_CANCELLED_TEXT = "Снятие роли отменено."
 
 
 def invalid_add_operator_usage_text() -> str:
@@ -90,7 +90,7 @@ def build_reply_mode_callback_text(public_number: str) -> str:
 
 def build_reassign_mode_enabled_text() -> str:
     return (
-        "Отправьте Telegram ID оператора, при необходимости добавьте имя.\n"
+        "Отправьте Telegram ID нового оператора, при необходимости добавьте имя.\n"
         "Пример: 123456789 Иван Иванов\n"
         "/cancel — отмена."
     )

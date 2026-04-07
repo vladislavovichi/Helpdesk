@@ -118,7 +118,7 @@ class ReplyToTicketAsOperatorUseCase:
             ticket_details.assigned_operator_id is not None
             and ticket_details.assigned_operator_id != operator_id
         ):
-            raise InvalidTicketTransitionError("Заявка назначена другому оператору.")
+            raise InvalidTicketTransitionError("С этой заявкой уже работает другой оператор.")
 
         ticket = await self._add_message_to_ticket(
             ticket_public_id=ticket_public_id,

@@ -813,7 +813,7 @@ async def test_revoke_operator_rejects_super_admin_target() -> None:
     try:
         await service.revoke_operator(telegram_user_id=42)
     except OperatorManagementError as exc:
-        assert str(exc) == "Нельзя снять права у суперадминистратора."
+        assert str(exc) == "Нельзя снять роль у суперадминистратора."
     else:
         raise AssertionError("expected OperatorManagementError")
 

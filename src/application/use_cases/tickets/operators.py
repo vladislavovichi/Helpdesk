@@ -80,7 +80,7 @@ class RevokeOperatorUseCase:
         telegram_user_id: int,
     ) -> OperatorRoleMutationResult | None:
         if telegram_user_id in self.super_admin_telegram_user_ids:
-            raise OperatorManagementError("Нельзя снять права у суперадминистратора.")
+            raise OperatorManagementError("Нельзя снять роль у суперадминистратора.")
 
         operator = await self.operator_repository.revoke(telegram_user_id=telegram_user_id)
         if operator is None:

@@ -20,12 +20,7 @@ def build_ticket_actions_markup(
     builder = InlineKeyboardBuilder()
     callback_value = str(ticket_public_id)
 
-    first_row = [
-        (
-            "Открыть",
-            OperatorActionCallback(action="view", ticket_public_id=callback_value).pack(),
-        )
-    ]
+    first_row: list[tuple[str, str]] = []
     if status == TicketStatus.QUEUED:
         first_row.append(
             (
@@ -40,7 +35,8 @@ def build_ticket_actions_markup(
                 OperatorActionCallback(action="reply", ticket_public_id=callback_value).pack(),
             )
         )
-    builder.row(*[_build_callback_button(text, data) for text, data in first_row])
+    if first_row:
+        builder.row(*[_build_callback_button(text, data) for text, data in first_row])
 
     second_row: list[tuple[str, str]] = []
     if status in {TicketStatus.QUEUED, TicketStatus.ASSIGNED}:

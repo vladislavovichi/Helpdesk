@@ -53,7 +53,7 @@ class AssignTicketToOperatorUseCase:
         previous_status = ticket.status
         previous_operator_id = ticket.assigned_operator_id
         if previous_status == TicketStatus.ASSIGNED and previous_operator_id == operator_id:
-            raise InvalidTicketTransitionError("Заявка уже назначена этому оператору.")
+            raise InvalidTicketTransitionError("Заявка уже у вас в работе.")
 
         event_type = TicketEventType.ASSIGNED
         if previous_operator_id is not None and previous_operator_id != operator_id:

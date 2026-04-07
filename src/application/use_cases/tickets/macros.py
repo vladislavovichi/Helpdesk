@@ -72,7 +72,7 @@ class ApplyMacroToTicketUseCase:
             ticket_details.assigned_operator_id is not None
             and ticket_details.assigned_operator_id != operator_id
         ):
-            raise InvalidTicketTransitionError("Заявка назначена другому оператору.")
+            raise InvalidTicketTransitionError("С этой заявкой уже работает другой оператор.")
 
         telegram_message_id = (
             await self.ticket_message_repository.allocate_internal_telegram_message_id(
