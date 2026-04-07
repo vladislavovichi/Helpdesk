@@ -55,7 +55,7 @@ def build_operator_detail_markup(
     )
     builder.row(
         _build_callback_button(
-            "К списку",
+            "Назад",
             AdminOperatorCallback(
                 action="back_list",
                 telegram_user_id=telegram_user_id,

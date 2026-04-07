@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Chat, Message, User
 from application.services.authorization import AuthorizationService, AuthorizationServiceFactory
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.middlewares.authorization import AuthorizationMiddleware
+from bot.texts.buttons import OPERATORS_BUTTON_TEXT, QUEUE_BUTTON_TEXT
 from domain.enums.roles import UserRole
 
 
@@ -97,7 +98,7 @@ def callback_answer_mock(callback: CallbackQuery) -> AsyncMock:
 async def test_authorization_middleware_denies_regular_user_operator_command() -> None:
     middleware = AuthorizationMiddleware()
     handler = AsyncMock()
-    message = build_message(user_id=2002, text="/queue")
+    message = build_message(user_id=2002, text=QUEUE_BUTTON_TEXT)
 
     result = await middleware(
         handler,
@@ -147,7 +148,7 @@ async def test_authorization_middleware_denies_regular_user_operator_callback() 
 async def test_authorization_middleware_allows_operator_command_and_sets_role_context() -> None:
     middleware = AuthorizationMiddleware()
     handler = AsyncMock(return_value="handled")
-    message = build_message(user_id=1001, text="/queue")
+    message = build_message(user_id=1001, text=QUEUE_BUTTON_TEXT)
     data = {
         "authorization_service_factory": build_authorization_service_factory(
             active_operator_ids={1001}
@@ -168,7 +169,7 @@ async def test_authorization_middleware_allows_operator_command_and_sets_role_co
 async def test_authorization_middleware_marks_super_admin_context() -> None:
     middleware = AuthorizationMiddleware()
     handler = AsyncMock(return_value="handled")
-    message = build_message(user_id=42, text="/operators")
+    message = build_message(user_id=42, text=OPERATORS_BUTTON_TEXT)
     data = {
         "authorization_service_factory": build_authorization_service_factory(
             active_operator_ids={1001},
@@ -194,7 +195,7 @@ async def test_authorization_middleware_denies_revoked_operator_on_next_request(
         active_operator_ids=active_operator_ids
     )
 
-    first_message = build_message(user_id=1001, text="/queue")
+    first_message = build_message(user_id=1001, text=QUEUE_BUTTON_TEXT)
     first_data = {
         "authorization_service_factory": authorization_service_factory,
         "event_user_id": 1001,
@@ -209,7 +210,7 @@ async def test_authorization_middleware_denies_revoked_operator_on_next_request(
     active_operator_ids.remove(1001)
     handler.reset_mock()
 
-    second_message = build_message(user_id=1001, text="/queue")
+    second_message = build_message(user_id=1001, text=QUEUE_BUTTON_TEXT)
     second_data = {
         "authorization_service_factory": authorization_service_factory,
         "event_user_id": 1001,

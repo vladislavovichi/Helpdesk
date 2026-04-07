@@ -150,8 +150,6 @@ def format_macro_list(
 
     if ticket_details is None:
         lines.append("Откройте заявку, чтобы использовать макрос.")
-    else:
-        lines.append("Выберите макрос.")
     return "\n".join(lines)
 
 
@@ -177,7 +175,7 @@ def format_operator_list_response(
         for operator in operators:
             lines.append(f"- {format_operator_line(operator)}")
 
-    lines.extend(["", "Выберите оператора ниже или добавьте нового."])
+    lines.extend(["", "Откройте оператора ниже или добавьте нового."])
     return "\n".join(lines)
 
 
@@ -210,7 +208,7 @@ def format_ticket_tags_response(
         "Каталог",
         format_tags(tuple(tag.name for tag in available_tags)),
         "",
-        "Нажмите на метку ниже, чтобы добавить или снять её.",
+        "Нажмите на метку ниже.",
     ]
     return "\n".join(lines)
 

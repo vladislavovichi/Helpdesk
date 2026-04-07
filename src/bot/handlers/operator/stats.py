@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -14,7 +13,6 @@ from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHe
 router = Router(name="operator_stats")
 
 
-@router.message(Command("stats"))
 @router.message(F.text == STATS_BUTTON_TEXT)
 async def handle_stats(
     message: Message,

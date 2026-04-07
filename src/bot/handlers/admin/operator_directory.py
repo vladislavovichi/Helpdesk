@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from aiogram import F, Router
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -28,7 +27,6 @@ from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHe
 router = Router(name="admin_operator_directory")
 
 
-@router.message(Command("operators"))
 @router.message(F.text == OPERATORS_BUTTON_TEXT)
 async def handle_operators(
     message: Message,

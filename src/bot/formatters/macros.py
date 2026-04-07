@@ -42,8 +42,6 @@ def format_operator_macro_picker(
 
     for index, macro in enumerate(macros, start=1):
         lines.extend([f"{index}. {macro.title}", f"   {format_macro_preview(macro.body)}", ""])
-
-    lines.append("Выберите макрос.")
     return "\n".join(lines)
 
 
@@ -78,8 +76,7 @@ def format_admin_macro_list(
     else:
         for index, macro in enumerate(macros, start=1):
             lines.extend([f"{index}. {macro.title}", f"   {format_macro_preview(macro.body)}", ""])
-
-    lines.append("Выберите макрос или создайте новый.")
+    lines.append("Откройте макрос или создайте новый.")
     return "\n".join(lines)
 
 

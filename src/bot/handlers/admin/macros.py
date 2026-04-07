@@ -42,6 +42,7 @@ from bot.texts.macros import (
     MACRO_INPUT_NAVIGATION_BLOCK_TEXT,
     MACRO_NOT_FOUND_TEXT,
     MACRO_PAGE_UPDATED_TEXT,
+    MACRO_PREVIEW_COMMAND_BLOCK_TEXT,
     MACRO_TITLE_EDIT_PROMPT_TEXT,
     MACRO_TITLE_EDIT_STARTED_TEXT,
     MACRO_TITLE_UPDATED_TEXT,
@@ -394,12 +395,28 @@ async def handle_admin_macro_preview_edit(
 @router.callback_query(AdminMacroCallback.filter(F.action == "preview_cancel"))
 async def handle_admin_macro_preview_cancel(
     callback: CallbackQuery,
+    callback_data: AdminMacroCallback,
     state: FSMContext,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+    global_rate_limiter: GlobalRateLimiter,
+    operator_presence: OperatorPresenceHelper,
 ) -> None:
+    if not await global_rate_limiter.allow():
+        await respond_to_operator(callback, SERVICE_UNAVAILABLE_TEXT)
+        return
+
+    await operator_presence.touch(operator_id=callback.from_user.id)
     await state.clear()
-    if isinstance(callback.message, Message):
-        await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.answer(MACRO_CREATE_CANCELLED_TEXT)
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+
+    await _edit_admin_macro_list(
+        callback=callback,
+        macros=macros,
+        page=callback_data.page,
+        answer_text=MACRO_CREATE_CANCELLED_TEXT,
+    )
 
 
 @router.message(StateFilter(AdminMacroStates.creating_title))
@@ -455,7 +472,7 @@ async def handle_admin_macro_create_body(
 
 @router.message(StateFilter(AdminMacroStates.creating_preview))
 async def handle_admin_macro_create_preview_message(message: Message) -> None:
-    await message.answer(MACRO_INPUT_COMMAND_BLOCK_TEXT)
+    await message.answer(MACRO_PREVIEW_COMMAND_BLOCK_TEXT)
 
 
 @router.message(StateFilter(AdminMacroStates.editing_title))

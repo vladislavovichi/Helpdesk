@@ -57,7 +57,7 @@ def build_ticket_actions_markup(
                 OperatorActionCallback(action="tags", ticket_public_id=callback_value).pack(),
             )
         )
-    if status != TicketStatus.CLOSED:
+    if status in {TicketStatus.ASSIGNED, TicketStatus.ESCALATED}:
         second_row.append(
             (
                 "Передать",

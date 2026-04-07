@@ -5,17 +5,34 @@ from collections.abc import Sequence
 from math import ceil
 
 from aiogram import F, Router
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
-from application.use_cases.tickets.summaries import OperatorTicketSummary, QueuedTicketSummary
+from application.use_cases.tickets.summaries import (
+    MacroSummary,
+    OperatorTicketSummary,
+    QueuedTicketSummary,
+)
 from bot.callbacks import OperatorQueueCallback
+from bot.formatters.macros import (
+    format_admin_macro_details,
+    format_admin_macro_list,
+    paginate_macros,
+)
 from bot.formatters.operator import (
     QUEUE_PAGE_SIZE,
+    format_operator_list_response,
     format_operator_ticket_page,
     format_queue_page,
+)
+from bot.handlers.admin.states import AdminMacroStates, AdminOperatorStates
+from bot.handlers.operator.parsers import parse_ticket_public_id
+from bot.handlers.operator.states import OperatorTicketStates
+from bot.keyboards.inline.admin import build_operator_management_markup
+from bot.keyboards.inline.macros import (
+    build_admin_macro_detail_markup,
+    build_admin_macro_list_markup,
 )
 from bot.keyboards.inline.operator_actions import (
     build_operator_ticket_list_markup,
@@ -38,28 +55,79 @@ from bot.texts.operator import (
     QUEUE_EMPTY_TEXT,
     build_queue_page_callback_text,
 )
+from infrastructure.config.settings import Settings
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
     OperatorPresenceHelper,
     TicketLockManager,
 )
 
+MACRO_CREATE_STATE_NAMES = {
+    AdminMacroStates.creating_title.state,
+    AdminMacroStates.creating_body.state,
+    AdminMacroStates.creating_preview.state,
+}
+MACRO_EDIT_STATE_NAMES = {
+    AdminMacroStates.editing_title.state,
+    AdminMacroStates.editing_body.state,
+}
+OPERATOR_TICKET_STATE_NAMES = {
+    OperatorTicketStates.replying.state,
+    OperatorTicketStates.reassigning.state,
+}
+
 router = Router(name="operator_navigation")
 logger = logging.getLogger(__name__)
 
 
-@router.message(Command("cancel"))
 @router.message(F.text == CANCEL_BUTTON_TEXT)
-async def handle_cancel(message: Message, state: FSMContext) -> None:
-    if await state.get_state() is None:
+async def handle_cancel(
+    message: Message,
+    state: FSMContext,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    state_name = await state.get_state()
+    if state_name is None:
         await message.answer(OPERATOR_ACTION_IDLE_TEXT)
         return
 
+    state_data = await state.get_data()
     await state.clear()
     await message.answer(OPERATOR_ACTION_CANCELLED_TEXT)
+    if message.from_user is None:
+        return
+
+    if state_name in OPERATOR_TICKET_STATE_NAMES:
+        await _restore_ticket_after_cancel(
+            message=message,
+            state_data=state_data,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
+    if state_name == AdminOperatorStates.adding_operator.state:
+        await _restore_operator_directory_after_cancel(
+            message=message,
+            settings=settings,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
+    if state_name in MACRO_CREATE_STATE_NAMES:
+        await _restore_macro_list_after_cancel(
+            message=message,
+            state_data=state_data,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
+    if state_name in MACRO_EDIT_STATE_NAMES:
+        await _restore_macro_details_after_cancel(
+            message=message,
+            state_data=state_data,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
 
 
-@router.message(Command("queue"))
 @router.message(F.text == QUEUE_BUTTON_TEXT)
 async def handle_queue(
     message: Message,
@@ -184,7 +252,6 @@ async def handle_queue_page_noop(
     await callback.answer(build_queue_page_callback_text(callback_data.page))
 
 
-@router.message(Command("take"))
 @router.message(F.text == TAKE_NEXT_BUTTON_TEXT)
 async def handle_take_next(
     message: Message,
@@ -249,6 +316,139 @@ async def handle_take_next(
         ticket_details=ticket_details,
         include_history=True,
     )
+
+
+async def _restore_ticket_after_cancel(
+    *,
+    message: Message,
+    state_data: dict[str, object],
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    from bot.handlers.operator.workflow_ticket_actions import send_ticket_details
+
+    ticket_public_id_value = state_data.get("ticket_public_id")
+    ticket_public_id = parse_ticket_public_id(
+        ticket_public_id_value if isinstance(ticket_public_id_value, str) else None
+    )
+    if ticket_public_id is None or message.from_user is None:
+        return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        ticket_details = await helpdesk_service.get_ticket_details(
+            ticket_public_id=ticket_public_id,
+            actor_telegram_user_id=message.from_user.id,
+        )
+
+    if ticket_details is None:
+        return
+
+    await send_ticket_details(
+        message=message,
+        ticket_details=ticket_details,
+    )
+
+
+async def _restore_operator_directory_after_cancel(
+    *,
+    message: Message,
+    settings: Settings,
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    if message.from_user is None:
+        return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        operators = await helpdesk_service.list_operators(
+            actor_telegram_user_id=message.from_user.id,
+        )
+
+    await message.answer(
+        format_operator_list_response(
+            operators=operators,
+            super_admin_telegram_user_ids=settings.authorization.super_admin_telegram_user_ids,
+        ),
+        reply_markup=build_operator_management_markup(operators=operators),
+    )
+
+
+async def _restore_macro_list_after_cancel(
+    *,
+    message: Message,
+    state_data: dict[str, object],
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    if message.from_user is None:
+        return
+
+    page = _parse_page(state_data.get("page"))
+    async with helpdesk_service_factory() as helpdesk_service:
+        macros = await helpdesk_service.list_macros(actor_telegram_user_id=message.from_user.id)
+
+    text, markup = _build_admin_macro_list_response(macros=macros, page=page)
+    await message.answer(text, reply_markup=markup)
+
+
+async def _restore_macro_details_after_cancel(
+    *,
+    message: Message,
+    state_data: dict[str, object],
+    helpdesk_service_factory: HelpdeskServiceFactory,
+) -> None:
+    if message.from_user is None:
+        return
+
+    macro_id = state_data.get("macro_id")
+    page = _parse_page(state_data.get("page"))
+    if not isinstance(macro_id, int):
+        await _restore_macro_list_after_cancel(
+            message=message,
+            state_data=state_data,
+            helpdesk_service_factory=helpdesk_service_factory,
+        )
+        return
+
+    async with helpdesk_service_factory() as helpdesk_service:
+        macro = await helpdesk_service.get_macro(
+            macro_id=macro_id,
+            actor_telegram_user_id=message.from_user.id,
+        )
+        if macro is None:
+            macros = await helpdesk_service.list_macros(actor_telegram_user_id=message.from_user.id)
+            text, markup = _build_admin_macro_list_response(macros=macros, page=page)
+            await message.answer(text, reply_markup=markup)
+            return
+
+    await message.answer(
+        format_admin_macro_details(macro),
+        reply_markup=build_admin_macro_detail_markup(
+            macro_id=macro.id,
+            page=page,
+        ),
+    )
+
+
+def _build_admin_macro_list_response(
+    *,
+    macros: Sequence[MacroSummary],
+    page: int,
+) -> tuple[str, InlineKeyboardMarkup]:
+    page_macros, current_page, total_pages = paginate_macros(macros, page=page)
+    return (
+        format_admin_macro_list(
+            page_macros,
+            current_page=current_page,
+            total_pages=total_pages,
+        ),
+        build_admin_macro_list_markup(
+            macros=page_macros,
+            current_page=current_page,
+            total_pages=total_pages,
+        ),
+    )
+
+
+def _parse_page(value: object) -> int:
+    return value if isinstance(value, int) and value > 0 else 1
 
 
 def _build_queue_page_response(

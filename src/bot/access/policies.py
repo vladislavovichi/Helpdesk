@@ -7,11 +7,6 @@ from bot.texts.buttons import OPERATOR_NAVIGATION_BUTTONS, SUPER_ADMIN_NAVIGATIO
 
 PROTECTED_COMMAND_PERMISSIONS: Mapping[str, Permission] = {
     "health": Permission.ACCESS_OPERATOR,
-    "cancel": Permission.ACCESS_OPERATOR,
-    "queue": Permission.ACCESS_OPERATOR,
-    "take": Permission.ACCESS_OPERATOR,
-    "stats": Permission.ACCESS_OPERATOR,
-    "operators": Permission.MANAGE_OPERATORS,
 }
 PROTECTED_MESSAGE_TEXT_PERMISSIONS: Mapping[str, Permission] = {
     **{button_text: Permission.ACCESS_OPERATOR for button_text in OPERATOR_NAVIGATION_BUTTONS},

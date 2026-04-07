@@ -10,19 +10,22 @@ from bot.access.policies import (
     resolve_required_permission,
 )
 from bot.texts.buttons import (
+    HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
     MY_TICKETS_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
+    STATS_BUTTON_TEXT,
+    TAKE_NEXT_BUTTON_TEXT,
 )
 
 
 def test_extract_command_name_strips_bot_suffix_and_args() -> None:
-    assert extract_command_name("/queue@test_bot 123") == "queue"
+    assert extract_command_name("/health@test_bot 123") == "health"
 
 
 def test_resolve_required_permission_for_operator_command() -> None:
-    result = resolve_required_permission(message_text="/take")
+    result = resolve_required_permission(message_text="/health")
 
     assert result == Permission.ACCESS_OPERATOR
 
@@ -42,10 +45,6 @@ def test_protected_command_permissions_cover_operator_commands() -> None:
 
     assert operator_commands == {
         "health",
-        "queue",
-        "take",
-        "cancel",
-        "stats",
     }
 
 
@@ -56,7 +55,7 @@ def test_protected_command_permissions_cover_admin_commands() -> None:
         if permission == Permission.MANAGE_OPERATORS
     }
 
-    assert admin_commands == {"operators"}
+    assert admin_commands == set()
 
 
 def test_protected_message_permissions_cover_navigation_buttons() -> None:
@@ -115,8 +114,20 @@ def test_resolve_required_permission_for_operator_navigation_button() -> None:
     assert result == Permission.ACCESS_OPERATOR
 
 
+def test_resolve_required_permission_for_take_navigation_button() -> None:
+    result = resolve_required_permission(message_text=TAKE_NEXT_BUTTON_TEXT)
+
+    assert result == Permission.ACCESS_OPERATOR
+
+
 def test_resolve_required_permission_for_my_tickets_navigation_button() -> None:
     result = resolve_required_permission(message_text=MY_TICKETS_BUTTON_TEXT)
+
+    assert result == Permission.ACCESS_OPERATOR
+
+
+def test_resolve_required_permission_for_stats_navigation_button() -> None:
+    result = resolve_required_permission(message_text=STATS_BUTTON_TEXT)
 
     assert result == Permission.ACCESS_OPERATOR
 
@@ -138,15 +149,9 @@ def test_resolve_required_permission_for_operator_state() -> None:
 
 
 def test_resolve_required_permission_returns_none_for_regular_help() -> None:
-    result = resolve_required_permission(message_text="/help")
+    result = resolve_required_permission(message_text=HELP_BUTTON_TEXT)
 
     assert result is None
-
-
-def test_resolve_required_permission_for_super_admin_command() -> None:
-    result = resolve_required_permission(message_text="/operators")
-
-    assert result == Permission.MANAGE_OPERATORS
 
 
 def test_resolve_required_permission_for_super_admin_navigation_button() -> None:

@@ -26,15 +26,15 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
             [
                 [
                     KeyboardButton(text=QUEUE_BUTTON_TEXT),
-                    KeyboardButton(text=TAKE_NEXT_BUTTON_TEXT),
+                    KeyboardButton(text=MY_TICKETS_BUTTON_TEXT),
                 ],
                 [
-                    KeyboardButton(text=MY_TICKETS_BUTTON_TEXT),
+                    KeyboardButton(text=TAKE_NEXT_BUTTON_TEXT),
                     KeyboardButton(text=STATS_BUTTON_TEXT),
                 ],
             ]
         )
-        placeholder = "Выберите действие"
+        placeholder = "Главное меню"
 
         if role == UserRole.SUPER_ADMIN:
             keyboard_rows.append(
