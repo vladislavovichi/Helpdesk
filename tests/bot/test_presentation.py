@@ -17,11 +17,15 @@ from bot.formatters.operator import (
     format_ticket_history_chunks,
 )
 from bot.formatters.system import build_help_text, build_start_text, format_diagnostics_report
-from bot.keyboards.inline.operator_actions import build_queue_markup
+from bot.keyboards.inline.operator_actions import (
+    build_queue_markup,
+    build_ticket_actions_markup,
+)
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import (
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
+    MACROS_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
@@ -44,7 +48,7 @@ def test_build_start_text_for_super_admin_mentions_admin_scope() -> None:
     result = build_start_text(UserRole.SUPER_ADMIN)
 
     assert "Рабочее меню суперадминистратора." in result
-    assert "управление командой" in result
+    assert "команда и макросы" in result
 
 
 def test_build_help_text_for_user_does_not_expose_operator_commands() -> None:
@@ -62,6 +66,7 @@ def test_build_help_text_for_operator_includes_operator_commands_only() -> None:
     assert "/stats - открыть статистику" in result
     assert "/health - проверить состояние сервиса" in result
     assert "/ticket <ticket_public_id> - открыть карточку заявки" in result
+    assert "/macros " not in result
     assert "/queue - " not in result
     assert "/take - " not in result
     assert "/operators" not in result
@@ -78,6 +83,7 @@ def test_build_help_text_for_super_admin_includes_admin_commands() -> None:
     assert "/remove_operator <telegram_user_id> - снять роль оператора" in result
     assert "/queue - " not in result
     assert "/operators - " not in result
+    assert f"«{MACROS_BUTTON_TEXT}» - открыть макросы" in result
 
 
 def test_build_main_menu_for_user_is_minimal() -> None:
@@ -104,7 +110,7 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
     assert _keyboard_rows(keyboard) == (
         (QUEUE_BUTTON_TEXT, TAKE_NEXT_BUTTON_TEXT),
         (STATS_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
-        (OPERATORS_BUTTON_TEXT,),
+        (OPERATORS_BUTTON_TEXT, MACROS_BUTTON_TEXT),
         (HELP_BUTTON_TEXT,),
     )
     assert keyboard.input_field_placeholder == "Выберите раздел"
@@ -189,6 +195,13 @@ def test_format_ticket_details_returns_calm_operator_card() -> None:
     assert "\nСоздана\n07.04.2026 12:30 UTC" in result
     assert "\nТеги\nbilling, vip" in result
     assert "\nПоследнее сообщение\nКлиент — Проблема началась после смены пароля" in result
+
+
+def test_build_ticket_actions_markup_adds_macro_action_for_active_ticket() -> None:
+    markup = build_ticket_actions_markup(ticket_public_id=uuid4(), status=TicketStatus.ASSIGNED)
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert ("Ответить", "Макросы") in rows
 
 
 def test_format_ticket_history_chunks_returns_calm_conversation_blocks() -> None:

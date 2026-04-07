@@ -5,7 +5,15 @@ from dataclasses import dataclass
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskStatsService
 from application.use_cases.tickets.creation import CreateTicketFromClientMessageUseCase
-from application.use_cases.tickets.macros import ApplyMacroToTicketUseCase, ListMacrosUseCase
+from application.use_cases.tickets.macros import (
+    ApplyMacroToTicketUseCase,
+    CreateMacroUseCase,
+    DeleteMacroUseCase,
+    GetMacroUseCase,
+    ListMacrosUseCase,
+    UpdateMacroBodyUseCase,
+    UpdateMacroTitleUseCase,
+)
 from application.use_cases.tickets.messaging import (
     AddMessageToTicketUseCase,
     ReplyToTicketAsOperatorUseCase,
@@ -76,6 +84,11 @@ class HelpdeskOperatorUseCases:
 @dataclass(slots=True, frozen=True)
 class HelpdeskCatalogUseCases:
     list_macros: ListMacrosUseCase
+    get_macro: GetMacroUseCase
+    create_macro: CreateMacroUseCase
+    update_macro_title: UpdateMacroTitleUseCase
+    update_macro_body: UpdateMacroBodyUseCase
+    delete_macro: DeleteMacroUseCase
     apply_macro: ApplyMacroToTicketUseCase
     list_ticket_tags: ListTicketTagsUseCase
     list_available_tags: ListAvailableTagsUseCase
@@ -174,6 +187,11 @@ def build_helpdesk_components(
         ),
         catalog=HelpdeskCatalogUseCases(
             list_macros=ListMacrosUseCase(macro_repository=macro_repository),
+            get_macro=GetMacroUseCase(macro_repository=macro_repository),
+            create_macro=CreateMacroUseCase(macro_repository=macro_repository),
+            update_macro_title=UpdateMacroTitleUseCase(macro_repository=macro_repository),
+            update_macro_body=UpdateMacroBodyUseCase(macro_repository=macro_repository),
+            delete_macro=DeleteMacroUseCase(macro_repository=macro_repository),
             apply_macro=ApplyMacroToTicketUseCase(
                 ticket_repository=ticket_repository,
                 ticket_message_repository=ticket_message_repository,

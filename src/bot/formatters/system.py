@@ -3,6 +3,7 @@ from __future__ import annotations
 from bot.texts.buttons import (
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
+    MACROS_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
@@ -46,6 +47,7 @@ def _build_navigation_help(role: UserRole) -> list[str]:
             f"«{STATS_BUTTON_TEXT}» - открыть статистику",
             f"«{CANCEL_BUTTON_TEXT}» - отменить текущее действие",
             f"«{OPERATORS_BUTTON_TEXT}» - открыть команду",
+            f"«{MACROS_BUTTON_TEXT}» - открыть макросы",
             f"«{HELP_BUTTON_TEXT}» - открыть справку",
         ]
     if role == UserRole.OPERATOR:

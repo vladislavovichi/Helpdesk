@@ -4,7 +4,11 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from application.use_cases.tickets.messaging import AddMessageToTicketUseCase
-from application.use_cases.tickets.summaries import MacroApplicationResult, MacroSummary
+from application.use_cases.tickets.summaries import (
+    MacroApplicationResult,
+    MacroManagementError,
+    MacroSummary,
+)
 from domain.contracts.repositories import (
     MacroRepository,
     OperatorRepository,
@@ -23,6 +27,80 @@ class ListMacrosUseCase:
     async def __call__(self) -> Sequence[MacroSummary]:
         macros = await self.macro_repository.list_all()
         return [MacroSummary(id=macro.id, title=macro.title, body=macro.body) for macro in macros]
+
+
+class GetMacroUseCase:
+    def __init__(self, macro_repository: MacroRepository) -> None:
+        self.macro_repository = macro_repository
+
+    async def __call__(self, *, macro_id: int) -> MacroSummary | None:
+        macro = await self.macro_repository.get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+        return MacroSummary(id=macro.id, title=macro.title, body=macro.body)
+
+
+class CreateMacroUseCase:
+    def __init__(self, macro_repository: MacroRepository) -> None:
+        self.macro_repository = macro_repository
+
+    async def __call__(self, *, title: str, body: str) -> MacroSummary:
+        normalized_title = _normalize_macro_title(title)
+        normalized_body = _normalize_macro_body(body)
+
+        existing = await self.macro_repository.get_by_title(title=normalized_title)
+        if existing is not None:
+            raise MacroManagementError("Макрос с таким названием уже есть.")
+
+        macro = await self.macro_repository.create(
+            title=normalized_title,
+            body=normalized_body,
+        )
+        return MacroSummary(id=macro.id, title=macro.title, body=macro.body)
+
+
+class UpdateMacroTitleUseCase:
+    def __init__(self, macro_repository: MacroRepository) -> None:
+        self.macro_repository = macro_repository
+
+    async def __call__(self, *, macro_id: int, title: str) -> MacroSummary | None:
+        normalized_title = _normalize_macro_title(title)
+        existing = await self.macro_repository.get_by_title(title=normalized_title)
+        if existing is not None and existing.id != macro_id:
+            raise MacroManagementError("Макрос с таким названием уже есть.")
+
+        macro = await self.macro_repository.update_title(
+            macro_id=macro_id,
+            title=normalized_title,
+        )
+        if macro is None:
+            return None
+        return MacroSummary(id=macro.id, title=macro.title, body=macro.body)
+
+
+class UpdateMacroBodyUseCase:
+    def __init__(self, macro_repository: MacroRepository) -> None:
+        self.macro_repository = macro_repository
+
+    async def __call__(self, *, macro_id: int, body: str) -> MacroSummary | None:
+        macro = await self.macro_repository.update_body(
+            macro_id=macro_id,
+            body=_normalize_macro_body(body),
+        )
+        if macro is None:
+            return None
+        return MacroSummary(id=macro.id, title=macro.title, body=macro.body)
+
+
+class DeleteMacroUseCase:
+    def __init__(self, macro_repository: MacroRepository) -> None:
+        self.macro_repository = macro_repository
+
+    async def __call__(self, *, macro_id: int) -> MacroSummary | None:
+        macro = await self.macro_repository.delete(macro_id=macro_id)
+        if macro is None:
+            return None
+        return MacroSummary(id=macro.id, title=macro.title, body=macro.body)
 
 
 class ApplyMacroToTicketUseCase:
@@ -99,3 +177,17 @@ class ApplyMacroToTicketUseCase:
             client_chat_id=ticket_details.client_chat_id,
             macro=MacroSummary(id=macro.id, title=macro.title, body=macro.body),
         )
+
+
+def _normalize_macro_title(title: str) -> str:
+    normalized = " ".join(title.strip().split())
+    if not normalized:
+        raise MacroManagementError("Название макроса не должно быть пустым.")
+    return normalized[:150]
+
+
+def _normalize_macro_body(body: str) -> str:
+    normalized = body.strip()
+    if not normalized:
+        raise MacroManagementError("Текст макроса не должен быть пустым.")
+    return normalized

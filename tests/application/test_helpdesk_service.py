@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
 from application.use_cases.tickets.summaries import (
+    MacroManagementError,
     OperatorManagementError,
     SLAAutoReassignmentTarget,
 )
@@ -395,6 +396,7 @@ def build_macro_repository_mock(
 ) -> Mock:
     repository = Mock()
     active_macros = [] if macros is None else macros
+    next_id = max((int(macro.id) for macro in active_macros), default=0) + 1
 
     async def list_all() -> list[SimpleNamespace]:
         return sorted(active_macros, key=lambda macro: (macro.title, macro.id))
@@ -405,8 +407,47 @@ def build_macro_repository_mock(
                 return macro
         return None
 
+    async def get_by_title(*, title: str) -> SimpleNamespace | None:
+        for macro in active_macros:
+            if macro.title == title:
+                return macro
+        return None
+
+    async def create(*, title: str, body: str) -> SimpleNamespace:
+        nonlocal next_id
+        macro = SimpleNamespace(id=next_id, title=title, body=body)
+        next_id += 1
+        active_macros.append(macro)
+        return macro
+
+    async def update_title(*, macro_id: int, title: str) -> SimpleNamespace | None:
+        macro = await get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+        macro.title = title
+        return macro
+
+    async def update_body(*, macro_id: int, body: str) -> SimpleNamespace | None:
+        macro = await get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+        macro.body = body
+        return macro
+
+    async def delete(*, macro_id: int) -> SimpleNamespace | None:
+        macro = await get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+        active_macros.remove(macro)
+        return macro
+
     repository.list_all = AsyncMock(side_effect=list_all)
     repository.get_by_id = AsyncMock(side_effect=get_by_id)
+    repository.get_by_title = AsyncMock(side_effect=get_by_title)
+    repository.create = AsyncMock(side_effect=create)
+    repository.update_title = AsyncMock(side_effect=update_title)
+    repository.update_body = AsyncMock(side_effect=update_body)
+    repository.delete = AsyncMock(side_effect=delete)
     return repository
 
 
@@ -1163,6 +1204,70 @@ async def test_apply_macro_to_ticket_persists_operator_message_and_macro_event_p
     assert isinstance(macro_event_payload, dict)
     assert macro_event_payload["macro_id"] == 5
     assert macro_event_payload["macro_title"] == "Resolved"
+
+
+async def test_super_admin_can_create_update_and_delete_macro() -> None:
+    macro_repository = build_macro_repository_mock(
+        macros=[SimpleNamespace(id=5, title="Resolved", body="Issue resolved.")]
+    )
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        ),
+        macro_repository=macro_repository,
+        super_admin_telegram_user_ids=frozenset({42}),
+    )
+
+    created = await service.create_macro(
+        title="Новый макрос",
+        body="Готово.",
+        actor_telegram_user_id=42,
+    )
+    updated_title = await service.update_macro_title(
+        macro_id=created.id,
+        title="Финальный ответ",
+        actor_telegram_user_id=42,
+    )
+    updated_body = await service.update_macro_body(
+        macro_id=created.id,
+        body="Проверили. Всё исправлено.",
+        actor_telegram_user_id=42,
+    )
+    deleted = await service.delete_macro(
+        macro_id=created.id,
+        actor_telegram_user_id=42,
+    )
+
+    assert created.title == "Новый макрос"
+    assert updated_title is not None
+    assert updated_title.title == "Финальный ответ"
+    assert updated_body is not None
+    assert updated_body.body == "Проверили. Всё исправлено."
+    assert deleted is not None
+    assert deleted.id == created.id
+
+
+async def test_create_macro_rejects_duplicate_title() -> None:
+    service = build_service(
+        ticket_repository=StubTicketRepository(
+            created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW)
+        ),
+        macro_repository=build_macro_repository_mock(
+            macros=[SimpleNamespace(id=5, title="Resolved", body="Issue resolved.")]
+        ),
+        super_admin_telegram_user_ids=frozenset({42}),
+    )
+
+    try:
+        await service.create_macro(
+            title="Resolved",
+            body="Another body",
+            actor_telegram_user_id=42,
+        )
+    except MacroManagementError as exc:
+        assert str(exc) == "Макрос с таким названием уже есть."
+    else:
+        raise AssertionError("expected MacroManagementError")
 
 
 async def test_add_tag_to_ticket_is_idempotent_and_logs_event_once() -> None:

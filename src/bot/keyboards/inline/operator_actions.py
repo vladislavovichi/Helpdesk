@@ -35,6 +35,12 @@ def build_ticket_actions_markup(
                 OperatorActionCallback(action="reply", ticket_public_id=callback_value).pack(),
             )
         )
+        first_row.append(
+            (
+                "Макросы",
+                OperatorActionCallback(action="macros", ticket_public_id=callback_value).pack(),
+            )
+        )
     if first_row:
         builder.row(*[_build_callback_button(text, data) for text, data in first_row])
 
@@ -79,8 +85,10 @@ def build_macro_actions_markup(
             _build_callback_button(
                 format_macro_button_text(macro),
                 OperatorMacroCallback(
+                    action="preview",
                     ticket_public_id=callback_value,
                     macro_id=macro.id,
+                    page=1,
                 ).pack(),
             )
         )

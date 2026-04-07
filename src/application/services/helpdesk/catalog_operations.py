@@ -30,6 +30,75 @@ class HelpdeskCatalogOperations:
         )
         return await self._components.catalog.list_macros()
 
+    async def get_macro(
+        self,
+        *,
+        macro_id: int,
+        actor_telegram_user_id: int | None = None,
+    ) -> MacroSummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.get_macro(macro_id=macro_id)
+
+    async def create_macro(
+        self,
+        *,
+        title: str,
+        body: str,
+        actor_telegram_user_id: int | None = None,
+    ) -> MacroSummary:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.create_macro(title=title, body=body)
+
+    async def update_macro_title(
+        self,
+        *,
+        macro_id: int,
+        title: str,
+        actor_telegram_user_id: int | None = None,
+    ) -> MacroSummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.update_macro_title(
+            macro_id=macro_id,
+            title=title,
+        )
+
+    async def update_macro_body(
+        self,
+        *,
+        macro_id: int,
+        body: str,
+        actor_telegram_user_id: int | None = None,
+    ) -> MacroSummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.update_macro_body(
+            macro_id=macro_id,
+            body=body,
+        )
+
+    async def delete_macro(
+        self,
+        *,
+        macro_id: int,
+        actor_telegram_user_id: int | None = None,
+    ) -> MacroSummary | None:
+        await self._require_permission_if_actor(
+            permission=Permission.MANAGE_OPERATORS,
+            actor_telegram_user_id=actor_telegram_user_id,
+        )
+        return await self._components.catalog.delete_macro(macro_id=macro_id)
+
     async def apply_macro_to_ticket(
         self,
         *,

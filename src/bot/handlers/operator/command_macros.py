@@ -5,9 +5,13 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
-from bot.formatters.operator import format_macro_list
+from bot.formatters.macros import (
+    format_macro_library,
+    format_operator_macro_picker,
+    paginate_macros,
+)
 from bot.handlers.operator.parsers import parse_ticket_public_id
-from bot.keyboards.inline.operator_actions import build_macro_actions_markup
+from bot.keyboards.inline.macros import build_operator_macro_picker_markup
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT, TICKET_NOT_FOUND_TEXT
 from bot.texts.operator import MACROS_EMPTY_TEXT, invalid_macros_usage_text
 from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper
@@ -53,11 +57,23 @@ async def handle_macros(
         await message.answer(MACROS_EMPTY_TEXT)
         return
 
+    if ticket_public_id is None:
+        await message.answer(format_macro_library(macros))
+        return
+
+    assert ticket_details is not None
+    page_macros, current_page, total_pages = paginate_macros(macros, page=1)
     await message.answer(
-        format_macro_list(macros, ticket_details),
-        reply_markup=(
-            build_macro_actions_markup(ticket_public_id=ticket_public_id, macros=macros)
-            if ticket_public_id is not None
-            else None
+        format_operator_macro_picker(
+            ticket_public_number=ticket_details.public_number,
+            macros=page_macros,
+            current_page=current_page,
+            total_pages=total_pages,
+        ),
+        reply_markup=build_operator_macro_picker_markup(
+            ticket_public_id=ticket_public_id,
+            macros=page_macros,
+            current_page=current_page,
+            total_pages=total_pages,
         ),
     )

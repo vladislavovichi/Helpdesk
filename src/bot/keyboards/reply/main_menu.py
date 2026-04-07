@@ -5,6 +5,7 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from bot.texts.buttons import (
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
+    MACROS_BUTTON_TEXT,
     OPERATORS_BUTTON_TEXT,
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
@@ -35,7 +36,12 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
         placeholder = "Выберите раздел"
 
         if role == UserRole.SUPER_ADMIN:
-            keyboard_rows.append([KeyboardButton(text=OPERATORS_BUTTON_TEXT)])
+            keyboard_rows.append(
+                [
+                    KeyboardButton(text=OPERATORS_BUTTON_TEXT),
+                    KeyboardButton(text=MACROS_BUTTON_TEXT),
+                ]
+            )
 
         keyboard_rows.append([KeyboardButton(text=HELP_BUTTON_TEXT)])
 

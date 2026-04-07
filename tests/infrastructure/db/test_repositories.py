@@ -509,6 +509,32 @@ async def test_macro_repository_lists_and_fetches_macros() -> None:
     assert fetched is second_macro
 
 
+async def test_macro_repository_creates_updates_and_deletes_macros() -> None:
+    existing_macro = Macro(title="Old", body="Body")
+    existing_macro.id = 7
+    session = build_session(
+        build_result(scalar=existing_macro),
+        build_result(scalar=existing_macro),
+        build_result(scalar=existing_macro),
+    )
+    repository = SqlAlchemyMacroRepository(session)
+
+    created = await repository.create(title="New", body="Created body")
+    updated_title = await repository.update_title(macro_id=7, title="Renamed")
+    updated_body = await repository.update_body(macro_id=7, body="Updated body")
+    deleted = await repository.delete(macro_id=7)
+
+    assert isinstance(session.added[0], Macro)
+    assert created.title == "New"
+    assert created.body == "Created body"
+    assert updated_title is existing_macro
+    assert existing_macro.title == "Renamed"
+    assert updated_body is existing_macro
+    assert existing_macro.body == "Updated body"
+    assert deleted is existing_macro
+    assert session.deleted == [existing_macro]
+
+
 async def test_tag_repository_normalizes_and_lists_tags() -> None:
     existing_tag = Tag(name="vip")
     existing_tag.id = 3

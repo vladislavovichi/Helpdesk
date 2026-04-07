@@ -1,0 +1,9 @@
+from aiogram.fsm.state import State, StatesGroup
+
+
+class AdminMacroStates(StatesGroup):
+    creating_title = State()
+    creating_body = State()
+    creating_preview = State()
+    editing_title = State()
+    editing_body = State()

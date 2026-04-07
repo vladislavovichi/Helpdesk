@@ -25,6 +25,41 @@ class SqlAlchemyMacroRepository:
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
+    async def get_by_title(self, *, title: str) -> Macro | None:
+        statement = select(Macro).where(Macro.title == title)
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def create(self, *, title: str, body: str) -> Macro:
+        macro = Macro(title=title, body=body)
+        self.session.add(macro)
+        await self.session.flush()
+        return macro
+
+    async def update_title(self, *, macro_id: int, title: str) -> Macro | None:
+        macro = await self.get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+        macro.title = title
+        await self.session.flush()
+        return macro
+
+    async def update_body(self, *, macro_id: int, body: str) -> Macro | None:
+        macro = await self.get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+        macro.body = body
+        await self.session.flush()
+        return macro
+
+    async def delete(self, *, macro_id: int) -> Macro | None:
+        macro = await self.get_by_id(macro_id=macro_id)
+        if macro is None:
+            return None
+        await self.session.delete(macro)
+        await self.session.flush()
+        return macro
+
 
 class SqlAlchemySLAPolicyRepository:
     def __init__(self, session: AsyncSession) -> None:

@@ -22,7 +22,6 @@ OPERATOR_COMMAND_HINTS = (
     CommandHint("/stats", "открыть статистику"),
     CommandHint("/health", "проверить состояние сервиса"),
     CommandHint("/ticket <ticket_public_id>", "открыть карточку заявки"),
-    CommandHint("/macros [ticket_public_id]", "открыть макросы"),
     CommandHint("/tags <ticket_public_id>", "открыть теги заявки"),
     CommandHint("/alltags", "показать доступные теги"),
     CommandHint("/addtag <ticket_public_id> <tag>", "добавить тег к заявке"),
@@ -49,7 +48,7 @@ def get_start_lines(role: UserRole) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
         return [
             "Рабочее меню суперадминистратора.",
-            "Здесь доступны инструменты оператора и управление командой.",
+            "Здесь доступны инструменты оператора, команда и макросы.",
             "Откройте заявку, чтобы увидеть её детали и действия.",
         ]
     if role == UserRole.OPERATOR:

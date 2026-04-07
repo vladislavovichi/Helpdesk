@@ -148,6 +148,10 @@ class MacroApplicationResult:
     macro: MacroSummary
 
 
+class MacroManagementError(Exception):
+    """Raised when a macro management action cannot be completed."""
+
+
 @dataclass(slots=True)
 class TicketTagsSummary:
     public_id: UUID

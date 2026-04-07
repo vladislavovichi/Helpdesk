@@ -163,6 +163,21 @@ class MacroRepository(Protocol):
     async def get_by_id(self, *, macro_id: int) -> MacroRecord | None:
         """Return a macro by identifier."""
 
+    async def get_by_title(self, *, title: str) -> MacroRecord | None:
+        """Return a macro by title."""
+
+    async def create(self, *, title: str, body: str) -> MacroRecord:
+        """Create and return a macro."""
+
+    async def update_title(self, *, macro_id: int, title: str) -> MacroRecord | None:
+        """Update a macro title and return the stored record."""
+
+    async def update_body(self, *, macro_id: int, body: str) -> MacroRecord | None:
+        """Update a macro body and return the stored record."""
+
+    async def delete(self, *, macro_id: int) -> MacroRecord | None:
+        """Delete a macro and return the removed record."""
+
 
 class TagRecord(Protocol):
     id: int

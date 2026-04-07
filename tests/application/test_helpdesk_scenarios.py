@@ -442,6 +442,21 @@ class EmptyMacroRepository:
     async def get_by_id(self, *, macro_id: int) -> SimpleNamespace | None:
         return None
 
+    async def get_by_title(self, *, title: str) -> SimpleNamespace | None:
+        return None
+
+    async def create(self, *, title: str, body: str) -> SimpleNamespace:
+        return SimpleNamespace(id=1, title=title, body=body)
+
+    async def update_title(self, *, macro_id: int, title: str) -> SimpleNamespace | None:
+        return None
+
+    async def update_body(self, *, macro_id: int, body: str) -> SimpleNamespace | None:
+        return None
+
+    async def delete(self, *, macro_id: int) -> SimpleNamespace | None:
+        return None
+
 
 class StaticSLAPolicyRepository:
     async def get_for_priority(self, *, priority: TicketPriority) -> SimpleNamespace:
