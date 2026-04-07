@@ -162,7 +162,20 @@ PYTHONPATH=src poetry run python -m app.main
 
 ## Docker
 
-Поднять стек:
+Полный happy-path запуск с проверкой health:
+
+```bash
+make full
+```
+
+`make full`:
+
+- собирает и поднимает весь Docker Compose stack в фоне;
+- ждет healthcheck'и `postgres`, `redis` и `app` с bounded timeout;
+- считает запуск успешным только если `app` становится `healthy`;
+- при сбое печатает `docker compose ps` и релевантные логи, в первую очередь `app`.
+
+Базовый запуск без ожидания health:
 
 ```bash
 make docker-up
@@ -186,6 +199,12 @@ docker compose ps
 make docker-down
 ```
 
+Альтернатива с тем же эффектом:
+
+```bash
+make full-down
+```
+
 Сервисы в Compose:
 
 - `app`
@@ -195,9 +214,15 @@ make docker-down
 Контейнер `app`:
 
 - ждет `postgres` и `redis` по healthcheck;
-- автоматически применяет миграции через `alembic upgrade head`;
+- автоматически применяет миграции через `alembic upgrade head` в startup flow контейнера;
 - запускает приложение;
 - публикует собственный healthcheck через `python -m app.healthcheck`.
+
+Для ручной инспекции:
+
+- `make logs` показывает live-логи `app`;
+- `docker compose logs -f postgres redis app` показывает логи всего стека;
+- `docker compose ps` показывает текущее состояние и health сервисов.
 
 ## Redis и FSM
 

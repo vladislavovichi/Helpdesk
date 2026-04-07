@@ -4,6 +4,8 @@ PYTHON ?= python3.12
 export PYTHONPATH ?= src
 ALEMBIC ?= $(POETRY) run alembic
 APP_MODULE ?= app.main
+FULL_SERVICES ?= postgres redis app
+FULL_TIMEOUT ?= 180
 
 define ensure_poetry_env
 	@if ! command -v "$(PYTHON)" >/dev/null 2>&1; then \
@@ -15,13 +17,14 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test check ci health migrate migration-check make-migration docker-up docker-down logs up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test check ci health run migrate migration-check make-migration docker-up docker-down full full-down logs up down pre-commit-install pre-commit-run
 
 help:
 	@printf "Available targets:\n"
 	@printf "  install            Install project dependencies with Poetry\n"
 	@printf "  lint               Run Ruff and mypy\n"
 	@printf "  format             Auto-fix Ruff issues and format code\n"
+	@printf "  typecheck          Run mypy\n"
 	@printf "  test               Run the test suite\n"
 	@printf "  check              Run lint and tests\n"
 	@printf "  ci                 Run lint, tests, and migration consistency checks\n"
@@ -32,6 +35,8 @@ help:
 	@printf "  make-migration     Create a new Alembic revision (use name=...)\n"
 	@printf "  docker-up          Start the Docker Compose stack in the background\n"
 	@printf "  docker-down        Stop the Docker Compose stack\n"
+	@printf "  full               Build, start, and verify the full Docker Compose stack\n"
+	@printf "  full-down          Stop the full Docker Compose stack\n"
 	@printf "  logs               Tail application logs from Docker Compose\n"
 	@printf "  pre-commit-install Install pre-commit hooks\n"
 	@printf "  pre-commit-run     Run pre-commit on all files\n"
@@ -89,6 +94,11 @@ docker-up:
 
 docker-down:
 	$(COMPOSE) down
+
+full:
+	COMPOSE="$(COMPOSE)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh ./docker/full.sh
+
+full-down: docker-down
 
 logs:
 	$(COMPOSE) logs -f app
