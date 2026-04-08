@@ -213,11 +213,7 @@ async def handle_cancel_revoke_operator(
         )
 
     operator = next(
-        (
-            item
-            for item in operators
-            if item.telegram_user_id == callback_data.telegram_user_id
-        ),
+        (item for item in operators if item.telegram_user_id == callback_data.telegram_user_id),
         None,
     )
     await callback.answer(REVOKE_CANCELLED_TEXT)

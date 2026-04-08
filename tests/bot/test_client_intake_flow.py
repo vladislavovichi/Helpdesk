@@ -116,7 +116,9 @@ async def test_client_message_with_active_ticket_keeps_live_dialogue_path() -> N
         helpdesk_service_factory=build_helpdesk_service_factory(service),
         global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
         chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(get_active_ticket=AsyncMock(return_value=None)),
+        operator_active_ticket_store=SimpleNamespace(
+            get_active_ticket=AsyncMock(return_value=None)
+        ),
         ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
         ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
     )
@@ -169,7 +171,9 @@ async def test_intake_message_creates_ticket_with_selected_category() -> None:
         helpdesk_service_factory=build_helpdesk_service_factory(service),
         global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
         chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(get_active_ticket=AsyncMock(return_value=None)),
+        operator_active_ticket_store=SimpleNamespace(
+            get_active_ticket=AsyncMock(return_value=None)
+        ),
         ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
         ticket_stream_publisher=publisher,
     )

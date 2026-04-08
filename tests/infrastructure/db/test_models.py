@@ -26,9 +26,7 @@ def test_models_package_populates_base_metadata() -> None:
 def test_operator_telegram_user_id_uses_unique_constraint_and_plain_index() -> None:
     operator_table = cast(Table, Operator.__table__)
     constraint_names = {
-        constraint.name
-        for constraint in operator_table.constraints
-        if constraint.name is not None
+        constraint.name for constraint in operator_table.constraints if constraint.name is not None
     }
 
     assert "uq_operators_telegram_user_id" in constraint_names

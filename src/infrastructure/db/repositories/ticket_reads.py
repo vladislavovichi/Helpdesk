@@ -32,9 +32,10 @@ class SqlAlchemyTicketReadRepository:
         if ticket is None or ticket.id is None:
             return None
 
-        assigned_operator_name, assigned_operator_telegram_user_id = (
-            await self._get_assigned_operator_details(ticket.assigned_operator_id)
-        )
+        (
+            assigned_operator_name,
+            assigned_operator_telegram_user_id,
+        ) = await self._get_assigned_operator_details(ticket.assigned_operator_id)
         category_code, category_title = await self._get_category_details(ticket.category_id)
         last_message_text, last_message_sender_type = await self._get_last_message(ticket.id)
         tags = await self._list_ticket_tags(ticket.id)

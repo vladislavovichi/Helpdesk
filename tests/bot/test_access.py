@@ -78,8 +78,7 @@ def test_protected_callback_permissions_cover_operator_and_admin_prefixes() -> N
 
 def test_protected_state_permissions_cover_operator_fsm_states() -> None:
     assert (
-        PROTECTED_STATE_PERMISSIONS["OperatorTicketStates:replying"]
-        == Permission.ACCESS_OPERATOR
+        PROTECTED_STATE_PERMISSIONS["OperatorTicketStates:replying"] == Permission.ACCESS_OPERATOR
     )
     assert (
         PROTECTED_STATE_PERMISSIONS["OperatorTicketStates:reassigning"]
@@ -102,20 +101,17 @@ def test_protected_state_permissions_cover_operator_fsm_states() -> None:
         == Permission.MANAGE_OPERATORS
     )
     assert (
-        PROTECTED_STATE_PERMISSIONS["AdminMacroStates:creating_body"]
-        == Permission.MANAGE_OPERATORS
+        PROTECTED_STATE_PERMISSIONS["AdminMacroStates:creating_body"] == Permission.MANAGE_OPERATORS
     )
     assert (
         PROTECTED_STATE_PERMISSIONS["AdminMacroStates:creating_preview"]
         == Permission.MANAGE_OPERATORS
     )
     assert (
-        PROTECTED_STATE_PERMISSIONS["AdminMacroStates:editing_title"]
-        == Permission.MANAGE_OPERATORS
+        PROTECTED_STATE_PERMISSIONS["AdminMacroStates:editing_title"] == Permission.MANAGE_OPERATORS
     )
     assert (
-        PROTECTED_STATE_PERMISSIONS["AdminMacroStates:editing_body"]
-        == Permission.MANAGE_OPERATORS
+        PROTECTED_STATE_PERMISSIONS["AdminMacroStates:editing_body"] == Permission.MANAGE_OPERATORS
     )
 
 

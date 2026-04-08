@@ -35,7 +35,7 @@ def build_operator_management_markup(
         _build_callback_button(
             REFRESH_BUTTON_TEXT,
             AdminOperatorCallback(action="refresh", telegram_user_id=0).pack(),
-        )
+        ),
     )
     return builder.as_markup()
 

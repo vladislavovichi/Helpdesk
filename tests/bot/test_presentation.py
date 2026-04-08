@@ -269,8 +269,7 @@ def test_build_operator_macro_navigation_is_consistent() -> None:
         page=1,
     )
     preview_rows = tuple(
-        tuple(button.text for button in row)
-        for row in preview_markup.inline_keyboard
+        tuple(button.text for button in row) for row in preview_markup.inline_keyboard
     )
 
     assert picker_rows == ((BACK_TO_TICKET_BUTTON_TEXT,),)

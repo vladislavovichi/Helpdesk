@@ -134,7 +134,7 @@ async def handle_finish_ticket_prompt(
         callback=callback,
         reply_markup=build_client_ticket_finish_confirmation_markup(
             ticket_public_id=ticket_public_id
-        )
+        ),
     ):
         await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
         return

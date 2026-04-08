@@ -154,15 +154,15 @@ def build_ticket_list_markup(
             )
 
         pagination_row.append(
-                _build_callback_button(
-                    f"{current_page} / {total_pages}",
-                    OperatorQueueCallback(
-                        action="noop",
-                        scope=scope,
-                        page=current_page,
-                    ).pack(),
-                )
+            _build_callback_button(
+                f"{current_page} / {total_pages}",
+                OperatorQueueCallback(
+                    action="noop",
+                    scope=scope,
+                    page=current_page,
+                ).pack(),
             )
+        )
 
         if current_page < total_pages:
             pagination_row.append(

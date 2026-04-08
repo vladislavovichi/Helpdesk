@@ -8,9 +8,7 @@ MACRO_CREATE_EDIT_TEXT = "Можно изменить черновик."
 MACRO_CREATE_SAVED_TEXT = "Макрос сохранён."
 MACRO_CREATE_CANCELLED_TEXT = "Создание макроса отменено."
 MACRO_DRAFT_LOST_TEXT = "Черновик больше не найден. Начните ещё раз."
-MACRO_INPUT_COMMAND_BLOCK_TEXT = (
-    "Сейчас нужен текст. Отправьте сообщение или нажмите «Отмена»."
-)
+MACRO_INPUT_COMMAND_BLOCK_TEXT = "Сейчас нужен текст. Отправьте сообщение или нажмите «Отмена»."
 MACRO_INPUT_NAVIGATION_BLOCK_TEXT = "Сначала завершите текущий шаг или нажмите «Отмена»."
 MACRO_TITLE_EDIT_STARTED_TEXT = "Изменяем название."
 MACRO_TITLE_EDIT_PROMPT_TEXT = "Отправьте новое название."

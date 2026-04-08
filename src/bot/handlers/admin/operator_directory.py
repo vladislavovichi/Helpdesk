@@ -106,11 +106,7 @@ async def handle_operator_view(
         )
 
     operator = next(
-        (
-            item
-            for item in operators
-            if item.telegram_user_id == callback_data.telegram_user_id
-        ),
+        (item for item in operators if item.telegram_user_id == callback_data.telegram_user_id),
         None,
     )
     if operator is None:

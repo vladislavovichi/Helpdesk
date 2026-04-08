@@ -33,16 +33,12 @@ REVOKE_CONFIRM_PROMPT_TEXT = "Подтвердите снятие роли."
 REVOKE_CANCELLED_TEXT = "Снятие роли отменено."
 OPERATOR_ADD_STARTED_TEXT = "Добавляем оператора."
 OPERATOR_ADD_PROMPT_TEXT = (
-    "Отправьте Telegram ID и, если нужно, имя одной строкой.\n"
-    "Например: 123456789 Анна Смирнова"
+    "Отправьте Telegram ID и, если нужно, имя одной строкой.\nНапример: 123456789 Анна Смирнова"
 )
 OPERATOR_ADD_INVALID_TEXT = (
-    "Не удалось распознать данные. "
-    "Укажите Telegram ID и при необходимости имя."
+    "Не удалось распознать данные. Укажите Telegram ID и при необходимости имя."
 )
-OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT = (
-    "Сначала завершите текущий шаг или нажмите «Отмена»."
-)
+OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT = "Сначала завершите текущий шаг или нажмите «Отмена»."
 TAGS_UPDATED_TEXT = "Метки обновлены."
 
 
@@ -63,10 +59,7 @@ def build_tag_missing_text(ticket_public_number: str, tag: str, tags: str) -> st
 
 
 def build_reply_mode_enabled_text(public_number: str) -> str:
-    return (
-        f"Отправьте ответ по заявке {public_number}.\n"
-        "Если передумали, нажмите «Отмена»."
-    )
+    return f"Отправьте ответ по заявке {public_number}.\nЕсли передумали, нажмите «Отмена»."
 
 
 def build_reply_mode_callback_text(public_number: str) -> str:
@@ -126,10 +119,7 @@ def build_reply_sent_text(public_number: str) -> str:
 
 
 def build_reply_delivery_failed_text(public_number: str, error_text: str) -> str:
-    return (
-        f"Ответ по заявке {public_number} сохранён, "
-        f"но клиент его не получил: {error_text}"
-    )
+    return f"Ответ по заявке {public_number} сохранён, но клиент его не получил: {error_text}"
 
 
 def build_forwarded_client_message_text(public_number: str, body: str) -> str:

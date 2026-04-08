@@ -113,10 +113,7 @@ async def test_build_runtime_wires_same_redis_client_into_fsm_and_workflow(
     assert dispatcher_kwargs["global_rate_limiter"] is fake_workflow.global_rate_limiter
     assert dispatcher_kwargs["chat_rate_limiter"] is fake_workflow.chat_rate_limiter
     assert dispatcher_kwargs["operator_presence"] is fake_workflow.operator_presence
-    assert (
-        dispatcher_kwargs["ticket_live_session_store"]
-        is fake_workflow.ticket_live_session_store
-    )
+    assert dispatcher_kwargs["ticket_live_session_store"] is fake_workflow.ticket_live_session_store
     assert (
         dispatcher_kwargs["operator_active_ticket_store"]
         is fake_workflow.operator_active_ticket_store

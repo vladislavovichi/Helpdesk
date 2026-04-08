@@ -194,11 +194,9 @@ async def _handle_operator_message(
     )
     if ticket_details is None:
         await message.answer(
-
-                REPLY_CONTEXT_LOST_TEXT
-                if explicit_ticket_public_id is not None
-                else ACTIVE_TICKET_REQUIRED_TEXT
-
+            REPLY_CONTEXT_LOST_TEXT
+            if explicit_ticket_public_id is not None
+            else ACTIVE_TICKET_REQUIRED_TEXT
         )
         return
 
