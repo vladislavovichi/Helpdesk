@@ -11,7 +11,10 @@ from aiogram.types import CallbackQuery, Message
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import OperatorManagementError, OperatorSummary
 from bot.callbacks import AdminOperatorCallback
-from bot.formatters.operator import format_operator_detail_response, format_operator_list_response
+from bot.formatters.operator_admin_views import (
+    format_operator_detail_response,
+    format_operator_list_response,
+)
 from bot.handlers.admin.states import AdminOperatorStates
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_operator_argument_with_optional_name

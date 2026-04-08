@@ -4,13 +4,13 @@ import asyncio
 import logging
 
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup
 from aiogram.exceptions import (
     TelegramAPIError,
     TelegramNetworkError,
     TelegramRetryAfter,
     TelegramServerError,
 )
+from aiogram.types import InlineKeyboardMarkup
 
 from bot.texts.client import build_operator_reply_text, build_ticket_closed_text
 from bot.texts.operator import (

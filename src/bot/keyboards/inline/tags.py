@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.use_cases.tickets.summaries import TagSummary
 from bot.callbacks import OperatorTagCallback
-from bot.formatters.operator import format_tag_button_text
+from bot.formatters.operator_primitives import format_tag_button_text
 from bot.texts.buttons import BACK_TO_TICKET_BUTTON_TEXT
 
 

@@ -1,4 +1,4 @@
-# Python
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,12 +13,13 @@ env/
 .env.*
 !.env.example
 
-# Tool caches
+# Tooling caches and reports
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 .hypothesis/
 .pyre/
+.cache/
 .coverage
 .coverage.*
 htmlcov/
@@ -30,25 +31,27 @@ dist/
 .eggs/
 *.egg-info/
 
-# Editors
+# Editors and local workspaces
 .idea/
 .vscode/
+*.swp
+*.swo
 
 # OS files
 .DS_Store
 
-# Logs
+# Local runtime artifacts
 *.log
 *.sqlite3
 *.db
 *.pid
+*.tmp
+*.bak
 
 # Local Docker data
 postgres_data/
 redis_data/
 
-# Codex
+# Local tooling
 .codex
-
-# Benchmark results
 .benchmarks/

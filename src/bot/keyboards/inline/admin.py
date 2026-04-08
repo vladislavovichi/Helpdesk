@@ -7,7 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.use_cases.tickets.summaries import OperatorSummary
 from bot.callbacks import AdminOperatorCallback
-from bot.formatters.operator import format_operator_button_text
+from bot.formatters.operator_primitives import format_operator_button_text
 from bot.texts.buttons import BACK_BUTTON_TEXT, REFRESH_BUTTON_TEXT
 
 

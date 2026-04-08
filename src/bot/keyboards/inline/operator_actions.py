@@ -13,7 +13,7 @@ from application.use_cases.tickets.summaries import (
     QueuedTicketSummary,
 )
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback, OperatorQueueCallback
-from bot.formatters.operator import format_macro_button_text
+from bot.formatters.operator_primitives import format_macro_button_text
 from bot.texts.buttons import BACK_BUTTON_TEXT, CLOSE_BUTTON_TEXT, OPEN_BUTTON_TEXT
 from domain.enums.tickets import TicketStatus
 

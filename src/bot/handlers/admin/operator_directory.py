@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import OperatorSummary
 from bot.callbacks import AdminOperatorCallback
-from bot.formatters.operator import (
+from bot.formatters.operator_admin_views import (
     format_operator_detail_response,
     format_operator_list_response,
 )

@@ -10,8 +10,8 @@ from pytest import MonkeyPatch
 from bot.delivery import (
     deliver_client_message_to_operator,
     deliver_operator_reply_to_client,
-    deliver_ticket_closed_to_operator,
     deliver_ticket_closed_to_client,
+    deliver_ticket_closed_to_operator,
     send_message_with_retry,
 )
 

@@ -5,7 +5,11 @@ from typing import Any, cast
 
 from redis.asyncio import Redis
 
-from infrastructure.redis.contracts import OperatorActiveTicketStore, TicketLiveSession, TicketLiveSessionStore
+from infrastructure.redis.contracts import (
+    OperatorActiveTicketStore,
+    TicketLiveSession,
+    TicketLiveSessionStore,
+)
 from infrastructure.redis.keys import operator_active_ticket_key, ticket_live_session_key
 
 LIVE_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
@@ -23,7 +27,7 @@ class RedisTicketLiveSessionStore(TicketLiveSessionStore, OperatorActiveTicketSt
         self.redis = redis
 
     async def get_session(self, *, ticket_public_id: str) -> TicketLiveSession | None:
-        data = await self.redis.hgetall(ticket_live_session_key(ticket_public_id))
+        data = await cast(Any, self.redis.hgetall(ticket_live_session_key(ticket_public_id)))
         if not data:
             return None
         return _parse_ticket_live_session(data)
@@ -63,19 +67,19 @@ class RedisTicketLiveSessionStore(TicketLiveSessionStore, OperatorActiveTicketSt
         )
 
     async def delete_session(self, *, ticket_public_id: str) -> None:
-        await self.redis.delete(ticket_live_session_key(ticket_public_id))
+        await cast(Any, self.redis.delete(ticket_live_session_key(ticket_public_id)))
 
     async def get_active_ticket(self, *, operator_id: int) -> str | None:
-        value = await self.redis.get(operator_active_ticket_key(operator_id))
+        value = await cast(Any, self.redis.get(operator_active_ticket_key(operator_id)))
         if value is None:
             return None
         return str(value)
 
     async def set_active_ticket(self, *, operator_id: int, ticket_public_id: str) -> None:
-        await self.redis.set(operator_active_ticket_key(operator_id), ticket_public_id)
+        await cast(Any, self.redis.set(operator_active_ticket_key(operator_id), ticket_public_id))
 
         live_session_key = ticket_live_session_key(ticket_public_id)
-        if not await self.redis.exists(live_session_key):
+        if not await cast(Any, self.redis.exists(live_session_key)):
             return
 
         async with self.redis.pipeline(transaction=True) as pipeline:
@@ -90,7 +94,7 @@ class RedisTicketLiveSessionStore(TicketLiveSessionStore, OperatorActiveTicketSt
             await pipeline.execute()
 
     async def clear(self, *, operator_id: int) -> None:
-        await self.redis.delete(operator_active_ticket_key(operator_id))
+        await cast(Any, self.redis.delete(operator_active_ticket_key(operator_id)))
 
     async def clear_if_matches(self, *, operator_id: int, ticket_public_id: str) -> None:
         await cast(

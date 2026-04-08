@@ -1,22 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-from bot.handlers.operator.workflow_ticket_actions import handle_back_from_more_action
+from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
+from application.use_cases.tickets.summaries import TicketDetailsSummary
+from bot.handlers.operator.workflow_ticket_views import handle_back_from_more_action
 from bot.texts.operator import build_active_ticket_opened_text
 from domain.enums.tickets import TicketStatus
 
 
-def _build_helpdesk_service_factory(service: object):
+def _build_helpdesk_service_factory(service: object) -> HelpdeskServiceFactory:
     @asynccontextmanager
-    async def provide():
-        yield service
+    async def provide() -> AsyncIterator[HelpdeskService]:
+        yield cast(HelpdeskService, service)
 
     return provide
 
@@ -46,7 +50,7 @@ def _build_callback(*, ticket_public_id: str) -> CallbackQuery:
 async def test_back_from_more_action_returns_to_current_ticket_surface() -> None:
     ticket_public_id = uuid4()
     callback = _build_callback(ticket_public_id=str(ticket_public_id))
-    ticket_details = SimpleNamespace(
+    ticket_details = TicketDetailsSummary(
         public_id=ticket_public_id,
         public_number="HD-AAAA1111",
         client_chat_id=2002,
@@ -81,8 +85,22 @@ async def test_back_from_more_action_returns_to_current_ticket_surface() -> None
         ticket_live_session_store=ticket_live_session_store,
     )
 
-    callback.answer.assert_awaited_once_with(
+    callback_answer_mock(callback).assert_awaited_once_with(
         build_active_ticket_opened_text(ticket_details.public_number)
     )
-    callback.message.edit_text.assert_awaited_once_with(ANY, reply_markup=ANY)
-    callback.message.answer.assert_not_awaited()
+    message_edit_text_mock(callback).assert_awaited_once_with(ANY, reply_markup=ANY)
+    message_answer_mock(callback).assert_not_awaited()
+
+
+def callback_answer_mock(callback: CallbackQuery) -> AsyncMock:
+    return cast(AsyncMock, callback.answer)
+
+
+def message_edit_text_mock(callback: CallbackQuery) -> AsyncMock:
+    assert isinstance(callback.message, Message)
+    return cast(AsyncMock, callback.message.edit_text)
+
+
+def message_answer_mock(callback: CallbackQuery) -> AsyncMock:
+    assert isinstance(callback.message, Message)
+    return cast(AsyncMock, callback.message.answer)

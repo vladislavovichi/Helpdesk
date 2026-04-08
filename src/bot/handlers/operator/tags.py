@@ -8,11 +8,11 @@ from aiogram.types import CallbackQuery, Message
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TagSummary, TicketTagsSummary
 from bot.callbacks import OperatorActionCallback, OperatorTagCallback
-from bot.formatters.operator import format_ticket_tags_response
+from bot.formatters.operator_admin_views import format_ticket_tags_response
 from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
-from bot.handlers.operator.workflow_ticket_actions import edit_ticket_main_surface
+from bot.handlers.operator.ticket_surfaces import edit_ticket_main_surface
 from bot.keyboards.inline.tags import build_ticket_tags_markup
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,

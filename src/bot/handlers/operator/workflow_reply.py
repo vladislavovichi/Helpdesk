@@ -20,7 +20,7 @@ from bot.handlers.operator.active_context import (
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
-from bot.handlers.operator.workflow_ticket_actions import send_ticket_details
+from bot.handlers.operator.ticket_surfaces import send_ticket_details
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,
@@ -93,7 +93,7 @@ async def handle_reply_action(
         return
 
     await callback.answer(build_active_ticket_opened_text(ticket_details.public_number))
-    if callback.message is None:
+    if not isinstance(callback.message, Message):
         return
 
     await send_ticket_details(
@@ -194,7 +194,11 @@ async def _handle_operator_message(
     )
     if ticket_details is None:
         await message.answer(
-            REPLY_CONTEXT_LOST_TEXT if explicit_ticket_public_id is not None else ACTIVE_TICKET_REQUIRED_TEXT
+
+                REPLY_CONTEXT_LOST_TEXT
+                if explicit_ticket_public_id is not None
+                else ACTIVE_TICKET_REQUIRED_TEXT
+
         )
         return
 
@@ -275,7 +279,9 @@ async def _resolve_target_ticket(
         async with helpdesk_service_factory() as helpdesk_service:
             return await helpdesk_service.get_ticket_details(
                 ticket_public_id=explicit_ticket_public_id,
-                actor_telegram_user_id=message.from_user.id if message.from_user is not None else None,
+                actor_telegram_user_id=(
+                    message.from_user.id if message.from_user is not None else None
+                ),
             )
 
     if message.from_user is None:

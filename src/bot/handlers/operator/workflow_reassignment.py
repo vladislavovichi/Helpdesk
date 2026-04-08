@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import OperatorActionCallback
-from bot.formatters.operator import format_active_ticket_context, format_ticket_details
+from bot.formatters.operator_ticket_views import format_active_ticket_context, format_ticket_details
 from bot.handlers.operator.active_context import (
     activate_ticket_for_operator,
     clear_active_ticket_for_operator,

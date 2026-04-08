@@ -1,5 +1,7 @@
+"""Register SQLAlchemy model modules on package import."""
+
 from __future__ import annotations
 
-from infrastructure.db.models import catalog, operator, ticket
-
-__all__ = ["catalog", "operator", "ticket"]
+from . import catalog as catalog
+from . import operator as operator
+from . import ticket as ticket

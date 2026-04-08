@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
-from bot.formatters.operator import format_operational_stats
+from bot.formatters.operator_stats import format_operational_stats
 from bot.texts.buttons import STATS_BUTTON_TEXT
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
 from infrastructure.redis.contracts import GlobalRateLimiter, OperatorPresenceHelper

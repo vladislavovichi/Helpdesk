@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
 from domain.enums.tickets import TicketStatus
@@ -103,7 +105,7 @@ async def resolve_active_ticket_for_operator(
     return ticket_details
 
 
-def _parse_active_ticket_id(ticket_public_id: str):
+def _parse_active_ticket_id(ticket_public_id: str) -> UUID | None:
     from bot.handlers.operator.parsers import parse_ticket_public_id
 
     return parse_ticket_public_id(ticket_public_id)

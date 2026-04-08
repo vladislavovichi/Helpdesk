@@ -5,7 +5,7 @@ import logging
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import MagicData
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from bot.callbacks import ClientTicketCallback
@@ -16,7 +16,10 @@ from bot.keyboards.inline.client_actions import (
     build_client_ticket_finish_confirmation_markup,
     build_client_ticket_markup,
 )
-from bot.keyboards.inline.operator_actions import build_ticket_actions_markup, build_ticket_switch_markup
+from bot.keyboards.inline.operator_actions import (
+    build_ticket_actions_markup,
+    build_ticket_switch_markup,
+)
 from bot.texts.client import (
     FINISH_TICKET_CANCELLED_TEXT,
     FINISH_TICKET_LOCKED_TEXT,
@@ -109,15 +112,16 @@ async def handle_client_text(
         )
         return
 
-    operator_connected = ticket_details.assigned_operator_telegram_user_id is not None
-    if operator_connected:
+    operator_chat_id = ticket_details.assigned_operator_telegram_user_id
+    operator_connected = operator_chat_id is not None
+    if operator_chat_id is not None:
         active_ticket_public_id = await operator_active_ticket_store.get_active_ticket(
-            operator_id=ticket_details.assigned_operator_telegram_user_id
+            operator_id=operator_chat_id
         )
         is_active_context = active_ticket_public_id == str(ticket.public_id)
         delivery_error = await deliver_client_message_to_operator(
             bot,
-            chat_id=ticket_details.assigned_operator_telegram_user_id,
+            chat_id=operator_chat_id,
             public_number=ticket.public_number,
             body=message.text,
             reply_markup=(
@@ -168,7 +172,9 @@ async def handle_finish_ticket_prompt(
         return
 
     async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(ticket_public_id=ticket_public_id)
+        ticket_details = await helpdesk_service.get_ticket_details(
+            ticket_public_id=ticket_public_id
+        )
 
     if ticket_details is None:
         await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
@@ -246,7 +252,9 @@ async def handle_finish_ticket_confirm(
     ticket_details = None
     try:
         async with helpdesk_service_factory() as helpdesk_service:
-            ticket_details = await helpdesk_service.get_ticket_details(ticket_public_id=ticket_public_id)
+            ticket_details = await helpdesk_service.get_ticket_details(
+                ticket_public_id=ticket_public_id
+            )
             if ticket_details is None:
                 await callback.answer(FINISH_TICKET_STALE_TEXT, show_alert=True)
                 return
@@ -258,7 +266,9 @@ async def handle_finish_ticket_confirm(
                 return
 
             try:
-                closed_ticket = await helpdesk_service.close_ticket(ticket_public_id=ticket_public_id)
+                closed_ticket = await helpdesk_service.close_ticket(
+                    ticket_public_id=ticket_public_id
+                )
             except InvalidTicketTransitionError:
                 refreshed_ticket_details = await helpdesk_service.get_ticket_details(
                     ticket_public_id=ticket_public_id
@@ -300,7 +310,8 @@ async def handle_finish_ticket_confirm(
         )
         if delivery_error is not None:
             logger.warning(
-                "Failed to notify operator about client-side closure ticket=%s operator_chat_id=%s error=%s",
+                "Failed to notify operator about client-side closure "
+                "ticket=%s operator_chat_id=%s error=%s",
                 ticket_details.public_number,
                 ticket_details.assigned_operator_telegram_user_id,
                 delivery_error,
@@ -318,7 +329,7 @@ async def handle_finish_ticket_confirm(
 async def _try_edit_client_ticket_markup(
     *,
     callback: CallbackQuery,
-    reply_markup: object | None,
+    reply_markup: InlineKeyboardMarkup | None,
 ) -> bool:
     if not isinstance(callback.message, Message):
         return False

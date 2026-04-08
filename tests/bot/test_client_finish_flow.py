@@ -4,13 +4,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, call
-from uuid import uuid4
+from typing import cast
+from unittest.mock import AsyncMock, Mock
+from uuid import UUID, uuid4
 
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Chat, Message, User
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary, TicketSummary
 from bot.handlers.user.client import (
     handle_finish_ticket_confirm,
@@ -27,8 +28,8 @@ from domain.tickets import InvalidTicketTransitionError
 
 def build_helpdesk_service_factory(service: object) -> HelpdeskServiceFactory:
     @asynccontextmanager
-    async def provide() -> AsyncIterator[object]:
-        yield service
+    async def provide() -> AsyncIterator[HelpdeskService]:
+        yield cast(HelpdeskService, service)
 
     return provide
 
@@ -55,7 +56,7 @@ def build_callback(*, ticket_public_id: str) -> CallbackQuery:
     return callback
 
 
-def build_ticket_details(*, public_id: object, status: TicketStatus) -> TicketDetailsSummary:
+def build_ticket_details(*, public_id: UUID, status: TicketStatus) -> TicketDetailsSummary:
     return TicketDetailsSummary(
         public_id=public_id,
         public_number="HD-AAAA1111",
@@ -75,17 +76,17 @@ def build_ticket_details(*, public_id: object, status: TicketStatus) -> TicketDe
 
 
 def callback_answer_mock(callback: CallbackQuery) -> AsyncMock:
-    return callback.answer
+    return cast(AsyncMock, callback.answer)
 
 
 def message_answer_mock(callback: CallbackQuery) -> AsyncMock:
     assert isinstance(callback.message, Message)
-    return callback.message.answer
+    return cast(AsyncMock, callback.message.answer)
 
 
 def message_edit_reply_markup_mock(callback: CallbackQuery) -> AsyncMock:
     assert isinstance(callback.message, Message)
-    return callback.message.edit_reply_markup
+    return cast(AsyncMock, callback.message.edit_reply_markup)
 
 
 async def test_finish_ticket_prompt_uses_domain_stale_text_for_missing_ticket() -> None:
@@ -160,8 +161,14 @@ async def test_finish_ticket_confirm_closes_ticket_and_cleans_runtime_state() ->
 async def test_finish_ticket_confirm_returns_closed_message_after_race() -> None:
     ticket_public_id = uuid4()
     callback = build_callback(ticket_public_id=str(ticket_public_id))
-    open_ticket_details = build_ticket_details(public_id=ticket_public_id, status=TicketStatus.ASSIGNED)
-    closed_ticket_details = build_ticket_details(public_id=ticket_public_id, status=TicketStatus.CLOSED)
+    open_ticket_details = build_ticket_details(
+        public_id=ticket_public_id,
+        status=TicketStatus.ASSIGNED,
+    )
+    closed_ticket_details = build_ticket_details(
+        public_id=ticket_public_id,
+        status=TicketStatus.CLOSED,
+    )
 
     service = SimpleNamespace(
         get_ticket_details=AsyncMock(side_effect=[open_ticket_details, closed_ticket_details]),

@@ -11,7 +11,7 @@ from application.use_cases.tickets.summaries import (
     TicketDetailsSummary,
     TicketMessageSummary,
 )
-from bot.formatters.operator import (
+from bot.formatters.operator_ticket_views import (
     format_active_ticket_context,
     format_queue_page,
     format_ticket_details,

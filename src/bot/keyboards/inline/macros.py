@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.use_cases.tickets.summaries import MacroSummary
 from bot.callbacks import AdminMacroCallback, OperatorMacroCallback
-from bot.formatters.operator import format_macro_button_text
+from bot.formatters.operator_primitives import format_macro_button_text
 from bot.texts.buttons import BACK_BUTTON_TEXT, BACK_TO_TICKET_BUTTON_TEXT, CANCEL_BUTTON_TEXT
 
 
