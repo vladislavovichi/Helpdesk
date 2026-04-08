@@ -9,6 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from application.use_cases.tickets.summaries import TagSummary
 from bot.callbacks import OperatorTagCallback
 from bot.formatters.operator import format_tag_button_text
+from bot.texts.buttons import BACK_TO_TICKET_BUTTON_TEXT
 
 
 def build_ticket_tags_markup(
@@ -35,7 +36,7 @@ def build_ticket_tags_markup(
 
     builder.row(
         _button(
-            "К диалогу",
+            BACK_TO_TICKET_BUTTON_TEXT,
             OperatorTagCallback(
                 action="ticket",
                 ticket_public_id=callback_value,

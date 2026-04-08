@@ -6,17 +6,13 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
-from application.use_cases.tickets.summaries import TagSummary
+from application.use_cases.tickets.summaries import TagSummary, TicketTagsSummary
 from bot.callbacks import OperatorActionCallback, OperatorTagCallback
-from bot.formatters.operator import (
-    format_active_ticket_context,
-    format_ticket_details,
-    format_ticket_tags_response,
-)
+from bot.formatters.operator import format_ticket_tags_response
 from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
-from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
+from bot.handlers.operator.workflow_ticket_actions import edit_ticket_main_surface
 from bot.keyboards.inline.tags import build_ticket_tags_markup
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,
@@ -24,7 +20,13 @@ from bot.texts.common import (
     TICKET_LOCKED_TEXT,
     TICKET_NOT_FOUND_TEXT,
 )
-from bot.texts.operator import TAG_ACTION_STALE_TEXT, TAGS_UPDATED_TEXT
+from bot.texts.operator import (
+    TAG_ACTION_STALE_TEXT,
+    TAGS_OPENED_TEXT,
+    TAGS_UPDATED_TEXT,
+    build_active_ticket_opened_text,
+    build_view_opened_text,
+)
 from infrastructure.redis.contracts import (
     GlobalRateLimiter,
     OperatorActiveTicketStore,
@@ -80,22 +82,11 @@ async def handle_open_tags(
             ticket_details=ticket_details,
             ticket_live_session_store=ticket_live_session_store,
         )
-    if not isinstance(callback.message, Message):
-        await callback.answer(TAGS_UPDATED_TEXT)
-        return
-
-    await callback.answer(TAGS_UPDATED_TEXT)
-    await callback.message.edit_text(
-        format_ticket_tags_response(
-            ticket_tags.public_number,
-            ticket_tags.tags,
-            available_tags,
-        ),
-        reply_markup=build_ticket_tags_markup(
-            ticket_public_id=ticket_tags.public_id,
-            available_tags=available_tags,
-            active_tag_names=ticket_tags.tags,
-        ),
+    await _edit_ticket_tags_surface(
+        callback=callback,
+        ticket_tags=ticket_tags,
+        available_tags=available_tags,
+        answer_text=TAGS_OPENED_TEXT,
     )
 
 
@@ -139,7 +130,12 @@ async def handle_toggle_tag(
                 await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
                 return
             if tag is None:
-                await respond_to_operator(callback, TAG_ACTION_STALE_TEXT)
+                await _edit_ticket_tags_surface(
+                    callback=callback,
+                    ticket_tags=ticket_tags,
+                    available_tags=available_tags,
+                    answer_text=TAG_ACTION_STALE_TEXT,
+                )
                 return
 
             if tag.name in ticket_tags.tags:
@@ -181,22 +177,11 @@ async def handle_toggle_tag(
             ticket_details=ticket_details,
             ticket_live_session_store=ticket_live_session_store,
         )
-    if not isinstance(callback.message, Message):
-        await callback.answer(TAGS_UPDATED_TEXT)
-        return
-
-    await callback.answer(TAGS_UPDATED_TEXT)
-    await callback.message.edit_text(
-        format_ticket_tags_response(
-            refreshed_tags.public_number,
-            refreshed_tags.tags,
-            refreshed_available_tags,
-        ),
-        reply_markup=build_ticket_tags_markup(
-            ticket_public_id=refreshed_tags.public_id,
-            available_tags=refreshed_available_tags,
-            active_tag_names=refreshed_tags.tags,
-        ),
+    await _edit_ticket_tags_surface(
+        callback=callback,
+        ticket_tags=refreshed_tags,
+        available_tags=refreshed_available_tags,
+        answer_text=TAGS_UPDATED_TEXT,
     )
 
 
@@ -235,20 +220,35 @@ async def handle_back_to_ticket(
         ticket_details=ticket_details,
         ticket_live_session_store=ticket_live_session_store,
     )
-    if not isinstance(callback.message, Message):
-        await callback.answer(ticket_details.public_number)
-        return
-
-    await callback.answer(ticket_details.public_number)
-    await callback.message.edit_text(
-        (
-            format_active_ticket_context(ticket_details)
+    await edit_ticket_main_surface(
+        callback=callback,
+        ticket_details=ticket_details,
+        answer_text=(
+            build_active_ticket_opened_text(ticket_details.public_number)
             if is_active_context
-            else format_ticket_details(ticket_details)
+            else build_view_opened_text(ticket_details.public_number)
         ),
-        reply_markup=build_ticket_actions_markup(
-            ticket_public_id=ticket_details.public_id,
-            status=ticket_details.status,
+        is_active_context=is_active_context,
+    )
+
+
+async def _edit_ticket_tags_surface(
+    *,
+    callback: CallbackQuery,
+    ticket_tags: TicketTagsSummary,
+    available_tags: Sequence[TagSummary],
+    answer_text: str,
+) -> None:
+    if not isinstance(callback.message, Message):
+        await callback.answer(answer_text)
+        return
+    await callback.answer(answer_text)
+    await callback.message.edit_text(
+        format_ticket_tags_response(ticket_tags.public_number, ticket_tags.tags, available_tags),
+        reply_markup=build_ticket_tags_markup(
+            ticket_public_id=ticket_tags.public_id,
+            available_tags=available_tags,
+            active_tag_names=ticket_tags.tags,
         ),
     )
 

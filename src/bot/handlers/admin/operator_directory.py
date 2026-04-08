@@ -88,6 +88,7 @@ async def handle_operator_view(
     callback: CallbackQuery,
     callback_data: AdminOperatorCallback,
     state: FSMContext,
+    settings: Settings,
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
@@ -113,7 +114,12 @@ async def handle_operator_view(
         None,
     )
     if operator is None:
-        await respond_to_operator(callback, OPERATORS_REFRESHED_TEXT)
+        await _edit_operator_list(
+            callback=callback,
+            operators=operators,
+            settings=settings,
+            answer_text=OPERATORS_REFRESHED_TEXT,
+        )
         return
     if not isinstance(callback.message, Message):
         await callback.answer(operator.display_name)

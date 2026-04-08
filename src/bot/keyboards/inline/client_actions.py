@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.callbacks import ClientTicketCallback
+from bot.texts.buttons import CANCEL_BUTTON_TEXT
 
 
 def build_client_ticket_markup(*, ticket_public_id: UUID) -> InlineKeyboardMarkup:
@@ -22,7 +23,10 @@ def build_client_ticket_markup(*, ticket_public_id: UUID) -> InlineKeyboardMarku
     return builder.as_markup()
 
 
-def build_client_ticket_finish_confirmation_markup(*, ticket_public_id: UUID) -> InlineKeyboardMarkup:
+def build_client_ticket_finish_confirmation_markup(
+    *,
+    ticket_public_id: UUID,
+) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     callback_value = str(ticket_public_id)
     builder.row(
@@ -34,7 +38,7 @@ def build_client_ticket_finish_confirmation_markup(*, ticket_public_id: UUID) ->
             ).pack(),
         ),
         _button(
-            "Продолжить",
+            CANCEL_BUTTON_TEXT,
             ClientTicketCallback(
                 action="finish_cancel",
                 ticket_public_id=callback_value,

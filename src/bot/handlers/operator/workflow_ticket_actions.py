@@ -453,10 +453,10 @@ async def handle_back_from_more_action(
         ticket_live_session_store=ticket_live_session_store,
     )
 
-    await _answer_with_ticket_details(
+    await edit_ticket_main_surface(
         callback=callback,
         ticket_details=ticket_details,
-        fallback_text=(
+        answer_text=(
             build_active_ticket_opened_text(ticket_details.public_number)
             if is_active_context
             else build_view_opened_text(ticket_details.public_number)
@@ -494,11 +494,7 @@ async def send_ticket_details(
     is_active_context: bool = False,
 ) -> None:
     await message.answer(
-        (
-            format_active_ticket_context(ticket_details)
-            if is_active_context
-            else format_ticket_details(ticket_details)
-        ),
+        format_ticket_main_surface(ticket_details, is_active_context=is_active_context),
         reply_markup=build_ticket_actions_markup(
             ticket_public_id=ticket_details.public_id,
             status=ticket_details.status,
@@ -509,3 +505,47 @@ async def send_ticket_details(
 
     for chunk in format_ticket_history_chunks(ticket_details):
         await message.answer(chunk)
+
+
+async def edit_ticket_main_surface(
+    *,
+    callback: CallbackQuery,
+    ticket_details: TicketDetailsSummary,
+    answer_text: str,
+    is_active_context: bool = False,
+) -> None:
+    if not isinstance(callback.message, Message):
+        await callback.answer(answer_text)
+        return
+
+    await callback.answer(answer_text)
+    await edit_ticket_main_message(
+        message=callback.message,
+        ticket_details=ticket_details,
+        is_active_context=is_active_context,
+    )
+
+
+def format_ticket_main_surface(
+    ticket_details: TicketDetailsSummary,
+    *,
+    is_active_context: bool = False,
+) -> str:
+    if is_active_context:
+        return format_active_ticket_context(ticket_details)
+    return format_ticket_details(ticket_details)
+
+
+async def edit_ticket_main_message(
+    *,
+    message: Message,
+    ticket_details: TicketDetailsSummary,
+    is_active_context: bool = False,
+) -> None:
+    await message.edit_text(
+        format_ticket_main_surface(ticket_details, is_active_context=is_active_context),
+        reply_markup=build_ticket_actions_markup(
+            ticket_public_id=ticket_details.public_id,
+            status=ticket_details.status,
+        ),
+    )

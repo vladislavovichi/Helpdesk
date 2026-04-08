@@ -14,6 +14,7 @@ from application.use_cases.tickets.summaries import (
 )
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback, OperatorQueueCallback
 from bot.formatters.operator import format_macro_button_text
+from bot.texts.buttons import BACK_BUTTON_TEXT, CLOSE_BUTTON_TEXT, OPEN_BUTTON_TEXT
 from domain.enums.tickets import TicketStatus
 
 
@@ -41,7 +42,7 @@ def build_ticket_actions_markup(
     if status in {TicketStatus.ASSIGNED, TicketStatus.ESCALATED}:
         builder.row(
             _build_callback_button(
-                "Закрыть",
+                CLOSE_BUTTON_TEXT,
                 OperatorActionCallback(action="close", ticket_public_id=callback_value).pack(),
             ),
             _build_callback_button(
@@ -102,7 +103,7 @@ def build_ticket_more_actions_markup(
     builder.row(*status_row)
     builder.row(
         _build_callback_button(
-            "Назад",
+            BACK_BUTTON_TEXT,
             OperatorActionCallback(action="back", ticket_public_id=callback_value).pack(),
         )
     )
@@ -113,7 +114,7 @@ def build_ticket_switch_markup(*, ticket_public_id: UUID) -> InlineKeyboardMarku
     builder = InlineKeyboardBuilder()
     builder.row(
         _build_callback_button(
-            "Открыть",
+            OPEN_BUTTON_TEXT,
             OperatorActionCallback(action="view", ticket_public_id=str(ticket_public_id)).pack(),
         )
     )

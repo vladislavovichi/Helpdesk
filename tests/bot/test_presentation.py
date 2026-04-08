@@ -14,19 +14,28 @@ from application.use_cases.tickets.summaries import (
 from bot.formatters.operator import (
     format_active_ticket_context,
     format_queue_page,
-    format_ticket_more_actions,
     format_ticket_details,
     format_ticket_history_chunks,
+    format_ticket_more_actions,
 )
 from bot.formatters.system import build_help_text, build_start_text, format_diagnostics_report
+from bot.keyboards.inline.client_actions import (
+    build_client_ticket_finish_confirmation_markup,
+)
+from bot.keyboards.inline.macros import (
+    build_operator_macro_picker_markup,
+    build_operator_macro_preview_markup,
+)
 from bot.keyboards.inline.operator_actions import (
     build_queue_markup,
     build_ticket_actions_markup,
     build_ticket_more_actions_markup,
 )
-from bot.keyboards.inline.client_actions import build_client_ticket_finish_confirmation_markup
+from bot.keyboards.inline.tags import build_ticket_tags_markup
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import (
+    BACK_BUTTON_TEXT,
+    BACK_TO_TICKET_BUTTON_TEXT,
     CANCEL_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
@@ -227,7 +236,40 @@ def test_build_client_ticket_finish_confirmation_markup_fits_telegram_callback_l
     markup = build_client_ticket_finish_confirmation_markup(ticket_public_id=uuid4())
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert rows == (("Завершить", "Продолжить"),)
+    assert rows == (("Завершить", CANCEL_BUTTON_TEXT),)
+
+
+def test_build_ticket_tags_markup_uses_consistent_ticket_return_action() -> None:
+    markup = build_ticket_tags_markup(
+        ticket_public_id=uuid4(),
+        available_tags=(),
+        active_tag_names=(),
+    )
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert rows == ((BACK_TO_TICKET_BUTTON_TEXT,),)
+
+
+def test_build_operator_macro_navigation_is_consistent() -> None:
+    markup = build_operator_macro_picker_markup(
+        ticket_public_id=uuid4(),
+        macros=(),
+        current_page=1,
+        total_pages=1,
+    )
+    picker_rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+    preview_markup = build_operator_macro_preview_markup(
+        ticket_public_id=uuid4(),
+        macro_id=1,
+        page=1,
+    )
+    preview_rows = tuple(
+        tuple(button.text for button in row)
+        for row in preview_markup.inline_keyboard
+    )
+
+    assert picker_rows == ((BACK_TO_TICKET_BUTTON_TEXT,),)
+    assert preview_rows == (("Отправить", BACK_BUTTON_TEXT),)
 
 
 def test_format_active_ticket_context_stays_compact_and_obvious() -> None:

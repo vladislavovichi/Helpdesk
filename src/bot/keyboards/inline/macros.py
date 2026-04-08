@@ -9,6 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from application.use_cases.tickets.summaries import MacroSummary
 from bot.callbacks import AdminMacroCallback, OperatorMacroCallback
 from bot.formatters.operator import format_macro_button_text
+from bot.texts.buttons import BACK_BUTTON_TEXT, BACK_TO_TICKET_BUTTON_TEXT, CANCEL_BUTTON_TEXT
 
 
 def build_operator_macro_picker_markup(
@@ -75,7 +76,7 @@ def build_operator_macro_picker_markup(
 
     builder.row(
         _button(
-            "К диалогу",
+            BACK_TO_TICKET_BUTTON_TEXT,
             OperatorMacroCallback(
                 action="ticket",
                 ticket_public_id=callback_value,
@@ -106,7 +107,7 @@ def build_operator_macro_preview_markup(
             ).pack(),
         ),
         _button(
-            "К списку",
+            BACK_BUTTON_TEXT,
             OperatorMacroCallback(
                 action="back",
                 ticket_public_id=callback_value,
@@ -186,7 +187,7 @@ def build_admin_macro_detail_markup(*, macro_id: int, page: int) -> InlineKeyboa
             AdminMacroCallback(action="delete", macro_id=macro_id, page=page).pack(),
         ),
         _button(
-            "Назад",
+            BACK_BUTTON_TEXT,
             AdminMacroCallback(action="back_list", macro_id=macro_id, page=page).pack(),
         ),
     )
@@ -201,7 +202,7 @@ def build_admin_macro_delete_markup(*, macro_id: int, page: int) -> InlineKeyboa
             AdminMacroCallback(action="confirm_delete", macro_id=macro_id, page=page).pack(),
         ),
         _button(
-            "Назад",
+            BACK_BUTTON_TEXT,
             AdminMacroCallback(action="cancel_delete", macro_id=macro_id, page=page).pack(),
         ),
     )
@@ -222,7 +223,7 @@ def build_admin_macro_create_preview_markup(*, page: int) -> InlineKeyboardMarku
     )
     builder.row(
         _button(
-            "Отмена",
+            CANCEL_BUTTON_TEXT,
             AdminMacroCallback(action="preview_cancel", macro_id=0, page=page).pack(),
         )
     )

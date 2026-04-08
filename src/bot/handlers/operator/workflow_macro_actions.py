@@ -15,16 +15,18 @@ from bot.formatters.macros import (
     format_operator_macro_preview,
     paginate_macros,
 )
-from bot.formatters.operator import format_active_ticket_context, format_ticket_details
 from bot.handlers.operator.active_context import activate_ticket_for_operator
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
+from bot.handlers.operator.workflow_ticket_actions import (
+    edit_ticket_main_message,
+    edit_ticket_main_surface,
+)
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.keyboards.inline.macros import (
     build_operator_macro_picker_markup,
     build_operator_macro_preview_markup,
 )
-from bot.keyboards.inline.operator_actions import build_ticket_actions_markup
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,
     SERVICE_UNAVAILABLE_TEXT,
@@ -40,6 +42,7 @@ from bot.texts.macros import (
 from bot.texts.operator import (
     APPLY_MACRO_FAILED_TEXT,
     MACROS_EMPTY_TEXT,
+    build_active_ticket_opened_text,
     build_macro_delivery_failed_text,
     build_macro_saved_text,
     build_macro_sent_text,
@@ -88,16 +91,21 @@ async def handle_open_macros(
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
-    if not macros:
-        await respond_to_operator(callback, MACROS_EMPTY_TEXT)
-        return
 
-    await activate_ticket_for_operator(
+    is_active_context = await activate_ticket_for_operator(
         active_ticket_store=operator_active_ticket_store,
         operator_telegram_user_id=callback.from_user.id,
         ticket_details=ticket_details,
         ticket_live_session_store=ticket_live_session_store,
     )
+    if not macros:
+        await edit_ticket_main_surface(
+            callback=callback,
+            ticket_details=ticket_details,
+            answer_text=MACROS_EMPTY_TEXT,
+            is_active_context=is_active_context,
+        )
+        return
 
     await _render_picker(
         callback=callback,
@@ -138,16 +146,21 @@ async def handle_macro_page(
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
-    if not macros:
-        await respond_to_operator(callback, MACROS_EMPTY_TEXT)
-        return
 
-    await activate_ticket_for_operator(
+    is_active_context = await activate_ticket_for_operator(
         active_ticket_store=operator_active_ticket_store,
         operator_telegram_user_id=callback.from_user.id,
         ticket_details=ticket_details,
         ticket_live_session_store=ticket_live_session_store,
     )
+    if not macros:
+        await edit_ticket_main_surface(
+            callback=callback,
+            ticket_details=ticket_details,
+            answer_text=MACROS_EMPTY_TEXT,
+            is_active_context=is_active_context,
+        )
+        return
 
     await _render_picker(
         callback=callback,
@@ -197,7 +210,7 @@ async def handle_macro_preview(
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
 
-    await activate_ticket_for_operator(
+    is_active_context = await activate_ticket_for_operator(
         active_ticket_store=operator_active_ticket_store,
         operator_telegram_user_id=callback.from_user.id,
         ticket_details=ticket_details,
@@ -206,7 +219,22 @@ async def handle_macro_preview(
 
     macro = next((item for item in macros if item.id == callback_data.macro_id), None)
     if macro is None:
-        await respond_to_operator(callback, MACRO_NOT_FOUND_TEXT)
+        if macros:
+            await _render_picker(
+                callback=callback,
+                ticket_details=ticket_details,
+                macros=macros,
+                page=callback_data.page,
+                answer_text=MACRO_NOT_FOUND_TEXT,
+            )
+            return
+
+        await edit_ticket_main_surface(
+            callback=callback,
+            ticket_details=ticket_details,
+            answer_text=MACRO_NOT_FOUND_TEXT,
+            is_active_context=is_active_context,
+        )
         return
 
     if not isinstance(callback.message, Message):
@@ -257,16 +285,21 @@ async def handle_macro_preview_back(
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
         return
-    if not macros:
-        await respond_to_operator(callback, MACROS_EMPTY_TEXT)
-        return
 
-    await activate_ticket_for_operator(
+    is_active_context = await activate_ticket_for_operator(
         active_ticket_store=operator_active_ticket_store,
         operator_telegram_user_id=callback.from_user.id,
         ticket_details=ticket_details,
         ticket_live_session_store=ticket_live_session_store,
     )
+    if not macros:
+        await edit_ticket_main_surface(
+            callback=callback,
+            ticket_details=ticket_details,
+            answer_text=MACROS_EMPTY_TEXT,
+            is_active_context=is_active_context,
+        )
+        return
 
     await _render_picker(
         callback=callback,
@@ -313,21 +346,15 @@ async def handle_macro_ticket_back(
         ticket_details=ticket_details,
         ticket_live_session_store=ticket_live_session_store,
     )
-    if not isinstance(callback.message, Message):
-        await callback.answer(build_view_opened_text(ticket_details.public_number))
-        return
-
-    await callback.answer(build_view_opened_text(ticket_details.public_number))
-    await callback.message.edit_text(
-        (
-            format_active_ticket_context(ticket_details)
+    await edit_ticket_main_surface(
+        callback=callback,
+        ticket_details=ticket_details,
+        answer_text=(
+            build_active_ticket_opened_text(ticket_details.public_number)
             if is_active_context
-            else format_ticket_details(ticket_details)
+            else build_view_opened_text(ticket_details.public_number)
         ),
-        reply_markup=build_ticket_actions_markup(
-            ticket_public_id=ticket_details.public_id,
-            status=ticket_details.status,
-        ),
+        is_active_context=is_active_context,
     )
 
 
@@ -428,16 +455,10 @@ async def handle_apply_macro(
             build_macro_delivery_failed_text(macro_result.macro.title, delivery_error)
         )
 
-    await callback.message.edit_text(
-        (
-            format_active_ticket_context(ticket_details)
-            if is_active_context
-            else format_ticket_details(ticket_details)
-        ),
-        reply_markup=build_ticket_actions_markup(
-            ticket_public_id=ticket_details.public_id,
-            status=ticket_details.status,
-        ),
+    await edit_ticket_main_message(
+        message=callback.message,
+        ticket_details=ticket_details,
+        is_active_context=is_active_context,
     )
 
 

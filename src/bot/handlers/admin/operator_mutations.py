@@ -194,6 +194,7 @@ async def handle_confirm_revoke_operator(
 async def handle_cancel_revoke_operator(
     callback: CallbackQuery,
     callback_data: AdminOperatorCallback,
+    settings: Settings,
     helpdesk_service_factory: HelpdeskServiceFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
@@ -217,13 +218,21 @@ async def handle_cancel_revoke_operator(
         None,
     )
     await callback.answer(REVOKE_CANCELLED_TEXT)
-    if isinstance(callback.message, Message) and operator is not None:
+    if not isinstance(callback.message, Message):
+        return
+    if operator is None:
         await callback.message.edit_text(
-            format_operator_detail_response(operator),
-            reply_markup=build_operator_detail_markup(
-                telegram_user_id=operator.telegram_user_id,
-            ),
+            _build_operator_list_text(operators=operators, settings=settings),
+            reply_markup=build_operator_management_markup(operators=operators),
         )
+        return
+
+    await callback.message.edit_text(
+        format_operator_detail_response(operator),
+        reply_markup=build_operator_detail_markup(
+            telegram_user_id=operator.telegram_user_id,
+        ),
+    )
 
 
 def _build_operator_list_text(

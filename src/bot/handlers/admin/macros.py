@@ -136,7 +136,17 @@ async def handle_admin_macro_view(
         )
 
     if macro is None:
-        await respond_to_operator(callback, MACRO_NOT_FOUND_TEXT)
+        async with helpdesk_service_factory() as helpdesk_service:
+            macros = await helpdesk_service.list_macros(
+                actor_telegram_user_id=callback.from_user.id
+            )
+
+        await _edit_admin_macro_list(
+            callback=callback,
+            macros=macros,
+            page=callback_data.page,
+            answer_text=MACRO_NOT_FOUND_TEXT,
+        )
         return
 
     await _edit_admin_macro_details(
@@ -250,7 +260,17 @@ async def handle_admin_macro_delete_prompt(
         )
 
     if macro is None:
-        await respond_to_operator(callback, MACRO_NOT_FOUND_TEXT)
+        async with helpdesk_service_factory() as helpdesk_service:
+            macros = await helpdesk_service.list_macros(
+                actor_telegram_user_id=callback.from_user.id
+            )
+
+        await _edit_admin_macro_list(
+            callback=callback,
+            macros=macros,
+            page=callback_data.page,
+            answer_text=MACRO_NOT_FOUND_TEXT,
+        )
         return
     if not isinstance(callback.message, Message):
         await callback.answer(MACRO_NOT_FOUND_TEXT)
@@ -289,7 +309,17 @@ async def handle_admin_macro_delete_cancel(
         )
 
     if macro is None:
-        await respond_to_operator(callback, MACRO_NOT_FOUND_TEXT)
+        async with helpdesk_service_factory() as helpdesk_service:
+            macros = await helpdesk_service.list_macros(
+                actor_telegram_user_id=callback.from_user.id
+            )
+
+        await _edit_admin_macro_list(
+            callback=callback,
+            macros=macros,
+            page=callback_data.page,
+            answer_text=MACRO_NOT_FOUND_TEXT,
+        )
         return
 
     await _edit_admin_macro_details(
@@ -322,7 +352,12 @@ async def handle_admin_macro_delete(
         macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
 
     if macro is None:
-        await respond_to_operator(callback, MACRO_NOT_FOUND_TEXT)
+        await _edit_admin_macro_list(
+            callback=callback,
+            macros=macros,
+            page=callback_data.page,
+            answer_text=MACRO_NOT_FOUND_TEXT,
+        )
         return
 
     await _edit_admin_macro_list(

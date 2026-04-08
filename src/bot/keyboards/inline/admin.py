@@ -8,6 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from application.use_cases.tickets.summaries import OperatorSummary
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator import format_operator_button_text
+from bot.texts.buttons import BACK_BUTTON_TEXT, REFRESH_BUTTON_TEXT
 
 
 def build_operator_management_markup(
@@ -32,7 +33,7 @@ def build_operator_management_markup(
             AdminOperatorCallback(action="add", telegram_user_id=0).pack(),
         ),
         _build_callback_button(
-            "Обновить",
+            REFRESH_BUTTON_TEXT,
             AdminOperatorCallback(action="refresh", telegram_user_id=0).pack(),
         )
     )
@@ -55,7 +56,7 @@ def build_operator_detail_markup(
     )
     builder.row(
         _build_callback_button(
-            "Назад",
+            BACK_BUTTON_TEXT,
             AdminOperatorCallback(
                 action="back_list",
                 telegram_user_id=telegram_user_id,
@@ -79,7 +80,7 @@ def build_operator_revoke_confirmation_markup(
             ).pack(),
         ),
         _build_callback_button(
-            "Назад",
+            BACK_BUTTON_TEXT,
             AdminOperatorCallback(
                 action="cancel_revoke",
                 telegram_user_id=telegram_user_id,
