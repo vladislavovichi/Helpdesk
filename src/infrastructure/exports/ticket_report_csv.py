@@ -80,7 +80,9 @@ def _build_base_row(report: TicketReport) -> dict[str, str | int]:
         "ticket_client_chat_id": report.client_chat_id,
         "ticket_tags": ", ".join(report.tags),
         "feedback_rating": report.feedback.rating if report.feedback is not None else "",
-        "feedback_comment": report.feedback.comment if report.feedback is not None else "",
+        "feedback_comment": (
+            (report.feedback.comment or "") if report.feedback is not None else ""
+        ),
         "feedback_submitted_at": (
             _format_timestamp(report.feedback.submitted_at) if report.feedback is not None else ""
         ),
