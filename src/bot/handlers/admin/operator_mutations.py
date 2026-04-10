@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import OperatorManagementError, OperatorSummary
+from bot.adapters.helpdesk import build_operator_identity_from_parts, build_request_actor
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator_admin_views import (
     format_operator_detail_response,
@@ -84,22 +85,24 @@ async def handle_add_operator_message(
     if message.from_user is None:
         return
 
-    await operator_presence.touch(operator_id=message.from_user.id)
+        await operator_presence.touch(operator_id=message.from_user.id)
     telegram_user_id, display_name = parsed
 
     async with helpdesk_service_factory() as helpdesk_service:
         try:
             result = await helpdesk_service.promote_operator(
-                telegram_user_id=telegram_user_id,
-                display_name=display_name,
-                actor_telegram_user_id=message.from_user.id,
+                build_operator_identity_from_parts(
+                    telegram_user_id=telegram_user_id,
+                    display_name=display_name,
+                ),
+                actor=build_request_actor(message.from_user),
             )
         except OperatorManagementError as exc:
             await message.answer(str(exc))
             return
 
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=message.from_user.id,
+            actor=build_request_actor(message.from_user),
         )
 
     await state.clear()
@@ -158,14 +161,14 @@ async def handle_confirm_revoke_operator(
         try:
             result = await helpdesk_service.revoke_operator(
                 telegram_user_id=callback_data.telegram_user_id,
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
         except OperatorManagementError as exc:
             await respond_to_operator(callback, str(exc))
             return
 
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=callback.from_user.id
+            actor=build_request_actor(callback.from_user)
         )
 
     answer_text = (
@@ -209,7 +212,7 @@ async def handle_cancel_revoke_operator(
     await operator_presence.touch(operator_id=callback.from_user.id)
     async with helpdesk_service_factory() as helpdesk_service:
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=callback.from_user.id
+            actor=build_request_actor(callback.from_user)
         )
 
     operator = next(

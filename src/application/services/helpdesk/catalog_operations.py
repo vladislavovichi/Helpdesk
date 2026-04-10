@@ -4,6 +4,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import cast
 from uuid import UUID
 
+from application.contracts.actors import RequestActor, actor_telegram_user_id
+from application.contracts.tickets import ApplyMacroToTicketCommand
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
 from application.services.helpdesk.ticket_operations import HelpdeskSLASync
@@ -24,11 +26,11 @@ class HelpdeskCatalogOperations:
     async def list_ticket_categories(
         self,
         *,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> Sequence[TicketCategorySummary]:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.list_ticket_categories(include_inactive=True)
 
@@ -36,11 +38,11 @@ class HelpdeskCatalogOperations:
         self,
         *,
         category_id: int,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketCategorySummary | None:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.get_ticket_category(category_id=category_id)
 
@@ -48,11 +50,11 @@ class HelpdeskCatalogOperations:
         self,
         *,
         title: str,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketCategorySummary:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.create_ticket_category(title=title)
 
@@ -61,11 +63,11 @@ class HelpdeskCatalogOperations:
         *,
         category_id: int,
         title: str,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketCategorySummary | None:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.update_ticket_category_title(
             category_id=category_id,
@@ -77,11 +79,11 @@ class HelpdeskCatalogOperations:
         *,
         category_id: int,
         is_active: bool,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketCategorySummary | None:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.set_ticket_category_active(
             category_id=category_id,
@@ -91,11 +93,11 @@ class HelpdeskCatalogOperations:
     async def list_macros(
         self,
         *,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> Sequence[MacroSummary]:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.list_macros()
 
@@ -103,11 +105,11 @@ class HelpdeskCatalogOperations:
         self,
         *,
         macro_id: int,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> MacroSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.get_macro(macro_id=macro_id)
 
@@ -116,11 +118,11 @@ class HelpdeskCatalogOperations:
         *,
         title: str,
         body: str,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> MacroSummary:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.create_macro(title=title, body=body)
 
@@ -129,11 +131,11 @@ class HelpdeskCatalogOperations:
         *,
         macro_id: int,
         title: str,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> MacroSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.update_macro_title(
             macro_id=macro_id,
@@ -145,11 +147,11 @@ class HelpdeskCatalogOperations:
         *,
         macro_id: int,
         body: str,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> MacroSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.update_macro_body(
             macro_id=macro_id,
@@ -160,35 +162,24 @@ class HelpdeskCatalogOperations:
         self,
         *,
         macro_id: int,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> MacroSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.MANAGE_OPERATORS,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.delete_macro(macro_id=macro_id)
 
     async def apply_macro_to_ticket(
         self,
-        *,
-        ticket_public_id: UUID,
-        macro_id: int,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None,
-        actor_telegram_user_id: int | None = None,
+        command: ApplyMacroToTicketCommand,
+        actor: RequestActor | None = None,
     ) -> MacroApplicationResult | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.catalog.apply_macro(
-            ticket_public_id=ticket_public_id,
-            macro_id=macro_id,
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
-        )
+        result = await self._components.catalog.apply_macro(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(
                 ticket_public_id=result.ticket.public_id
@@ -199,22 +190,22 @@ class HelpdeskCatalogOperations:
         self,
         *,
         ticket_public_id: UUID,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketTagsSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.list_ticket_tags(ticket_public_id=ticket_public_id)
 
     async def list_available_tags(
         self,
         *,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> Sequence[TagSummary]:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.catalog.list_available_tags()
 
@@ -223,11 +214,11 @@ class HelpdeskCatalogOperations:
         *,
         ticket_public_id: UUID,
         tag_name: str,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketTagMutationResult | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         result = await self._components.catalog.add_tag(
             ticket_public_id=ticket_public_id,
@@ -244,11 +235,11 @@ class HelpdeskCatalogOperations:
         *,
         ticket_public_id: UUID,
         tag_name: str,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketTagMutationResult | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         result = await self._components.catalog.remove_tag(
             ticket_public_id=ticket_public_id,

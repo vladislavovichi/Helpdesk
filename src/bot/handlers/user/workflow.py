@@ -7,6 +7,7 @@ from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import build_ticket_attachment_summary
+from bot.adapters.helpdesk import build_client_ticket_message_command
 from bot.delivery import deliver_client_message_to_operator
 from bot.handlers.common.ticket_attachments import extract_ticket_content
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
@@ -41,21 +42,15 @@ async def process_client_ticket_message(
 
     try:
         async with helpdesk_service_factory() as helpdesk_service:
+            command = build_client_ticket_message_command(
+                message=message,
+                content=content,
+                category_id=category_id,
+            )
             ticket = (
-                await helpdesk_service.create_ticket_from_client_message(
-                    client_chat_id=message.chat.id,
-                    telegram_message_id=message.message_id,
-                    text=content.text,
-                    attachment=content.attachment,
-                )
+                await helpdesk_service.create_ticket_from_client_message(command)
                 if category_id is None
-                else await helpdesk_service.create_ticket_from_client_intake(
-                    client_chat_id=message.chat.id,
-                    telegram_message_id=message.message_id,
-                    category_id=category_id,
-                    text=content.text,
-                    attachment=content.attachment,
-                )
+                else await helpdesk_service.create_ticket_from_client_intake(command)
             )
             ticket_details = await helpdesk_service.get_ticket_details(
                 ticket_public_id=ticket.public_id,

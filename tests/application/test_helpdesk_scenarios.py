@@ -9,6 +9,12 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from application.contracts.actors import OperatorIdentity, RequestActor
+from application.contracts.tickets import (
+    AssignNextQueuedTicketCommand,
+    ClientTicketMessageCommand,
+    OperatorTicketReplyCommand,
+)
 from application.services.authorization import AuthorizationError, AuthorizationService, Permission
 from application.services.helpdesk.service import HelpdeskService
 from domain.contracts.repositories import (
@@ -673,10 +679,12 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
     client_chat_id = 5001
 
     promotion = await service.promote_operator(
-        telegram_user_id=operator_telegram_user_id,
-        display_name="Operator One",
-        username="operator_one",
-        actor_telegram_user_id=super_admin_telegram_user_id,
+        OperatorIdentity(
+            telegram_user_id=operator_telegram_user_id,
+            display_name="Operator One",
+            username="operator_one",
+        ),
+        actor=RequestActor(telegram_user_id=super_admin_telegram_user_id),
     )
 
     assert promotion.changed is True
@@ -686,26 +694,32 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
     )
 
     created_ticket = await service.create_ticket_from_client_message(
-        client_chat_id=client_chat_id,
-        telegram_message_id=7001,
-        text="Не могу войти в личный кабинет",
+        ClientTicketMessageCommand(
+            client_chat_id=client_chat_id,
+            telegram_message_id=7001,
+            text="Не могу войти в личный кабинет",
+        )
     )
 
     assert created_ticket.created is True
     assert created_ticket.status == TicketStatus.QUEUED
 
     queued_tickets = await service.list_queued_tickets(
-        actor_telegram_user_id=operator_telegram_user_id
+        actor=RequestActor(telegram_user_id=operator_telegram_user_id)
     )
 
     assert [ticket.public_id for ticket in queued_tickets] == [created_ticket.public_id]
     assert queued_tickets[0].status == TicketStatus.QUEUED
 
     taken_ticket = await service.assign_next_ticket_to_operator(
-        telegram_user_id=operator_telegram_user_id,
-        display_name="Operator One",
-        username="operator_one",
-        actor_telegram_user_id=operator_telegram_user_id,
+        AssignNextQueuedTicketCommand(
+            operator=OperatorIdentity(
+                telegram_user_id=operator_telegram_user_id,
+                display_name="Operator One",
+                username="operator_one",
+            )
+        ),
+        actor=RequestActor(telegram_user_id=operator_telegram_user_id),
     )
 
     assert taken_ticket is not None
@@ -714,7 +728,7 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
 
     ticket_details = await service.get_ticket_details(
         ticket_public_id=created_ticket.public_id,
-        actor_telegram_user_id=operator_telegram_user_id,
+        actor=RequestActor(telegram_user_id=operator_telegram_user_id),
     )
 
     assert ticket_details is not None
@@ -724,13 +738,17 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
     assert ticket_details.message_history[0].text == "Не могу войти в личный кабинет"
 
     operator_reply = await service.reply_to_ticket_as_operator(
-        ticket_public_id=created_ticket.public_id,
-        telegram_user_id=operator_telegram_user_id,
-        display_name="Operator One",
-        username="operator_one",
-        telegram_message_id=7002,
-        text="Уже проверяем доступ, вернемся с ответом.",
-        actor_telegram_user_id=operator_telegram_user_id,
+        OperatorTicketReplyCommand(
+            ticket_public_id=created_ticket.public_id,
+            operator=OperatorIdentity(
+                telegram_user_id=operator_telegram_user_id,
+                display_name="Operator One",
+                username="operator_one",
+            ),
+            telegram_message_id=7002,
+            text="Уже проверяем доступ, вернемся с ответом.",
+        ),
+        actor=RequestActor(telegram_user_id=operator_telegram_user_id),
     )
 
     assert operator_reply is not None
@@ -738,7 +756,7 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
 
     updated_details = await service.get_ticket_details(
         ticket_public_id=created_ticket.public_id,
-        actor_telegram_user_id=operator_telegram_user_id,
+        actor=RequestActor(telegram_user_id=operator_telegram_user_id),
     )
 
     assert updated_details is not None
@@ -751,7 +769,9 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
     created_ticket_record = helpdesk_scenario.ticket_repository.tickets[created_ticket.public_id]
     assert created_ticket_record.first_response_at is not None
 
-    operators = await service.list_operators(actor_telegram_user_id=super_admin_telegram_user_id)
+    operators = await service.list_operators(
+        actor=RequestActor(telegram_user_id=super_admin_telegram_user_id)
+    )
 
     assert [(operator.telegram_user_id, operator.display_name) for operator in operators] == [
         (operator_telegram_user_id, "Operator One"),
@@ -759,7 +779,7 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
 
     revocation = await service.revoke_operator(
         telegram_user_id=operator_telegram_user_id,
-        actor_telegram_user_id=super_admin_telegram_user_id,
+        actor=RequestActor(telegram_user_id=super_admin_telegram_user_id),
     )
 
     assert revocation is not None
@@ -777,7 +797,9 @@ async def test_helpdesk_role_and_ticket_flow_scenario(
     )
 
     with pytest.raises(AuthorizationError):
-        await service.list_queued_tickets(actor_telegram_user_id=operator_telegram_user_id)
+        await service.list_queued_tickets(
+            actor=RequestActor(telegram_user_id=operator_telegram_user_id)
+        )
 
     assert [
         message["sender_type"] for message in helpdesk_scenario.message_repository.added_messages

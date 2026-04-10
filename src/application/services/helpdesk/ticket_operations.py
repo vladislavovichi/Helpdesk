@@ -4,6 +4,14 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import cast
 from uuid import UUID
 
+from application.contracts.actors import RequestActor, actor_telegram_user_id
+from application.contracts.tickets import (
+    AddInternalNoteCommand,
+    AssignNextQueuedTicketCommand,
+    ClientTicketMessageCommand,
+    OperatorTicketReplyCommand,
+    TicketAssignmentCommand,
+)
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
 from application.use_cases.tickets.exports import (
@@ -34,37 +42,17 @@ class HelpdeskTicketOperations:
 
     async def create_ticket_from_client_message(
         self,
-        *,
-        client_chat_id: int,
-        telegram_message_id: int,
-        text: str | None,
-        attachment: TicketAttachmentDetails | None = None,
+        command: ClientTicketMessageCommand,
     ) -> TicketSummary:
-        result = await self._components.tickets.create_from_client_message(
-            client_chat_id=client_chat_id,
-            telegram_message_id=telegram_message_id,
-            text=text,
-            attachment=attachment,
-        )
+        result = await self._components.tickets.create_from_client_message(command)
         await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
 
     async def create_ticket_from_client_intake(
         self,
-        *,
-        client_chat_id: int,
-        telegram_message_id: int,
-        category_id: int,
-        text: str | None,
-        attachment: TicketAttachmentDetails | None = None,
+        command: ClientTicketMessageCommand,
     ) -> TicketSummary:
-        result = await self._components.tickets.create_from_client_message(
-            client_chat_id=client_chat_id,
-            telegram_message_id=telegram_message_id,
-            text=text,
-            attachment=attachment,
-            category_id=category_id,
-        )
+        result = await self._components.tickets.create_from_client_message(command)
         await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
 
@@ -133,23 +121,14 @@ class HelpdeskTicketOperations:
 
     async def assign_ticket_to_operator(
         self,
-        *,
-        ticket_public_id: UUID,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None = None,
-        actor_telegram_user_id: int | None = None,
+        command: TicketAssignmentCommand,
+        actor: RequestActor | None = None,
     ) -> TicketSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.tickets.assign_ticket(
-            ticket_public_id=ticket_public_id,
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
-        )
+        result = await self._components.tickets.assign_ticket(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
@@ -168,11 +147,11 @@ class HelpdeskTicketOperations:
         self,
         *,
         ticket_public_id: UUID,
-        actor_telegram_user_id: int | None,
+        actor: RequestActor | None,
     ) -> TicketSummary | None:
         await self._ensure_permission(
             permission=Permission.ACCESS_OPERATOR,
-            telegram_user_id=actor_telegram_user_id,
+            telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self.close_ticket(ticket_public_id=ticket_public_id)
 
@@ -190,11 +169,11 @@ class HelpdeskTicketOperations:
         *,
         limit: int | None = None,
         prioritize_priority: bool = False,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> Sequence[QueuedTicketSummary]:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.tickets.list_queued(
             limit=limit,
@@ -203,23 +182,14 @@ class HelpdeskTicketOperations:
 
     async def assign_next_ticket_to_operator(
         self,
-        *,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None = None,
-        prioritize_priority: bool = False,
-        actor_telegram_user_id: int | None = None,
+        command: AssignNextQueuedTicketCommand,
+        actor: RequestActor | None = None,
     ) -> TicketSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.tickets.assign_next_queued(
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
-            prioritize_priority=prioritize_priority,
-        )
+        result = await self._components.tickets.assign_next_queued(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
@@ -229,11 +199,11 @@ class HelpdeskTicketOperations:
         *,
         operator_telegram_user_id: int,
         limit: int | None = None,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> Sequence[OperatorTicketSummary]:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.tickets.list_operator_tickets(
             operator_telegram_user_id=operator_telegram_user_id,
@@ -244,11 +214,11 @@ class HelpdeskTicketOperations:
         self,
         *,
         ticket_public_id: UUID,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketDetailsSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.tickets.get_details(ticket_public_id=ticket_public_id)
 
@@ -257,11 +227,11 @@ class HelpdeskTicketOperations:
         *,
         ticket_public_id: UUID,
         format: TicketReportFormat,
-        actor_telegram_user_id: int | None = None,
+        actor: RequestActor | None = None,
     ) -> TicketReportExport | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.tickets.export_report(
             ticket_public_id=ticket_public_id,
@@ -270,29 +240,14 @@ class HelpdeskTicketOperations:
 
     async def reply_to_ticket_as_operator(
         self,
-        *,
-        ticket_public_id: UUID,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None,
-        telegram_message_id: int,
-        text: str | None,
-        attachment: TicketAttachmentDetails | None = None,
-        actor_telegram_user_id: int | None = None,
+        command: OperatorTicketReplyCommand,
+        actor: RequestActor | None = None,
     ) -> OperatorReplyResult | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.tickets.reply_as_operator(
-            ticket_public_id=ticket_public_id,
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
-            telegram_message_id=telegram_message_id,
-            text=text,
-            attachment=attachment,
-        )
+        result = await self._components.tickets.reply_as_operator(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(
                 ticket_public_id=result.ticket.public_id
@@ -301,25 +256,14 @@ class HelpdeskTicketOperations:
 
     async def add_internal_note_to_ticket(
         self,
-        *,
-        ticket_public_id: UUID,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None,
-        text: str,
-        actor_telegram_user_id: int | None = None,
+        command: AddInternalNoteCommand,
+        actor: RequestActor | None = None,
     ) -> TicketSummary | None:
         await self._require_permission_if_actor(
             permission=Permission.ACCESS_OPERATOR,
-            actor_telegram_user_id=actor_telegram_user_id,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._components.tickets.add_internal_note(
-            ticket_public_id=ticket_public_id,
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
-            text=text,
-        )
+        result = await self._components.tickets.add_internal_note(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
         return result
@@ -338,11 +282,11 @@ class HelpdeskTicketOperations:
         self,
         *,
         ticket_public_id: UUID,
-        actor_telegram_user_id: int | None,
+        actor: RequestActor | None,
     ) -> TicketSummary | None:
         await self._ensure_permission(
             permission=Permission.ACCESS_OPERATOR,
-            telegram_user_id=actor_telegram_user_id,
+            telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self.escalate_ticket(ticket_public_id=ticket_public_id)
 

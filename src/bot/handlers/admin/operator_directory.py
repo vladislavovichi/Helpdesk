@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import OperatorSummary
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminOperatorCallback
 from bot.formatters.operator_admin_views import (
     format_operator_detail_response,
@@ -45,7 +46,7 @@ async def handle_operators(
 
     async with helpdesk_service_factory() as helpdesk_service:
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None
+            actor=build_request_actor(message.from_user)
         )
 
     await message.answer(
@@ -72,7 +73,7 @@ async def handle_refresh_operators(
 
     async with helpdesk_service_factory() as helpdesk_service:
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=callback.from_user.id
+            actor=build_request_actor(callback.from_user)
         )
 
     await _edit_operator_list(
@@ -102,7 +103,7 @@ async def handle_operator_view(
 
     async with helpdesk_service_factory() as helpdesk_service:
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=callback.from_user.id
+            actor=build_request_actor(callback.from_user)
         )
 
     operator = next(
@@ -148,7 +149,7 @@ async def handle_back_to_operator_list(
 
     async with helpdesk_service_factory() as helpdesk_service:
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=callback.from_user.id
+            actor=build_request_actor(callback.from_user)
         )
 
     await _edit_operator_list(

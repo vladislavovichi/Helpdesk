@@ -7,6 +7,11 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
+from bot.adapters.helpdesk import (
+    build_operator_identity,
+    build_request_actor,
+    build_ticket_assignment_command,
+)
 from bot.callbacks import OperatorActionCallback
 from bot.delivery import deliver_ticket_closed_to_client
 from bot.handlers.operator.active_context import (
@@ -65,17 +70,21 @@ async def handle_take_action(
 
         async with helpdesk_service_factory() as helpdesk_service:
             try:
+                operator = build_operator_identity(callback.from_user)
+                if operator is None:
+                    await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
+                    return
                 ticket = await helpdesk_service.assign_ticket_to_operator(
-                    ticket_public_id=ticket_public_id,
-                    telegram_user_id=callback.from_user.id,
-                    display_name=callback.from_user.full_name,
-                    username=callback.from_user.username,
-                    actor_telegram_user_id=callback.from_user.id,
+                    build_ticket_assignment_command(
+                        ticket_public_id=ticket_public_id,
+                        operator=operator,
+                    ),
+                    actor=build_request_actor(callback.from_user),
                 )
                 if ticket is not None:
                     ticket_details = await helpdesk_service.get_ticket_details(
                         ticket_public_id=ticket.public_id,
-                        actor_telegram_user_id=callback.from_user.id,
+                        actor=build_request_actor(callback.from_user),
                     )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)
@@ -138,12 +147,12 @@ async def handle_close_action(
             try:
                 ticket = await helpdesk_service.close_ticket_as_operator(
                     ticket_public_id=ticket_public_id,
-                    actor_telegram_user_id=callback.from_user.id,
+                    actor=build_request_actor(callback.from_user),
                 )
                 if ticket is not None:
                     ticket_details = await helpdesk_service.get_ticket_details(
                         ticket_public_id=ticket_public_id,
-                        actor_telegram_user_id=callback.from_user.id,
+                        actor=build_request_actor(callback.from_user),
                     )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)
@@ -215,12 +224,12 @@ async def handle_escalate_action(
             try:
                 ticket = await helpdesk_service.escalate_ticket_as_operator(
                     ticket_public_id=ticket_public_id,
-                    actor_telegram_user_id=callback.from_user.id,
+                    actor=build_request_actor(callback.from_user),
                 )
                 if ticket is not None:
                     ticket_details = await helpdesk_service.get_ticket_details(
                         ticket_public_id=ticket_public_id,
-                        actor_telegram_user_id=callback.from_user.id,
+                        actor=build_request_actor(callback.from_user),
                     )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)

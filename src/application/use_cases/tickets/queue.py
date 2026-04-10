@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
+from application.contracts.tickets import AssignNextQueuedTicketCommand, TicketAssignmentCommand
 from application.use_cases.tickets.common import build_status_payload, build_ticket_summary
 from application.use_cases.tickets.summaries import (
     OperatorTicketSummary,
@@ -35,21 +36,17 @@ class AssignTicketToOperatorUseCase:
 
     async def __call__(
         self,
-        *,
-        ticket_public_id: UUID,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None = None,
+        command: TicketAssignmentCommand,
     ) -> TicketSummary | None:
-        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        ticket = await self.ticket_repository.get_by_public_id(command.ticket_public_id)
         if ticket is None or ticket.id is None:
             return None
 
         ensure_assignable(ticket.status)
         operator_id = await self.operator_repository.get_or_create(
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
+            telegram_user_id=command.operator.telegram_user_id,
+            display_name=command.operator.display_name,
+            username=command.operator.username,
         )
 
         previous_status = ticket.status
@@ -62,7 +59,7 @@ class AssignTicketToOperatorUseCase:
             event_type = TicketEventType.REASSIGNED
 
         assigned_ticket = await self.ticket_repository.assign_to_operator(
-            ticket_public_id=ticket_public_id,
+            ticket_public_id=command.ticket_public_id,
             operator_id=operator_id,
         )
         if assigned_ticket is None:
@@ -156,21 +153,17 @@ class AssignNextQueuedTicketUseCase:
 
     async def __call__(
         self,
-        *,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None = None,
-        prioritize_priority: bool = False,
+        command: AssignNextQueuedTicketCommand,
     ) -> TicketSummary | None:
         operator_id = await self.operator_repository.get_or_create(
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
+            telegram_user_id=command.operator.telegram_user_id,
+            display_name=command.operator.display_name,
+            username=command.operator.username,
         )
 
         for _ in range(3):
             ticket = await self.ticket_repository.get_next_queued_ticket(
-                prioritize_priority=prioritize_priority
+                prioritize_priority=command.prioritize_priority
             )
             if ticket is None or ticket.id is None:
                 return None

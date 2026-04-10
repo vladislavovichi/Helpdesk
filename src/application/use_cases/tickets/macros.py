@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from uuid import UUID
 
+from application.contracts.tickets import ApplyMacroToTicketCommand
 from application.use_cases.tickets.messaging import AddMessageToTicketUseCase
 from application.use_cases.tickets.summaries import (
     MacroApplicationResult,
@@ -124,27 +124,24 @@ class ApplyMacroToTicketUseCase:
 
     async def __call__(
         self,
-        *,
-        ticket_public_id: UUID,
-        macro_id: int,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None,
+        command: ApplyMacroToTicketCommand,
     ) -> MacroApplicationResult | None:
-        ticket_details = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
+        ticket_details = await self.ticket_repository.get_details_by_public_id(
+            command.ticket_public_id
+        )
         if ticket_details is None:
             return None
 
-        macro = await self.macro_repository.get_by_id(macro_id=macro_id)
+        macro = await self.macro_repository.get_by_id(macro_id=command.macro_id)
         if macro is None:
             return None
 
         ensure_operator_replyable(ticket_details.status)
 
         operator_id = await self.operator_repository.get_or_create(
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
+            telegram_user_id=command.operator.telegram_user_id,
+            display_name=command.operator.display_name,
+            username=command.operator.username,
         )
         if (
             ticket_details.assigned_operator_id is not None
@@ -159,7 +156,7 @@ class ApplyMacroToTicketUseCase:
             )
         )
         ticket = await self._add_message_to_ticket(
-            ticket_public_id=ticket_public_id,
+            ticket_public_id=command.ticket_public_id,
             telegram_message_id=telegram_message_id,
             sender_type=TicketMessageSenderType.OPERATOR,
             text=macro.body,

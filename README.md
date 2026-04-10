@@ -41,9 +41,11 @@ bot -> application -> domain/contracts -> infrastructure
 Принципы слоя:
 
 - `bot` не принимает бизнес-решения и не работает с raw DB/session;
-- `application` не зависит от Telegram presentation;
+- `application` не зависит от Telegram presentation и всё активнее опирается на явные in-process контракты;
 - `infrastructure` не определяет продуктовые workflow-правила;
 - тексты, форматтеры и клавиатуры остаются отдельным presentation-слоем.
+
+Текущее состояние проекта: модульный монолит с подготовленными внутренними seam-ами для будущего вынесения business core в отдельный backend-сервис. Само вынесение транспорта и runtime пока не выполняется.
 
 ## Роли и сценарии
 

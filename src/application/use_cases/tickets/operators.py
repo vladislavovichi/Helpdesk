@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from application.contracts.actors import OperatorIdentity
 from application.use_cases.tickets.summaries import (
     OperatorManagementError,
     OperatorRoleMutationResult,
@@ -42,24 +43,21 @@ class PromoteOperatorUseCase:
 
     async def __call__(
         self,
-        *,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None = None,
+        operator: OperatorIdentity,
     ) -> OperatorRoleMutationResult:
-        if telegram_user_id in self.super_admin_telegram_user_ids:
+        if operator.telegram_user_id in self.super_admin_telegram_user_ids:
             raise OperatorManagementError("Суперадминистратор уже имеет эти права.")
 
         was_active = await self.operator_repository.exists_active_by_telegram_user_id(
-            telegram_user_id=telegram_user_id
+            telegram_user_id=operator.telegram_user_id
         )
-        operator = await self.operator_repository.promote(
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
+        promoted_operator = await self.operator_repository.promote(
+            telegram_user_id=operator.telegram_user_id,
+            display_name=operator.display_name,
+            username=operator.username,
         )
         return OperatorRoleMutationResult(
-            operator=build_operator_summary(operator),
+            operator=build_operator_summary(promoted_operator),
             changed=not was_active,
         )
 

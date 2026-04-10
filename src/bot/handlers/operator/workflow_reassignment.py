@@ -6,6 +6,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from bot.adapters.helpdesk import (
+    build_operator_identity_from_parts,
+    build_request_actor,
+    build_ticket_assignment_command,
+)
 from bot.callbacks import OperatorActionCallback
 from bot.formatters.operator_ticket_views import format_active_ticket_context, format_ticket_details
 from bot.handlers.operator.active_context import (
@@ -71,7 +76,7 @@ async def handle_reassign_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -142,11 +147,14 @@ async def handle_reassign_message(
         async with helpdesk_service_factory() as helpdesk_service:
             try:
                 ticket = await helpdesk_service.assign_ticket_to_operator(
-                    ticket_public_id=ticket_public_id,
-                    telegram_user_id=target[0],
-                    display_name=target[1],
-                    username=None,
-                    actor_telegram_user_id=actor_telegram_user_id,
+                    build_ticket_assignment_command(
+                        ticket_public_id=ticket_public_id,
+                        operator=build_operator_identity_from_parts(
+                            telegram_user_id=target[0],
+                            display_name=target[1],
+                        ),
+                    ),
+                    actor=build_request_actor(message.from_user),
                 )
             except InvalidTicketTransitionError as exc:
                 await state.clear()
@@ -160,7 +168,7 @@ async def handle_reassign_message(
 
             ticket_details = await helpdesk_service.get_ticket_details(
                 ticket_public_id=ticket_public_id,
-                actor_telegram_user_id=actor_telegram_user_id,
+                actor=build_request_actor(message.from_user),
             )
     finally:
         await lock.release()

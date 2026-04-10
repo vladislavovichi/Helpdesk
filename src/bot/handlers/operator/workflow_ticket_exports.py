@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.exports import TicketReportFormat
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback
 from bot.delivery import deliver_document_to_chat
 from bot.formatters.operator_ticket_views import format_ticket_export_actions
@@ -58,7 +59,7 @@ async def handle_export_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -110,7 +111,7 @@ async def handle_export_file_action(
             ticket_export = await helpdesk_service.export_ticket_report(
                 ticket_public_id=ticket_public_id,
                 format=export_format,
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
     except Exception:
         logger.exception(

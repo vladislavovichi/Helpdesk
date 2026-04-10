@@ -13,6 +13,11 @@ from application.use_cases.tickets.summaries import (
     TicketDetailsSummary,
     build_ticket_attachment_summary,
 )
+from bot.adapters.helpdesk import (
+    build_operator_identity,
+    build_operator_reply_command,
+    build_request_actor,
+)
 from bot.callbacks import OperatorActionCallback
 from bot.delivery import deliver_operator_reply_to_client
 from bot.handlers.common.ticket_attachments import extract_ticket_content
@@ -23,7 +28,6 @@ from bot.handlers.operator.active_context import (
 )
 from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
-from bot.handlers.operator.states import OperatorTicketStates
 from bot.handlers.operator.ticket_surfaces import send_ticket_details
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.texts.common import (
@@ -79,7 +83,7 @@ async def handle_reply_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -106,42 +110,6 @@ async def handle_reply_action(
         ticket_details=ticket_details,
         is_active_context=True,
     )
-
-
-@router.message(StateFilter(OperatorTicketStates.replying), F.text)
-@router.message(StateFilter(OperatorTicketStates.replying), SUPPORTED_TICKET_MEDIA_FILTER)
-async def handle_legacy_reply_message(
-    message: Message,
-    state: FSMContext,
-    bot: Bot,
-    helpdesk_service_factory: HelpdeskServiceFactory,
-    global_rate_limiter: GlobalRateLimiter,
-    operator_presence: OperatorPresenceHelper,
-    operator_active_ticket_store: OperatorActiveTicketStore,
-    ticket_live_session_store: TicketLiveSessionStore,
-    ticket_lock_manager: TicketLockManager,
-) -> None:
-    state_data = await state.get_data()
-    ticket_public_id = parse_ticket_public_id(state_data.get("ticket_public_id"))
-    if ticket_public_id is None:
-        await state.clear()
-        await message.answer(REPLY_CONTEXT_LOST_TEXT)
-        return
-
-    try:
-        await _handle_operator_message(
-            message=message,
-            bot=bot,
-            helpdesk_service_factory=helpdesk_service_factory,
-            global_rate_limiter=global_rate_limiter,
-            operator_presence=operator_presence,
-            operator_active_ticket_store=operator_active_ticket_store,
-            ticket_live_session_store=ticket_live_session_store,
-            ticket_lock_manager=ticket_lock_manager,
-            explicit_ticket_public_id=ticket_public_id,
-        )
-    finally:
-        await state.clear()
 
 
 @router.message(
@@ -227,15 +195,18 @@ async def _handle_operator_message(
     try:
         async with helpdesk_service_factory() as helpdesk_service:
             try:
+                operator = build_operator_identity(message.from_user)
+                if operator is None:
+                    await message.answer(OPERATOR_UNKNOWN_TEXT)
+                    return
                 reply_result = await helpdesk_service.reply_to_ticket_as_operator(
-                    ticket_public_id=ticket_details.public_id,
-                    telegram_user_id=message.from_user.id,
-                    display_name=message.from_user.full_name,
-                    username=message.from_user.username,
-                    telegram_message_id=message.message_id,
-                    text=content.text,
-                    attachment=content.attachment,
-                    actor_telegram_user_id=message.from_user.id,
+                    build_operator_reply_command(
+                        ticket_public_id=ticket_details.public_id,
+                        operator=operator,
+                        message=message,
+                        content=content,
+                    ),
+                    actor=build_request_actor(message.from_user),
                 )
             except InvalidTicketTransitionError as exc:
                 await clear_active_ticket_for_operator(
@@ -295,9 +266,7 @@ async def _resolve_target_ticket(
         async with helpdesk_service_factory() as helpdesk_service:
             return await helpdesk_service.get_ticket_details(
                 ticket_public_id=explicit_ticket_public_id,
-                actor_telegram_user_id=(
-                    message.from_user.id if message.from_user is not None else None
-                ),
+                actor=build_request_actor(message.from_user),
             )
 
     if message.from_user is None:

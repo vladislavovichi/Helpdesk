@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import MacroSummary, TicketDetailsSummary
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback, OperatorMacroCallback
 from bot.formatters.macros import (
     format_operator_macro_picker,
@@ -69,9 +70,9 @@ async def handle_open_macros(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -123,9 +124,9 @@ async def handle_macro_page(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -185,9 +186,9 @@ async def handle_macro_preview(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -260,9 +261,9 @@ async def handle_macro_preview_back(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     if ticket_details is None:
         await respond_to_operator(callback, TICKET_NOT_FOUND_TEXT)
@@ -314,7 +315,7 @@ async def handle_macro_ticket_back(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:

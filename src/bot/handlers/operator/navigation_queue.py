@@ -10,6 +10,11 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import OperatorTicketSummary, QueuedTicketSummary
+from bot.adapters.helpdesk import (
+    build_assign_next_ticket_command,
+    build_operator_identity,
+    build_request_actor,
+)
 from bot.callbacks import OperatorQueueCallback
 from bot.formatters.operator_primitives import format_status
 from bot.formatters.operator_ticket_views import format_operator_ticket_page, format_queue_page
@@ -61,7 +66,7 @@ async def handle_queue(
 
     async with helpdesk_service_factory() as helpdesk_service:
         queued_tickets = await helpdesk_service.list_queued_tickets(
-            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None,
+            actor=build_request_actor(message.from_user),
         )
 
     if not queued_tickets:
@@ -92,7 +97,7 @@ async def handle_my_tickets(
     async with helpdesk_service_factory() as helpdesk_service:
         tickets = await helpdesk_service.list_operator_tickets(
             operator_telegram_user_id=message.from_user.id,
-            actor_telegram_user_id=message.from_user.id,
+            actor=build_request_actor(message.from_user),
         )
 
     if not tickets:
@@ -127,7 +132,7 @@ async def handle_ticket_index_page(
         async with helpdesk_service_factory() as helpdesk_service:
             tickets = await helpdesk_service.list_operator_tickets(
                 operator_telegram_user_id=callback.from_user.id,
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
         if not tickets:
             await callback.answer(MY_TICKETS_EMPTY_TEXT)
@@ -144,7 +149,7 @@ async def handle_ticket_index_page(
 
     async with helpdesk_service_factory() as helpdesk_service:
         queued_tickets = await helpdesk_service.list_queued_tickets(
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if not queued_tickets:
@@ -196,17 +201,19 @@ async def handle_take_next(
 
     try:
         async with helpdesk_service_factory() as helpdesk_service:
+            operator = build_operator_identity(message.from_user)
+            if operator is None:
+                await message.answer(OPERATOR_UNKNOWN_TEXT)
+                return
             ticket = await helpdesk_service.assign_next_ticket_to_operator(
-                telegram_user_id=message.from_user.id,
-                display_name=message.from_user.full_name,
-                username=message.from_user.username,
-                actor_telegram_user_id=message.from_user.id,
+                build_assign_next_ticket_command(operator=operator),
+                actor=build_request_actor(message.from_user),
             )
             ticket_details = None
             if ticket is not None:
                 ticket_details = await helpdesk_service.get_ticket_details(
                     ticket_public_id=ticket.public_id,
-                    actor_telegram_user_id=message.from_user.id,
+                    actor=build_request_actor(message.from_user),
                 )
     finally:
         await queue_lock.release()

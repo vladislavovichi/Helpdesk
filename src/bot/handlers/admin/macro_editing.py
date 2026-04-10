@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import MacroManagementError
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminMacroCallback
 from bot.handlers.admin.macro_surfaces import update_admin_source_message
 from bot.handlers.admin.states import AdminMacroStates
@@ -84,7 +85,7 @@ async def handle_admin_macro_edit_title_message(
             macro = await helpdesk_service.update_macro_title(
                 macro_id=macro_id,
                 title=message.text,
-                actor_telegram_user_id=message.from_user.id,
+                actor=build_request_actor(message.from_user),
             )
     except MacroManagementError as exc:
         await message.answer(str(exc))
@@ -137,7 +138,7 @@ async def handle_admin_macro_edit_body_message(
             macro = await helpdesk_service.update_macro_body(
                 macro_id=macro_id,
                 body=message.text,
-                actor_telegram_user_id=message.from_user.id,
+                actor=build_request_actor(message.from_user),
             )
     except MacroManagementError as exc:
         await message.answer(str(exc))

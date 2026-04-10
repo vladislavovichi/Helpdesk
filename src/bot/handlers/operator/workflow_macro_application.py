@@ -6,6 +6,11 @@ from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from bot.adapters.helpdesk import (
+    build_apply_macro_command,
+    build_operator_identity,
+    build_request_actor,
+)
 from bot.callbacks import OperatorMacroCallback
 from bot.delivery import deliver_text_to_chat
 from bot.handlers.operator.active_context import activate_ticket_for_operator
@@ -70,13 +75,17 @@ async def handle_apply_macro(
     try:
         async with helpdesk_service_factory() as helpdesk_service:
             try:
+                operator = build_operator_identity(callback.from_user)
+                if operator is None:
+                    await respond_to_operator(callback, APPLY_MACRO_FAILED_TEXT)
+                    return
                 macro_result = await helpdesk_service.apply_macro_to_ticket(
-                    ticket_public_id=ticket_public_id,
-                    macro_id=callback_data.macro_id,
-                    telegram_user_id=callback.from_user.id,
-                    display_name=callback.from_user.full_name,
-                    username=callback.from_user.username,
-                    actor_telegram_user_id=callback.from_user.id,
+                    build_apply_macro_command(
+                        ticket_public_id=ticket_public_id,
+                        macro_id=callback_data.macro_id,
+                        operator=operator,
+                    ),
+                    actor=build_request_actor(callback.from_user),
                 )
             except InvalidTicketTransitionError as exc:
                 error_message = str(exc)
@@ -84,7 +93,7 @@ async def handle_apply_macro(
             if macro_result is not None:
                 ticket_details = await helpdesk_service.get_ticket_details(
                     ticket_public_id=ticket_public_id,
-                    actor_telegram_user_id=callback.from_user.id,
+                    actor=build_request_actor(callback.from_user),
                 )
     finally:
         await lock.release()

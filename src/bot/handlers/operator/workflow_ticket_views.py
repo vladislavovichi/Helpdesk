@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback
 from bot.formatters.operator_ticket_views import format_ticket_details, format_ticket_more_actions
 from bot.handlers.operator.active_context import activate_ticket_for_operator
@@ -57,7 +58,7 @@ async def handle_view_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -105,7 +106,7 @@ async def handle_card_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -155,7 +156,7 @@ async def handle_more_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -205,7 +206,7 @@ async def handle_back_from_more_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:

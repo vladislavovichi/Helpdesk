@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from uuid import UUID
 
+from application.contracts.tickets import AddInternalNoteCommand, OperatorTicketReplyCommand
 from application.use_cases.tickets.common import (
     build_event_type_for_message,
     build_message_payload,
@@ -103,25 +104,20 @@ class ReplyToTicketAsOperatorUseCase:
 
     async def __call__(
         self,
-        *,
-        ticket_public_id: UUID,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None,
-        telegram_message_id: int,
-        text: str | None,
-        attachment: TicketAttachmentDetails | None = None,
+        command: OperatorTicketReplyCommand,
     ) -> OperatorReplyResult | None:
-        ticket_details = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
+        ticket_details = await self.ticket_repository.get_details_by_public_id(
+            command.ticket_public_id
+        )
         if ticket_details is None:
             return None
 
         ensure_operator_replyable(ticket_details.status)
 
         operator_id = await self.operator_repository.get_or_create(
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
+            telegram_user_id=command.operator.telegram_user_id,
+            display_name=command.operator.display_name,
+            username=command.operator.username,
         )
         if (
             ticket_details.assigned_operator_id is not None
@@ -130,11 +126,11 @@ class ReplyToTicketAsOperatorUseCase:
             raise InvalidTicketTransitionError("С этой заявкой уже работает другой оператор.")
 
         ticket = await self._add_message_to_ticket(
-            ticket_public_id=ticket_public_id,
-            telegram_message_id=telegram_message_id,
+            ticket_public_id=command.ticket_public_id,
+            telegram_message_id=command.telegram_message_id,
             sender_type=TicketMessageSenderType.OPERATOR,
-            text=text,
-            attachment=attachment,
+            text=command.text,
+            attachment=command.attachment,
             sender_operator_id=operator_id,
         )
         if ticket is None:
@@ -159,25 +155,20 @@ class AddInternalNoteToTicketUseCase:
 
     async def __call__(
         self,
-        *,
-        ticket_public_id: UUID,
-        telegram_user_id: int,
-        display_name: str,
-        username: str | None,
-        text: str,
+        command: AddInternalNoteCommand,
     ) -> TicketSummary | None:
-        normalized_text = text.strip()
+        normalized_text = command.text.strip()
         if not normalized_text:
             raise ValueError("Текст заметки не может быть пустым.")
 
-        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        ticket = await self.ticket_repository.get_by_public_id(command.ticket_public_id)
         if ticket is None or ticket.id is None:
             return None
 
         operator_id = await self.operator_repository.get_or_create(
-            telegram_user_id=telegram_user_id,
-            display_name=display_name,
-            username=username,
+            telegram_user_id=command.author.telegram_user_id,
+            display_name=command.author.display_name,
+            username=command.author.username,
         )
         ticket.updated_at = utcnow()
         await self.ticket_internal_note_repository.add(

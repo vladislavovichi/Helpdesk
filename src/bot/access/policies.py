@@ -31,7 +31,6 @@ PROTECTED_STATE_PERMISSIONS: Mapping[str, Permission] = {
     "AdminMacroStates:editing_body": Permission.MANAGE_OPERATORS,
     "AdminCategoryStates:creating_title": Permission.MANAGE_OPERATORS,
     "AdminCategoryStates:editing_title": Permission.MANAGE_OPERATORS,
-    "OperatorTicketStates:replying": Permission.ACCESS_OPERATOR,
     "OperatorTicketStates:reassigning": Permission.ACCESS_OPERATOR,
     "OperatorTicketStates:writing_note": Permission.ACCESS_OPERATOR,
 }

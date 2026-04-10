@@ -10,6 +10,7 @@ from unittest.mock import ANY, AsyncMock
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Chat, Message, User
 
+from application.contracts.actors import RequestActor
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.services.stats import (
     AnalyticsCategorySnapshot,
@@ -76,7 +77,7 @@ async def test_handle_stats_sends_overview_surface() -> None:
     cast(AsyncMock, message.answer).assert_awaited_once_with(ANY, reply_markup=ANY)
     service.get_analytics_snapshot.assert_awaited_once_with(
         window=AnalyticsWindow.DAYS_7,
-        actor_telegram_user_id=1001,
+        actor=RequestActor(telegram_user_id=1001),
     )
 
 

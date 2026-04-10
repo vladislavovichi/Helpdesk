@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import MacroManagementError
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminMacroCallback
 from bot.formatters.macros import format_admin_macro_create_preview, format_admin_macro_details
 from bot.handlers.admin.macro_surfaces import edit_admin_macro_list
@@ -77,7 +78,7 @@ async def handle_admin_macro_preview_save(
             macro = await helpdesk_service.create_macro(
                 title=title,
                 body=body,
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
     except MacroManagementError as exc:
         await respond_to_operator(callback, str(exc))
@@ -126,7 +127,7 @@ async def handle_admin_macro_preview_cancel(
     await state.clear()
 
     async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     await edit_admin_macro_list(
         callback=callback,

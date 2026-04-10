@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TagSummary, TicketTagsSummary
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import OperatorActionCallback, OperatorTagCallback
 from bot.formatters.operator_admin_views import format_ticket_tags_response
 from bot.handlers.operator.active_context import activate_ticket_for_operator
@@ -60,10 +61,10 @@ async def handle_open_tags(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_tags = await helpdesk_service.list_ticket_tags(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
         available_tags = await helpdesk_service.list_available_tags(
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_tags is None:
@@ -73,7 +74,7 @@ async def handle_open_tags(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
     if ticket_details is not None:
         await activate_ticket_for_operator(
@@ -120,10 +121,10 @@ async def handle_toggle_tag(
         async with helpdesk_service_factory() as helpdesk_service:
             ticket_tags = await helpdesk_service.list_ticket_tags(
                 ticket_public_id=ticket_public_id,
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
             available_tags = await helpdesk_service.list_available_tags(
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
             tag = _find_tag(available_tags, callback_data.tag_id)
             if ticket_tags is None:
@@ -142,21 +143,21 @@ async def handle_toggle_tag(
                 await helpdesk_service.remove_tag_from_ticket(
                     ticket_public_id=ticket_public_id,
                     tag_name=tag.name,
-                    actor_telegram_user_id=callback.from_user.id,
+                    actor=build_request_actor(callback.from_user),
                 )
             else:
                 await helpdesk_service.add_tag_to_ticket(
                     ticket_public_id=ticket_public_id,
                     tag_name=tag.name,
-                    actor_telegram_user_id=callback.from_user.id,
+                    actor=build_request_actor(callback.from_user),
                 )
 
             refreshed_tags = await helpdesk_service.list_ticket_tags(
                 ticket_public_id=ticket_public_id,
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
             refreshed_available_tags = await helpdesk_service.list_available_tags(
-                actor_telegram_user_id=callback.from_user.id,
+                actor=build_request_actor(callback.from_user),
             )
     finally:
         await lock.release()
@@ -168,7 +169,7 @@ async def handle_toggle_tag(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
     if ticket_details is not None:
         await activate_ticket_for_operator(
@@ -207,7 +208,7 @@ async def handle_back_to_ticket(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:

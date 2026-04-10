@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import CategoryManagementError
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminCategoryCallback
 from bot.formatters.categories import format_admin_category_details
 from bot.handlers.admin.category_surfaces import (
@@ -87,7 +88,7 @@ async def handle_admin_category_create_title(
         async with helpdesk_service_factory() as helpdesk_service:
             category = await helpdesk_service.create_ticket_category(
                 title=message.text,
-                actor_telegram_user_id=message.from_user.id,
+                actor=build_request_actor(message.from_user),
             )
     except CategoryManagementError as exc:
         await message.answer(str(exc))
@@ -98,7 +99,7 @@ async def handle_admin_category_create_title(
     await message.answer(format_admin_category_details(category))
     async with helpdesk_service_factory() as helpdesk_service:
         categories = await helpdesk_service.list_ticket_categories(
-            actor_telegram_user_id=message.from_user.id
+            actor=build_request_actor(message.from_user)
         )
     text, markup = build_admin_category_list_response(categories=categories, page=page)
     await message.answer(text, reply_markup=markup)
@@ -136,7 +137,7 @@ async def handle_admin_category_edit_title_message(
             category = await helpdesk_service.update_ticket_category_title(
                 category_id=category_id,
                 title=message.text,
-                actor_telegram_user_id=message.from_user.id,
+                actor=build_request_actor(message.from_user),
             )
     except CategoryManagementError as exc:
         await message.answer(str(exc))

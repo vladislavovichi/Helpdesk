@@ -8,6 +8,14 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
+from application.contracts.actors import OperatorIdentity, RequestActor
+from application.contracts.tickets import (
+    ApplyMacroToTicketCommand,
+    AssignNextQueuedTicketCommand,
+    ClientTicketMessageCommand,
+    OperatorTicketReplyCommand,
+    TicketAssignmentCommand,
+)
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
 from application.services.stats import AnalyticsWindow
@@ -992,9 +1000,11 @@ async def test_create_ticket_from_first_client_message_creates_queues_and_logs_e
     )
 
     result = await service.create_ticket_from_client_message(
-        client_chat_id=555,
-        telegram_message_id=777,
-        text="Cannot log in",
+        ClientTicketMessageCommand(
+            client_chat_id=555,
+            telegram_message_id=777,
+            text="Cannot log in",
+        )
     )
 
     assert result.public_id == public_id
@@ -1028,9 +1038,11 @@ async def test_follow_up_client_message_reuses_active_open_ticket() -> None:
     )
 
     result = await service.create_ticket_from_client_message(
-        client_chat_id=active_ticket.client_chat_id,
-        telegram_message_id=888,
-        text="Any update?",
+        ClientTicketMessageCommand(
+            client_chat_id=active_ticket.client_chat_id,
+            telegram_message_id=888,
+            text="Any update?",
+        )
     )
 
     assert result.public_id == public_id
@@ -1051,10 +1063,12 @@ async def test_create_ticket_from_client_intake_persists_selected_category() -> 
     service = build_service(ticket_repository=ticket_repository)
 
     result = await service.create_ticket_from_client_intake(
-        client_chat_id=555,
-        telegram_message_id=777,
-        category_id=2,
-        text="Нужна помощь с другим вопросом",
+        ClientTicketMessageCommand(
+            client_chat_id=555,
+            telegram_message_id=777,
+            category_id=2,
+            text="Нужна помощь с другим вопросом",
+        )
     )
 
     assert result.public_id == public_id
@@ -1100,14 +1114,22 @@ async def test_assign_and_reassign_ticket_create_distinct_events() -> None:
     )
 
     first_result = await service.assign_ticket_to_operator(
-        ticket_public_id=public_id,
-        telegram_user_id=1001,
-        display_name="Operator One",
+        TicketAssignmentCommand(
+            ticket_public_id=public_id,
+            operator=OperatorIdentity(
+                telegram_user_id=1001,
+                display_name="Operator One",
+            ),
+        )
     )
     second_result = await service.assign_ticket_to_operator(
-        ticket_public_id=public_id,
-        telegram_user_id=1002,
-        display_name="Operator Two",
+        TicketAssignmentCommand(
+            ticket_public_id=public_id,
+            operator=OperatorIdentity(
+                telegram_user_id=1002,
+                display_name="Operator Two",
+            ),
+        )
     )
 
     assert first_result is not None
@@ -1164,7 +1186,7 @@ async def test_list_operators_rejects_non_admin_actor_when_actor_is_provided() -
     )
 
     try:
-        await service.list_operators(actor_telegram_user_id=1001)
+        await service.list_operators(actor=RequestActor(telegram_user_id=1001))
     except AuthorizationError as exc:
         assert str(exc) == "Доступно только суперадминистраторам."
     else:
@@ -1185,8 +1207,10 @@ async def test_promote_operator_marks_user_as_operator() -> None:
     )
 
     result = await service.promote_operator(
-        telegram_user_id=3001,
-        display_name="Новый оператор",
+        OperatorIdentity(
+            telegram_user_id=3001,
+            display_name="Новый оператор",
+        )
     )
 
     assert result.changed is True
@@ -1337,8 +1361,12 @@ async def test_assign_next_ticket_to_operator_assigns_oldest_queued_ticket() -> 
     )
 
     result = await service.assign_next_ticket_to_operator(
-        telegram_user_id=1001,
-        display_name="Operator One",
+        AssignNextQueuedTicketCommand(
+            operator=OperatorIdentity(
+                telegram_user_id=1001,
+                display_name="Operator One",
+            )
+        )
     )
 
     assert result is not None
@@ -1361,9 +1389,13 @@ async def test_assign_next_ticket_to_operator_rejects_regular_user_actor() -> No
 
     try:
         await service.assign_next_ticket_to_operator(
-            telegram_user_id=2002,
-            display_name="Regular User",
-            actor_telegram_user_id=2002,
+            AssignNextQueuedTicketCommand(
+                operator=OperatorIdentity(
+                    telegram_user_id=2002,
+                    display_name="Regular User",
+                )
+            ),
+            actor=RequestActor(telegram_user_id=2002),
         )
     except AuthorizationError as exc:
         assert str(exc) == "Доступно только операторам и суперадминистраторам."
@@ -1516,21 +1548,31 @@ async def test_service_supports_main_ticket_lifecycle_and_stats() -> None:
     )
 
     created = await service.create_ticket_from_client_message(
-        client_chat_id=555,
-        telegram_message_id=7001,
-        text="Cannot log in",
+        ClientTicketMessageCommand(
+            client_chat_id=555,
+            telegram_message_id=7001,
+            text="Cannot log in",
+        )
     )
     taken = await service.assign_next_ticket_to_operator(
-        telegram_user_id=1001,
-        display_name="Operator One",
+        AssignNextQueuedTicketCommand(
+            operator=OperatorIdentity(
+                telegram_user_id=1001,
+                display_name="Operator One",
+            )
+        )
     )
     reply = await service.reply_to_ticket_as_operator(
-        ticket_public_id=public_id,
-        telegram_user_id=1001,
-        display_name="Operator One",
-        username="operator_one",
-        telegram_message_id=7002,
-        text="Please try again now.",
+        OperatorTicketReplyCommand(
+            ticket_public_id=public_id,
+            operator=OperatorIdentity(
+                telegram_user_id=1001,
+                display_name="Operator One",
+                username="operator_one",
+            ),
+            telegram_message_id=7002,
+            text="Please try again now.",
+        )
     )
     closed = await service.close_ticket(ticket_public_id=public_id)
 
@@ -1571,12 +1613,16 @@ async def test_reply_to_ticket_as_operator_rejects_closed_ticket() -> None:
 
     try:
         await service.reply_to_ticket_as_operator(
-            ticket_public_id=public_id,
-            telegram_user_id=1001,
-            display_name="Operator One",
-            username="operator_one",
-            telegram_message_id=4321,
-            text="Please try again now.",
+            OperatorTicketReplyCommand(
+                ticket_public_id=public_id,
+                operator=OperatorIdentity(
+                    telegram_user_id=1001,
+                    display_name="Operator One",
+                    username="operator_one",
+                ),
+                telegram_message_id=4321,
+                text="Please try again now.",
+            )
         )
     except InvalidTicketTransitionError as exc:
         assert "закры" in str(exc).lower()
@@ -1816,7 +1862,7 @@ async def test_export_ticket_report_returns_csv_with_metadata_feedback_and_histo
     result = await service.export_ticket_report(
         ticket_public_id=public_id,
         format=TicketReportFormat.CSV,
-        actor_telegram_user_id=1001,
+        actor=RequestActor(telegram_user_id=1001),
     )
 
     assert result is not None
@@ -1864,7 +1910,7 @@ async def test_export_ticket_report_returns_html_with_sections() -> None:
     result = await service.export_ticket_report(
         ticket_public_id=public_id,
         format=TicketReportFormat.HTML,
-        actor_telegram_user_id=1001,
+        actor=RequestActor(telegram_user_id=1001),
     )
 
     assert result is not None
@@ -1895,12 +1941,16 @@ async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_c
     )
 
     result = await service.reply_to_ticket_as_operator(
-        ticket_public_id=public_id,
-        telegram_user_id=1001,
-        display_name="Operator One",
-        username="operator_one",
-        telegram_message_id=4321,
-        text="Please try again now.",
+        OperatorTicketReplyCommand(
+            ticket_public_id=public_id,
+            operator=OperatorIdentity(
+                telegram_user_id=1001,
+                display_name="Operator One",
+                username="operator_one",
+            ),
+            telegram_message_id=4321,
+            text="Please try again now.",
+        )
     )
 
     assert result is not None
@@ -1952,11 +2002,15 @@ async def test_apply_macro_to_ticket_persists_operator_message_and_macro_event_p
     )
 
     result = await service.apply_macro_to_ticket(
-        ticket_public_id=public_id,
-        macro_id=5,
-        telegram_user_id=1001,
-        display_name="Operator One",
-        username="operator_one",
+        ApplyMacroToTicketCommand(
+            ticket_public_id=public_id,
+            macro_id=5,
+            operator=OperatorIdentity(
+                telegram_user_id=1001,
+                display_name="Operator One",
+                username="operator_one",
+            ),
+        )
     )
 
     assert result is not None
@@ -1993,21 +2047,21 @@ async def test_super_admin_can_create_update_and_delete_macro() -> None:
     created = await service.create_macro(
         title="Новый макрос",
         body="Готово.",
-        actor_telegram_user_id=42,
+        actor=RequestActor(telegram_user_id=42),
     )
     updated_title = await service.update_macro_title(
         macro_id=created.id,
         title="Финальный ответ",
-        actor_telegram_user_id=42,
+        actor=RequestActor(telegram_user_id=42),
     )
     updated_body = await service.update_macro_body(
         macro_id=created.id,
         body="Проверили. Всё исправлено.",
-        actor_telegram_user_id=42,
+        actor=RequestActor(telegram_user_id=42),
     )
     deleted = await service.delete_macro(
         macro_id=created.id,
-        actor_telegram_user_id=42,
+        actor=RequestActor(telegram_user_id=42),
     )
 
     assert created.title == "Новый макрос"
@@ -2034,7 +2088,7 @@ async def test_create_macro_rejects_duplicate_title() -> None:
         await service.create_macro(
             title="Resolved",
             body="Another body",
-            actor_telegram_user_id=42,
+            actor=RequestActor(telegram_user_id=42),
         )
     except MacroManagementError as exc:
         assert str(exc) == "Макрос с таким названием уже есть."

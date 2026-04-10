@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from bot.adapters.helpdesk import build_request_actor
 from bot.formatters.categories import format_admin_category_details
 from bot.formatters.macros import format_admin_macro_details
 from bot.formatters.operator_admin_views import format_operator_list_response
@@ -46,7 +47,6 @@ CATEGORY_EDIT_STATE_NAMES = {
     AdminCategoryStates.editing_title.state,
 }
 OPERATOR_TICKET_STATE_NAMES = {
-    OperatorTicketStates.replying.state,
     OperatorTicketStates.reassigning.state,
     OperatorTicketStates.writing_note.state,
 }
@@ -137,7 +137,7 @@ async def _restore_ticket_after_cancel(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=message.from_user.id,
+            actor=build_request_actor(message.from_user),
         )
 
     if ticket_details is None:
@@ -167,7 +167,7 @@ async def _restore_operator_directory_after_cancel(
 
     async with helpdesk_service_factory() as helpdesk_service:
         operators = await helpdesk_service.list_operators(
-            actor_telegram_user_id=message.from_user.id,
+            actor=build_request_actor(message.from_user),
         )
 
     await message.answer(
@@ -190,7 +190,7 @@ async def _restore_macro_list_after_cancel(
 
     page = _parse_page(state_data.get("page"))
     async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=message.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(message.from_user))
 
     text, markup = build_admin_macro_list_response(macros=macros, page=page)
     await message.answer(text, reply_markup=markup)
@@ -218,10 +218,12 @@ async def _restore_macro_details_after_cancel(
     async with helpdesk_service_factory() as helpdesk_service:
         macro = await helpdesk_service.get_macro(
             macro_id=macro_id,
-            actor_telegram_user_id=message.from_user.id,
+            actor=build_request_actor(message.from_user),
         )
         if macro is None:
-            macros = await helpdesk_service.list_macros(actor_telegram_user_id=message.from_user.id)
+            macros = await helpdesk_service.list_macros(
+                actor=build_request_actor(message.from_user)
+            )
             text, markup = build_admin_macro_list_response(macros=macros, page=page)
             await message.answer(text, reply_markup=markup)
             return
@@ -251,7 +253,7 @@ async def _restore_category_list_after_cancel(
     page = _parse_page(state_data.get("page"))
     async with helpdesk_service_factory() as helpdesk_service:
         categories = await helpdesk_service.list_ticket_categories(
-            actor_telegram_user_id=message.from_user.id
+            actor=build_request_actor(message.from_user)
         )
 
     text, markup = build_admin_category_list_response(categories=categories, page=page)
@@ -280,11 +282,11 @@ async def _restore_category_details_after_cancel(
     async with helpdesk_service_factory() as helpdesk_service:
         category = await helpdesk_service.get_ticket_category(
             category_id=category_id,
-            actor_telegram_user_id=message.from_user.id,
+            actor=build_request_actor(message.from_user),
         )
         if category is None:
             categories = await helpdesk_service.list_ticket_categories(
-                actor_telegram_user_id=message.from_user.id
+                actor=build_request_actor(message.from_user)
             )
             text, markup = build_admin_category_list_response(categories=categories, page=page)
             await message.answer(text, reply_markup=markup)

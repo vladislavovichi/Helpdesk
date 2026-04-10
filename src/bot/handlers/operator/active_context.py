@@ -4,6 +4,7 @@ from uuid import UUID
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.use_cases.tickets.summaries import TicketDetailsSummary
+from bot.adapters.helpdesk import build_request_actor_from_id
 from domain.enums.tickets import TicketStatus
 from infrastructure.redis.contracts import OperatorActiveTicketStore, TicketLiveSessionStore
 
@@ -89,7 +90,7 @@ async def resolve_active_ticket_for_operator(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=parsed_ticket_public_id,
-            actor_telegram_user_id=operator_telegram_user_id,
+            actor=build_request_actor_from_id(operator_telegram_user_id),
         )
 
     if ticket_details is None or not is_operator_ticket_available(

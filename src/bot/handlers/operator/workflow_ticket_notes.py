@@ -8,6 +8,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from bot.adapters.helpdesk import (
+    build_internal_note_command,
+    build_operator_identity,
+    build_request_actor,
+)
 from bot.callbacks import OperatorActionCallback
 from bot.formatters.operator_ticket_views import (
     format_ticket_notes_chunks,
@@ -64,7 +69,7 @@ async def handle_notes_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -113,7 +118,7 @@ async def handle_note_add_action(
     async with helpdesk_service_factory() as helpdesk_service:
         ticket_details = await helpdesk_service.get_ticket_details(
             ticket_public_id=ticket_public_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if ticket_details is None:
@@ -173,17 +178,21 @@ async def handle_note_message(
 
     try:
         async with helpdesk_service_factory() as helpdesk_service:
+            operator = build_operator_identity(message.from_user)
+            if operator is None:
+                await message.answer(NOTE_CONTEXT_LOST_TEXT)
+                return
             note_ticket = await helpdesk_service.add_internal_note_to_ticket(
-                ticket_public_id=ticket_public_id,
-                telegram_user_id=message.from_user.id,
-                display_name=message.from_user.full_name,
-                username=message.from_user.username,
-                text=message.text,
-                actor_telegram_user_id=message.from_user.id,
+                build_internal_note_command(
+                    ticket_public_id=ticket_public_id,
+                    author=operator,
+                    text=message.text,
+                ),
+                actor=build_request_actor(message.from_user),
             )
             ticket_details = await helpdesk_service.get_ticket_details(
                 ticket_public_id=ticket_public_id,
-                actor_telegram_user_id=message.from_user.id,
+                actor=build_request_actor(message.from_user),
             )
     finally:
         await lock.release()

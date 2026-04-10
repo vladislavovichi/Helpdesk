@@ -79,9 +79,6 @@ def test_protected_callback_permissions_cover_operator_and_admin_prefixes() -> N
 
 def test_protected_state_permissions_cover_operator_fsm_states() -> None:
     assert (
-        PROTECTED_STATE_PERMISSIONS["OperatorTicketStates:replying"] == Permission.ACCESS_OPERATOR
-    )
-    assert (
         PROTECTED_STATE_PERMISSIONS["OperatorTicketStates:reassigning"]
         == Permission.ACCESS_OPERATOR
     )
@@ -150,7 +147,7 @@ def test_resolve_required_permission_for_operator_callback() -> None:
 
 def test_resolve_required_permission_for_operator_state() -> None:
     result = resolve_required_permission(
-        state_name="OperatorTicketStates:replying",
+        state_name="OperatorTicketStates:reassigning",
     )
 
     assert result == Permission.ACCESS_OPERATOR

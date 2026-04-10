@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminMacroCallback
 from bot.handlers.admin.macro_surfaces import (
     build_admin_macro_list_response,
@@ -43,9 +44,7 @@ async def handle_admin_macros(
     await state.clear()
 
     async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(
-            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None
-        )
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(message.from_user))
 
     text, markup = build_admin_macro_list_response(macros=macros, page=1)
     await message.answer(text, reply_markup=markup)
@@ -68,7 +67,7 @@ async def handle_admin_macro_page(
     await state.clear()
 
     async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     await edit_admin_macro_list(
         callback=callback,
@@ -105,13 +104,13 @@ async def handle_admin_macro_view(
     async with helpdesk_service_factory() as helpdesk_service:
         macro = await helpdesk_service.get_macro(
             macro_id=callback_data.macro_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if macro is None:
         async with helpdesk_service_factory() as helpdesk_service:
             macros = await helpdesk_service.list_macros(
-                actor_telegram_user_id=callback.from_user.id
+                actor=build_request_actor(callback.from_user)
             )
 
         await edit_admin_macro_list(
@@ -147,7 +146,7 @@ async def handle_admin_macro_back_list(
     await state.clear()
 
     async with helpdesk_service_factory() as helpdesk_service:
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     await edit_admin_macro_list(
         callback=callback,
@@ -176,13 +175,13 @@ async def handle_admin_macro_delete_prompt(
     async with helpdesk_service_factory() as helpdesk_service:
         macro = await helpdesk_service.get_macro(
             macro_id=callback_data.macro_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if macro is None:
         async with helpdesk_service_factory() as helpdesk_service:
             macros = await helpdesk_service.list_macros(
-                actor_telegram_user_id=callback.from_user.id
+                actor=build_request_actor(callback.from_user)
             )
 
         await edit_admin_macro_list(
@@ -225,13 +224,13 @@ async def handle_admin_macro_delete_cancel(
     async with helpdesk_service_factory() as helpdesk_service:
         macro = await helpdesk_service.get_macro(
             macro_id=callback_data.macro_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if macro is None:
         async with helpdesk_service_factory() as helpdesk_service:
             macros = await helpdesk_service.list_macros(
-                actor_telegram_user_id=callback.from_user.id
+                actor=build_request_actor(callback.from_user)
             )
 
         await edit_admin_macro_list(
@@ -267,9 +266,9 @@ async def handle_admin_macro_delete(
     async with helpdesk_service_factory() as helpdesk_service:
         macro = await helpdesk_service.delete_macro(
             macro_id=callback_data.macro_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
-        macros = await helpdesk_service.list_macros(actor_telegram_user_id=callback.from_user.id)
+        macros = await helpdesk_service.list_macros(actor=build_request_actor(callback.from_user))
 
     if macro is None:
         await edit_admin_macro_list(

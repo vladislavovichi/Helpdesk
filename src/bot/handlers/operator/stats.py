@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
 from application.services.stats import AnalyticsWindow
+from bot.adapters.helpdesk import build_request_actor, build_request_actor_from_id
 from bot.callbacks import OperatorStatsCallback
 from bot.formatters.operator_stats import (
     format_analytics_section,
@@ -40,7 +41,7 @@ async def handle_stats(
     async with helpdesk_service_factory() as helpdesk_service:
         snapshot = await helpdesk_service.get_analytics_snapshot(
             window=DEFAULT_ANALYTICS_WINDOW,
-            actor_telegram_user_id=operator_telegram_user_id,
+            actor=build_request_actor_from_id(operator_telegram_user_id),
         )
 
     await message.answer(
@@ -71,7 +72,7 @@ async def handle_stats_navigation(
     async with helpdesk_service_factory() as helpdesk_service:
         snapshot = await helpdesk_service.get_analytics_snapshot(
             window=window,
-            actor_telegram_user_id=operator_telegram_user_id,
+            actor=build_request_actor(callback.from_user),
         )
 
     answer_text = build_analytics_opened_text(section=callback_data.section, window=window)

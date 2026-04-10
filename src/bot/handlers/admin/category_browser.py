@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import AdminCategoryCallback
 from bot.handlers.admin.category_surfaces import (
     build_admin_category_list_response,
@@ -42,7 +43,7 @@ async def handle_admin_categories(
 
     async with helpdesk_service_factory() as helpdesk_service:
         categories = await helpdesk_service.list_ticket_categories(
-            actor_telegram_user_id=message.from_user.id if message.from_user is not None else None
+            actor=build_request_actor(message.from_user)
         )
 
     text, markup = build_admin_category_list_response(categories=categories, page=1)
@@ -67,7 +68,7 @@ async def handle_admin_category_page(
 
     async with helpdesk_service_factory() as helpdesk_service:
         categories = await helpdesk_service.list_ticket_categories(
-            actor_telegram_user_id=callback.from_user.id
+            actor=build_request_actor(callback.from_user)
         )
 
     await edit_admin_category_list(
@@ -105,13 +106,13 @@ async def handle_admin_category_view(
     async with helpdesk_service_factory() as helpdesk_service:
         category = await helpdesk_service.get_ticket_category(
             category_id=callback_data.category_id,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if category is None:
         async with helpdesk_service_factory() as helpdesk_service:
             categories = await helpdesk_service.list_ticket_categories(
-                actor_telegram_user_id=callback.from_user.id
+                actor=build_request_actor(callback.from_user)
             )
         await edit_admin_category_list(
             callback=callback,
@@ -147,7 +148,7 @@ async def handle_admin_category_back_list(
 
     async with helpdesk_service_factory() as helpdesk_service:
         categories = await helpdesk_service.list_ticket_categories(
-            actor_telegram_user_id=callback.from_user.id
+            actor=build_request_actor(callback.from_user)
         )
 
     await edit_admin_category_list(
@@ -177,13 +178,13 @@ async def handle_admin_category_toggle(
         category = await helpdesk_service.set_ticket_category_active(
             category_id=callback_data.category_id,
             is_active=is_active,
-            actor_telegram_user_id=callback.from_user.id,
+            actor=build_request_actor(callback.from_user),
         )
 
     if category is None:
         async with helpdesk_service_factory() as helpdesk_service:
             categories = await helpdesk_service.list_ticket_categories(
-                actor_telegram_user_id=callback.from_user.id
+                actor=build_request_actor(callback.from_user)
             )
         await edit_admin_category_list(
             callback=callback,

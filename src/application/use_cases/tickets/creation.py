@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from application.contracts.tickets import ClientTicketMessageCommand
 from application.use_cases.tickets.common import (
     build_message_payload,
     build_status_payload,
@@ -13,7 +14,6 @@ from domain.contracts.repositories import (
     TicketMessageRepository,
     TicketRepository,
 )
-from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
 
 
@@ -35,30 +35,27 @@ class CreateTicketFromClientMessageUseCase:
 
     async def __call__(
         self,
-        *,
-        client_chat_id: int,
-        telegram_message_id: int,
-        text: str | None,
-        attachment: TicketAttachmentDetails | None = None,
-        category_id: int | None = None,
+        command: ClientTicketMessageCommand,
     ) -> TicketSummary:
-        active_ticket = await self.ticket_repository.get_active_by_client_chat_id(client_chat_id)
+        active_ticket = await self.ticket_repository.get_active_by_client_chat_id(
+            command.client_chat_id
+        )
         if active_ticket is not None:
             result = await self._add_message_to_ticket(
                 ticket_public_id=active_ticket.public_id,
-                telegram_message_id=telegram_message_id,
+                telegram_message_id=command.telegram_message_id,
                 sender_type=TicketMessageSenderType.CLIENT,
-                text=text,
-                attachment=attachment,
+                text=command.text,
+                attachment=command.attachment,
             )
             if result is None:
                 raise RuntimeError("Не удалось добавить сообщение в активную заявку.")
             return result
 
         ticket = await self.ticket_repository.create(
-            client_chat_id=client_chat_id,
-            subject=build_ticket_subject(text or ""),
-            category_id=category_id,
+            client_chat_id=command.client_chat_id,
+            subject=build_ticket_subject(command.text or ""),
+            category_id=command.category_id,
         )
         if ticket.id is None:
             raise RuntimeError("Не удалось сгенерировать идентификатор заявки.")
@@ -70,7 +67,7 @@ class CreateTicketFromClientMessageUseCase:
                 "status": ticket.status.value,
                 "subject": ticket.subject,
                 "client_chat_id": ticket.client_chat_id,
-                "category_id": category_id,
+                "category_id": command.category_id,
             },
         )
 
@@ -90,19 +87,19 @@ class CreateTicketFromClientMessageUseCase:
 
         await self.ticket_message_repository.add(
             ticket_id=ticket.id,
-            telegram_message_id=telegram_message_id,
+            telegram_message_id=command.telegram_message_id,
             sender_type=TicketMessageSenderType.CLIENT,
-            text=text,
-            attachment=attachment,
+            text=command.text,
+            attachment=command.attachment,
         )
         await self.ticket_event_repository.add(
             ticket_id=ticket.id,
             event_type=TicketEventType.CLIENT_MESSAGE_ADDED,
             payload_json=build_message_payload(
-                telegram_message_id=telegram_message_id,
+                telegram_message_id=command.telegram_message_id,
                 sender_type=TicketMessageSenderType.CLIENT,
                 sender_operator_id=None,
-                attachment=attachment,
+                attachment=command.attachment,
             ),
         )
 
