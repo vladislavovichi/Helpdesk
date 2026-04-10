@@ -318,8 +318,7 @@ def _format_ticket_list_meta(priority: str, status: TicketStatus) -> str:
 
 def _format_ticket_note_entry(note: TicketInternalNoteSummary) -> str:
     return (
-        f"{_format_note_author(note)} · {format_timestamp(note.created_at)}\n"
-        f"{note.text.rstrip()}"
+        f"{_format_note_author(note)} · {format_timestamp(note.created_at)}\n{note.text.rstrip()}"
     )
 
 

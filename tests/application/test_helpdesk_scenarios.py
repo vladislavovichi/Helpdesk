@@ -626,9 +626,7 @@ def helpdesk_scenario() -> HelpdeskScenario:
         operator_telegram_user_ids=operator_repository.telegram_user_ids_by_operator_id,
     )
     message_repository = InMemoryMessageRepository(ticket_repository=ticket_repository)
-    internal_note_repository = InMemoryInternalNoteRepository(
-        ticket_repository=ticket_repository
-    )
+    internal_note_repository = InMemoryInternalNoteRepository(ticket_repository=ticket_repository)
     event_repository = InMemoryEventRepository()
     super_admin_telegram_user_id = 42
 

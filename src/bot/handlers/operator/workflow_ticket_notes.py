@@ -147,6 +147,9 @@ async def handle_note_message(
     if message.from_user is None:
         await message.answer(NOTE_CONTEXT_LOST_TEXT)
         return
+    if message.text is None:
+        await message.answer(NOTE_MODE_COMMAND_BLOCK_TEXT)
+        return
     if not await global_rate_limiter.allow():
         await message.answer(SERVICE_UNAVAILABLE_TEXT)
         return

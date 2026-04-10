@@ -115,8 +115,7 @@ class TicketMessage(CreatedAtMixin, Base):
     __tablename__ = "ticket_messages"
     __table_args__ = (
         CheckConstraint(
-            "(text IS NOT NULL AND length(btrim(text)) > 0) "
-            "OR attachment_kind IS NOT NULL",
+            "(text IS NOT NULL AND length(btrim(text)) > 0) OR attachment_kind IS NOT NULL",
             name="ticket_message_content_not_empty",
         ),
         UniqueConstraint(

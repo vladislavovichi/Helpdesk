@@ -216,10 +216,7 @@ def _format_load_lines(
 ) -> list[str]:
     if not loads:
         return [empty]
-    return [
-        f"- {item.display_name} · {item.ticket_count}"
-        for item in loads[:5]
-    ]
+    return [f"- {item.display_name} · {item.ticket_count}" for item in loads[:5]]
 
 
 def _format_operator_ranking(

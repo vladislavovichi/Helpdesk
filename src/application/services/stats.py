@@ -305,9 +305,7 @@ class HelpdeskStatsService:
             average_first_response_time_seconds=_normalize_average_seconds(
                 average_first_response_seconds
             ),
-            average_resolution_time_seconds=_normalize_average_seconds(
-                average_resolution_seconds
-            ),
+            average_resolution_time_seconds=_normalize_average_seconds(average_resolution_seconds),
             satisfaction_average=_normalize_average_rating(satisfaction_average),
             feedback_count=feedback_count,
             feedback_coverage_percent=feedback_coverage_percent,
@@ -353,9 +351,7 @@ def _merge_operator_snapshots(
                 average_first_response_time_seconds=(
                     None
                     if stats is None
-                    else _normalize_average_seconds(
-                        stats.average_first_response_time_seconds
-                    )
+                    else _normalize_average_seconds(stats.average_first_response_time_seconds)
                 ),
                 average_resolution_time_seconds=(
                     None
@@ -363,9 +359,7 @@ def _merge_operator_snapshots(
                     else _normalize_average_seconds(stats.average_resolution_time_seconds)
                 ),
                 average_satisfaction=(
-                    None
-                    if stats is None
-                    else _normalize_average_rating(stats.average_satisfaction)
+                    None if stats is None else _normalize_average_rating(stats.average_satisfaction)
                 ),
                 feedback_count=0 if stats is None else stats.feedback_count,
             )
@@ -404,11 +398,7 @@ def _merge_category_snapshots(
     }
     sla_map = {_category_key(item.category_id, item.category_title): item for item in sla_counts}
     category_keys = (
-        set(created_map)
-        | set(open_map)
-        | set(closed_map)
-        | set(feedback_map)
-        | set(sla_map)
+        set(created_map) | set(open_map) | set(closed_map) | set(feedback_map) | set(sla_map)
     )
 
     snapshots = []

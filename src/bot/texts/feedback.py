@@ -13,9 +13,7 @@ TICKET_FEEDBACK_COMMENT_ALREADY_SAVED_TEXT = "Комментарий уже со
 TICKET_FEEDBACK_COMMENT_EMPTY_TEXT = "Можно отправить пару слов одним сообщением."
 TICKET_FEEDBACK_NOT_AVAILABLE_TEXT = "Оценка доступна после закрытия обращения."
 TICKET_FEEDBACK_STALE_TEXT = "Эта кнопка уже неактуальна."
-TICKET_FEEDBACK_THANK_YOU_TEXT = (
-    "Спасибо. Если захотите, можно оставить короткий комментарий."
-)
+TICKET_FEEDBACK_THANK_YOU_TEXT = "Спасибо. Если захотите, можно оставить короткий комментарий."
 TICKET_FEEDBACK_COMMENT_PROMPT_TEXT = "Напишите пару слов одним сообщением, если удобно."
 TICKET_FEEDBACK_COMMENT_SAVED_TEXT = "Спасибо. Всё сохранили."
 TICKET_FEEDBACK_SKIPPED_TEXT = "Спасибо за оценку."

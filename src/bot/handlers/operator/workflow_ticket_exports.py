@@ -102,9 +102,7 @@ async def handle_export_file_action(
 
     await operator_presence.touch(operator_id=callback.from_user.id)
     export_format = (
-        TicketReportFormat.CSV
-        if callback_data.action == "export_csv"
-        else TicketReportFormat.HTML
+        TicketReportFormat.CSV if callback_data.action == "export_csv" else TicketReportFormat.HTML
     )
 
     try:

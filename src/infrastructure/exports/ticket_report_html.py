@@ -26,9 +26,7 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
         "</span>"
     )
     feedback_rating = str(report.feedback.rating) if report.feedback is not None else "Нет"
-    feedback_comment = (
-        report.feedback.comment or "Нет" if report.feedback is not None else "Нет"
-    )
+    feedback_comment = report.feedback.comment or "Нет" if report.feedback is not None else "Нет"
     feedback_received = (
         _format_timestamp(report.feedback.submitted_at) if report.feedback is not None else "Нет"
     )

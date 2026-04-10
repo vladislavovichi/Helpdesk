@@ -134,10 +134,7 @@ class SqlAlchemyTicketMetricsRepository:
             statement = statement.where(TicketFeedback.submitted_at >= since)
         statement = statement.order_by(TicketFeedback.rating.desc())
         result = await self.session.execute(statement)
-        return [
-            RatingDistributionRow(rating=rating, count=count)
-            for rating, count in result.all()
-        ]
+        return [RatingDistributionRow(rating=rating, count=count) for rating, count in result.all()]
 
     async def list_closed_ticket_stats_by_operator(
         self,
@@ -180,9 +177,7 @@ class SqlAlchemyTicketMetricsRepository:
                 average_first_response_time_seconds=(
                     None if first_response is None else float(first_response)
                 ),
-                average_resolution_time_seconds=(
-                    None if resolution is None else float(resolution)
-                ),
+                average_resolution_time_seconds=(None if resolution is None else float(resolution)),
                 average_satisfaction=None if satisfaction is None else float(satisfaction),
                 feedback_count=feedback_count,
             )
