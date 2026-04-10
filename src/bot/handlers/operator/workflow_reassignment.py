@@ -5,7 +5,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import (
     build_operator_identity_from_parts,
     build_request_actor,
@@ -57,7 +57,7 @@ async def handle_reassign_action(
     callback: CallbackQuery,
     callback_data: OperatorActionCallback,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -73,8 +73,8 @@ async def handle_reassign_action(
 
     await operator_presence.touch(operator_id=callback.from_user.id)
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(callback.from_user),
         )
@@ -103,7 +103,7 @@ async def handle_reassign_action(
 async def handle_reassign_message(
     message: Message,
     state: FSMContext,
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     global_rate_limiter: GlobalRateLimiter,
     operator_presence: OperatorPresenceHelper,
     operator_active_ticket_store: OperatorActiveTicketStore,
@@ -144,9 +144,9 @@ async def handle_reassign_message(
         return
 
     try:
-        async with helpdesk_service_factory() as helpdesk_service:
+        async with helpdesk_backend_client_factory() as helpdesk_backend:
             try:
-                ticket = await helpdesk_service.assign_ticket_to_operator(
+                ticket = await helpdesk_backend.assign_ticket_to_operator(
                     build_ticket_assignment_command(
                         ticket_public_id=ticket_public_id,
                         operator=build_operator_identity_from_parts(
@@ -166,7 +166,7 @@ async def handle_reassign_message(
                 await message.answer(TICKET_NOT_FOUND_TEXT)
                 return
 
-            ticket_details = await helpdesk_service.get_ticket_details(
+            ticket_details = await helpdesk_backend.get_ticket_details(
                 ticket_public_id=ticket_public_id,
                 actor=build_request_actor(message.from_user),
             )

@@ -26,6 +26,7 @@ class DiagnosticsReport:
 class DiagnosticsService:
     database_check: AsyncDependencyCheck
     redis_check: AsyncDependencyCheck
+    backend_check: AsyncDependencyCheck
     dry_run: bool
     bot_configured: bool
     bot_initialized: bool
@@ -49,6 +50,11 @@ class DiagnosticsService:
                 name="redis",
                 check=self.redis_check,
                 success_detail="подключение установлено",
+            ),
+            await self._run_check(
+                name="backend_grpc",
+                check=self.backend_check,
+                success_detail="внутренний gRPC backend доступен",
             ),
             DiagnosticsCheck(
                 name="bot_runtime",

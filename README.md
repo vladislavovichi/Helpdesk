@@ -1,6 +1,6 @@
 # Reliora
 
-`Reliora` — Telegram helpdesk для клиентской поддержки внутри одного бота. Проект принимает обращения, ведет живой диалог между клиентом и оператором, управляет очередью, ролями, макросами, тегами и операционной диагностикой.
+`Reliora` — Telegram helpdesk для клиентской поддержки. Telegram-бот остается премиальным русскоязычным интерфейсом, а бизнес-ядро вынесено в отдельный backend-сервис с реальным внутренним gRPC транспортом.
 
 ## Что это за проект
 
@@ -8,9 +8,10 @@
 
 - `src/bot` отвечает за Telegram UX, тексты, клавиатуры и обработку update'ов;
 - `src/application` собирает продуктовые сценарии и orchestration;
+- `src/backend` поднимает отдельный gRPC backend-процесс и транспортные контракты;
 - `src/domain` хранит сущности, правила и контракты;
 - `src/infrastructure` инкапсулирует PostgreSQL, Redis, конфигурацию и logging;
-- `src/app` поднимает runtime, bootstrap и health-проверки.
+- `src/app` поднимает runtime Telegram-бота и health-проверки клиентской части.
 
 Операционные артефакты вынесены отдельно:
 
@@ -26,7 +27,8 @@
 - активный контекст заявки для live-диалога;
 - эскалация, закрытие и переназначение;
 - макросы и теги;
-- статистика и диагностические проверки;
+- аналитика, экспорт аналитики и экспорт отчётов по заявкам;
+- диагностические проверки;
 - роли `user`, `operator`, `super_admin`;
 - Redis-backed FSM, rate limiting и runtime locks.
 
@@ -35,17 +37,19 @@
 Направление зависимостей:
 
 ```text
-bot -> application -> domain/contracts -> infrastructure
+Telegram bot -> gRPC client -> backend service -> application -> domain/contracts -> infrastructure
 ```
 
 Принципы слоя:
 
 - `bot` не принимает бизнес-решения и не работает с raw DB/session;
-- `application` не зависит от Telegram presentation и всё активнее опирается на явные in-process контракты;
+- `backend` публикует реальные protobuf/gRPC контракты и переводит транспорт в application-модели;
+- `application` не зависит от Telegram presentation и не знает о protobuf;
 - `infrastructure` не определяет продуктовые workflow-правила;
+- PostgreSQL остается source of truth, Redis остается runtime/session/realtime-слоем;
 - тексты, форматтеры и клавиатуры остаются отдельным presentation-слоем.
 
-Текущее состояние проекта: модульный монолит с подготовленными внутренними seam-ами для будущего вынесения business core в отдельный backend-сервис. Само вынесение транспорта и runtime пока не выполняется.
+Текущий extracted slice уже идет через реальный gRPC transport: категории/intake, создание заявки, карточка заявки, очередь, ответы оператора, назначение, закрытие, макросы, аналитика и экспорт.
 
 ## Роли и сценарии
 
@@ -92,19 +96,20 @@ AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS=12345,67890
 cp .env.example .env
 make install
 make migrate
-make health
-make run
+make run-backend
+make run-bot
 ```
 
-Если нужен bootstrap без Telegram polling:
+Если нужен bootstrap без Telegram polling, бот можно держать в dry-run:
 
 ```dotenv
 APP__DRY_RUN=true
 ```
 
-Фактический entrypoint:
+Фактические entrypoint'ы:
 
 ```bash
+PYTHONPATH=src poetry run python -m backend.main
 PYTHONPATH=src poetry run python -m app.main
 ```
 
@@ -149,6 +154,7 @@ ops/env/local.env.example
 - `bot`
 - `authorization`
 - `database`
+- `backend_service`
 - `redis`
 - `logging`
 
@@ -172,6 +178,9 @@ DATABASE__DATABASE=helpdesk
 REDIS__HOST=localhost
 REDIS__PORT=6381
 REDIS__DB=0
+
+BACKEND_SERVICE__HOST=localhost
+BACKEND_SERVICE__PORT=50071
 
 LOGGING__LEVEL=INFO
 LOGGING__STRUCTURED=true
@@ -222,8 +231,10 @@ make pre-commit-run
 На практике обычно достаточно:
 
 - `make install`
-- `make run`
+- `make run-backend`
+- `make run-bot`
 - `make health`
+- `make health-backend`
 - `make migrate`
 - `make test`
 - `make lint`
@@ -242,7 +253,9 @@ make help
 
 ```bash
 make health
-make run
+make health-backend
+make run-backend
+make run-bot
 make logs
 docker compose -f ops/docker/compose.yml ps
 ```
@@ -252,6 +265,7 @@ docker compose -f ops/docker/compose.yml ps
 - состояние bootstrap;
 - доступность PostgreSQL;
 - доступность Redis;
+- доступность внутреннего gRPC backend;
 - готовность Telegram runtime;
 - корректность Redis-backed FSM.
 

@@ -20,6 +20,7 @@ PROTECTED_CALLBACK_PREFIX_PERMISSIONS: tuple[tuple[str, Permission], ...] = (
     ("operator_queue:", Permission.ACCESS_OPERATOR),
     ("operator_macro:", Permission.ACCESS_OPERATOR),
     ("operator_stats:", Permission.ACCESS_OPERATOR),
+    ("operator_stats_export:", Permission.ACCESS_OPERATOR),
     ("operator_tag:", Permission.ACCESS_OPERATOR),
 )
 PROTECTED_STATE_PERMISSIONS: Mapping[str, Permission] = {

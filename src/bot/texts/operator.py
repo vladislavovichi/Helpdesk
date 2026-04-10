@@ -49,6 +49,8 @@ OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT = "Сначала завершите тек
 TAGS_UPDATED_TEXT = "Метки обновлены."
 EXPORT_FAILED_TEXT = "Не удалось подготовить отчёт. Попробуйте ещё раз."
 EXPORT_DELIVERY_FAILED_TEXT = "Не удалось отправить файл отчёта. Попробуйте ещё раз."
+ANALYTICS_EXPORT_FAILED_TEXT = "Не удалось подготовить экспорт аналитики. Попробуйте ещё раз."
+ANALYTICS_EXPORT_DELIVERY_FAILED_TEXT = "Не удалось отправить файл аналитики. Попробуйте ещё раз."
 
 
 def build_tag_added_text(ticket_public_number: str, tag: str, tags: str) -> str:
@@ -139,6 +141,18 @@ def build_export_ready_text(public_number: str, *, format_name: str) -> str:
     return f"Отчёт {format_name} по заявке {public_number} готов."
 
 
+def build_analytics_export_opened_text(*, section: str, window: AnalyticsWindow) -> str:
+    return (
+        f"Экспорт аналитики открыт. "
+        f"Секция: {_analytics_section_title(section)}. "
+        f"Период: {get_analytics_window_label(window)}."
+    )
+
+
+def build_analytics_export_ready_text(*, section: str, format_name: str) -> str:
+    return f"Аналитика «{_analytics_section_title(section)}» в формате {format_name} готова."
+
+
 def build_analytics_opened_text(*, section: str, window: AnalyticsWindow) -> str:
     section_labels = {
         "overview": "Открыта общая аналитика.",
@@ -202,3 +216,14 @@ def build_revoke_confirm_message(telegram_user_id: int) -> str:
 
 def build_queue_page_callback_text(page: int) -> str:
     return f"Страница {page}"
+
+
+def _analytics_section_title(section: str) -> str:
+    titles = {
+        "overview": "Общая",
+        "operators": "Операторы",
+        "topics": "Темы",
+        "quality": "Качество",
+        "sla": "SLA",
+    }
+    return titles.get(section, "Аналитика")

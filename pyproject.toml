@@ -9,6 +9,9 @@ alembic = "^1.18.4"
 asyncpg = "^0.30.0"
 redis = "^7.2.1"
 pydantic-settings = "^2.13.1"
+grpcio = "^1.80.0"
+protobuf = "^6.31.1"
+grpcio-tools = "^1.80.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
@@ -27,6 +30,7 @@ addopts = "-q"
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+extend-exclude = ["src/backend/grpc/generated"]
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "SIM", "UP", "W"]
@@ -50,6 +54,10 @@ check_untyped_defs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 exclude = ["^migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["backend.grpc.generated.*", "google.protobuf.*", "grpc", "grpc.*"]
+ignore_missing_imports = true
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]

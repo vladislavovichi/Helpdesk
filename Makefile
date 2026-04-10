@@ -6,8 +6,9 @@ export PYTHONPATH ?= src
 ALEMBIC_CONFIG ?= migrations/alembic.ini
 ALEMBIC ?= $(POETRY) run alembic -c $(ALEMBIC_CONFIG)
 APP_MODULE ?= app.main
+BACKEND_MODULE ?= backend.main
 FULL_SCRIPT ?= ops/docker/full.sh
-FULL_SERVICES ?= postgres redis app
+FULL_SERVICES ?= postgres redis backend bot
 FULL_TIMEOUT ?= 180
 
 define ensure_poetry_env
@@ -20,7 +21,7 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test check ci health run migrate migration-check make-migration docker-up docker-down full full-down logs up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test check ci health health-backend run run-backend run-bot migrate migration-check make-migration docker-up docker-down full full-down logs up down pre-commit-install pre-commit-run
 
 help:
 	@printf "Available targets:\n"
@@ -31,8 +32,11 @@ help:
 	@printf "  test               Run the test suite\n"
 	@printf "  check              Run lint and tests\n"
 	@printf "  ci                 Run lint, tests, and migration consistency checks\n"
-	@printf "  health             Run a local dependency and runtime health check\n"
-	@printf "  run                Start the application locally\n"
+	@printf "  health             Run the bot-side health check\n"
+	@printf "  health-backend     Run the backend-side health check\n"
+	@printf "  run                Start the Telegram bot runtime locally\n"
+	@printf "  run-backend        Start the backend gRPC service locally\n"
+	@printf "  run-bot            Start the Telegram bot runtime locally\n"
 	@printf "  migrate            Apply Alembic migrations\n"
 	@printf "  migration-check    Verify that migrations match the SQLAlchemy metadata\n"
 	@printf "  make-migration     Create a new Alembic revision (use name=...)\n"
@@ -70,12 +74,23 @@ health:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m app.healthcheck
 
+health-backend:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m backend.healthcheck
+
 migration-check:
 	$(call ensure_poetry_env)
 	$(ALEMBIC) upgrade head
 	$(ALEMBIC) check
 
 run:
+	$(MAKE) run-bot
+
+run-backend:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m $(BACKEND_MODULE)
+
+run-bot:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m $(APP_MODULE)
 
@@ -104,7 +119,7 @@ full:
 full-down: docker-down
 
 logs:
-	$(COMPOSE) -f $(COMPOSE_FILE) logs -f app
+	$(COMPOSE) -f $(COMPOSE_FILE) logs -f backend bot
 
 up: docker-up
 

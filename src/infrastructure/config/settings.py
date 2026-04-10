@@ -111,6 +111,31 @@ class RedisConfig(BaseModel):
         return f"redis://{host}:{port}/{self.db}"
 
 
+class BackendServiceConfig(BaseModel):
+    host: str = "backend"
+    port: int = 50051
+    expose_port: int | None = None
+    listen_host: str = "0.0.0.0"
+
+    @property
+    def runtime_target(self) -> tuple[str, int]:
+        return _resolve_service_target(
+            host=self.host,
+            port=self.port,
+            service_host="backend",
+            expose_port=self.expose_port,
+        )
+
+    @property
+    def target(self) -> str:
+        host, port = self.runtime_target
+        return f"{host}:{port}"
+
+    @property
+    def bind_target(self) -> str:
+        return f"{self.listen_host}:{self.port}"
+
+
 class LoggingConfig(BaseModel):
     level: str = "INFO"
     structured: bool = True
@@ -143,8 +168,10 @@ class Settings(BaseSettings):
     authorization: AuthorizationConfig
     postgres_expose_port: int | None = Field(default=None, validation_alias="POSTGRES_EXPOSE_PORT")
     redis_expose_port: int | None = Field(default=None, validation_alias="REDIS_EXPOSE_PORT")
+    backend_expose_port: int | None = Field(default=None, validation_alias="BACKEND_EXPOSE_PORT")
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
+    backend_service: BackendServiceConfig = Field(default_factory=BackendServiceConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     assets: AssetsConfig = Field(default_factory=AssetsConfig)
 
@@ -152,6 +179,7 @@ class Settings(BaseSettings):
     def apply_runtime_service_targets(self) -> Settings:
         self.database.expose_port = self.postgres_expose_port
         self.redis.expose_port = self.redis_expose_port
+        self.backend_service.expose_port = self.backend_expose_port
         return self
 
 

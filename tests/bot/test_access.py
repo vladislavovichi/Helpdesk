@@ -71,6 +71,10 @@ def test_protected_callback_permissions_cover_operator_and_admin_prefixes() -> N
     assert ("operator_queue:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_macro:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_stats:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
+    assert (
+        "operator_stats_export:",
+        Permission.ACCESS_OPERATOR,
+    ) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_tag:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("admin_category:", Permission.MANAGE_OPERATORS) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("admin_macro:", Permission.MANAGE_OPERATORS) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS

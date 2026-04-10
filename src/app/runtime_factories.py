@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from aiogram import Bot, Dispatcher
@@ -15,10 +15,9 @@ from application.services.authorization import (
 )
 from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
-from backend.grpc.client import provide_local_helpdesk_grpc_client
+from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
-from backend.grpc.server import LocalHelpdeskGrpcServer
-from infrastructure.config.settings import Settings
+from infrastructure.config.settings import BackendServiceConfig, Settings
 from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
     SqlAlchemySLAPolicyRepository,
@@ -116,22 +115,10 @@ def build_helpdesk_service_factory(
     return provide
 
 
-def build_helpdesk_backend_server(
-    *,
-    helpdesk_service_factory: HelpdeskServiceFactory,
-) -> LocalHelpdeskGrpcServer:
-    return LocalHelpdeskGrpcServer(helpdesk_service_factory=helpdesk_service_factory)
-
-
 def build_helpdesk_backend_client_factory(
-    server: LocalHelpdeskGrpcServer,
+    config: BackendServiceConfig,
 ) -> HelpdeskBackendClientFactory:
-    @asynccontextmanager
-    async def provide() -> AsyncIterator:
-        async with provide_local_helpdesk_grpc_client(server) as client:
-            yield client
-
-    return provide
+    return build_grpc_client_factory(config)
 
 
 def build_redis_workflow_runtime(redis: Redis) -> RedisWorkflowRuntime:
@@ -156,6 +143,7 @@ def build_diagnostics_service(
     settings: Settings,
     db_engine: AsyncEngine,
     redis: Redis,
+    backend_check: Callable[[], Awaitable[bool]],
     fsm_storage: BaseStorage,
     redis_workflow: RedisWorkflowRuntime,
     bot: Bot | None,
@@ -164,6 +152,7 @@ def build_diagnostics_service(
     return DiagnosticsService(
         database_check=lambda: ping_database_engine(db_engine),
         redis_check=lambda: ping_redis_client(redis),
+        backend_check=backend_check,
         dry_run=settings.app.dry_run,
         bot_configured=bool(settings.bot.token.strip()),
         bot_initialized=bot is not None,

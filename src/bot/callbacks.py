@@ -67,6 +67,12 @@ class OperatorStatsCallback(CallbackData, prefix="operator_stats"):
     window: Literal["today", "7d", "30d", "all"]
 
 
+class OperatorStatsExportCallback(CallbackData, prefix="operator_stats_export"):
+    action: Literal["open", "csv", "html"]
+    section: Literal["overview", "operators", "topics", "quality", "sla"]
+    window: Literal["today", "7d", "30d", "all"]
+
+
 class AdminOperatorCallback(CallbackData, prefix="admin_operator"):
     action: Literal[
         "refresh",

@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from application.services.helpdesk.service import HelpdeskServiceFactory
+from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_request_actor
 from bot.formatters.categories import format_admin_category_details
 from bot.formatters.macros import format_admin_macro_details
@@ -60,6 +61,7 @@ async def handle_cancel(
     state: FSMContext,
     settings: Settings,
     helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     operator_active_ticket_store: OperatorActiveTicketStore,
     ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
@@ -78,7 +80,7 @@ async def handle_cancel(
         await _restore_ticket_after_cancel(
             message=message,
             state_data=state_data,
-            helpdesk_service_factory=helpdesk_service_factory,
+            helpdesk_backend_client_factory=helpdesk_backend_client_factory,
             operator_active_ticket_store=operator_active_ticket_store,
             ticket_live_session_store=ticket_live_session_store,
         )
@@ -123,7 +125,7 @@ async def _restore_ticket_after_cancel(
     *,
     message: Message,
     state_data: dict[str, object],
-    helpdesk_service_factory: HelpdeskServiceFactory,
+    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
     operator_active_ticket_store: OperatorActiveTicketStore,
     ticket_live_session_store: TicketLiveSessionStore,
 ) -> None:
@@ -134,8 +136,8 @@ async def _restore_ticket_after_cancel(
     if ticket_public_id is None or message.from_user is None:
         return
 
-    async with helpdesk_service_factory() as helpdesk_service:
-        ticket_details = await helpdesk_service.get_ticket_details(
+    async with helpdesk_backend_client_factory() as helpdesk_backend:
+        ticket_details = await helpdesk_backend.get_ticket_details(
             ticket_public_id=ticket_public_id,
             actor=build_request_actor(message.from_user),
         )

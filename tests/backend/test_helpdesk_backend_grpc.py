@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
+
+import pytest
 
 from application.contracts.actors import RequestActor
 from application.contracts.tickets import ClientTicketMessageCommand
@@ -18,10 +21,11 @@ from application.services.stats import (
     OperatorTicketLoad,
 )
 from application.use_cases.tickets.summaries import TicketSummary
-from backend.grpc.client import LocalHelpdeskGrpcClient
-from backend.grpc.server import LocalHelpdeskGrpcServer
+from backend.grpc.client import build_helpdesk_backend_client_factory
+from backend.grpc.server import build_helpdesk_backend_server
 from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketAttachmentKind, TicketStatus
+from infrastructure.config.settings import BackendServiceConfig
 
 
 @asynccontextmanager
@@ -29,7 +33,7 @@ async def _build_service_factory(service: object) -> AsyncIterator[HelpdeskServi
     yield cast(HelpdeskService, service)
 
 
-async def test_local_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -> None:
+async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -> None:
     ticket_public_id = uuid4()
     command_log: list[ClientTicketMessageCommand] = []
     service = SimpleNamespace(
@@ -40,30 +44,45 @@ async def test_local_helpdesk_grpc_client_roundtrips_ticket_commands_and_analyti
         HelpdeskServiceFactory,
         lambda: _build_service_factory(service),
     )
-    server = LocalHelpdeskGrpcServer(helpdesk_service_factory=helpdesk_service_factory)
-    client = LocalHelpdeskGrpcClient(server=server)
-
-    ticket = await client.create_ticket_from_client_intake(
-        ClientTicketMessageCommand(
-            client_chat_id=2002,
-            telegram_message_id=15,
-            text="Не открывается доступ",
-            attachment=TicketAttachmentDetails(
-                kind=TicketAttachmentKind.DOCUMENT,
-                telegram_file_id="file-1",
-                telegram_file_unique_id="unique-1",
-                filename="issue.txt",
-                mime_type="text/plain",
-                storage_path="document/unique-1.txt",
-            ),
-            category_id=2,
-        )
+    port = _reserve_tcp_port()
+    server = build_helpdesk_backend_server(
+        helpdesk_service_factory=helpdesk_service_factory,
+        bind_target=f"127.0.0.1:{port}",
     )
-    snapshot = await client.get_analytics_snapshot(
-        window=AnalyticsWindow.DAYS_7,
-        actor=RequestActor(telegram_user_id=1001),
+    await server.start()
+
+    client_factory = build_helpdesk_backend_client_factory(
+        BackendServiceConfig(host="127.0.0.1", port=port)
     )
 
+    try:
+        async with client_factory() as client:
+            service_name, status = await client.get_backend_status()
+            ticket = await client.create_ticket_from_client_intake(
+                ClientTicketMessageCommand(
+                    client_chat_id=2002,
+                    telegram_message_id=15,
+                    text="Не открывается доступ",
+                    attachment=TicketAttachmentDetails(
+                        kind=TicketAttachmentKind.DOCUMENT,
+                        telegram_file_id="file-1",
+                        telegram_file_unique_id="unique-1",
+                        filename="issue.txt",
+                        mime_type="text/plain",
+                        storage_path="document/unique-1.txt",
+                    ),
+                    category_id=2,
+                )
+            )
+            snapshot = await client.get_analytics_snapshot(
+                window=AnalyticsWindow.DAYS_7,
+                actor=RequestActor(telegram_user_id=1001),
+            )
+    finally:
+        await server.stop()
+
+    assert service_name == "helpdesk-backend"
+    assert status == "ready"
     assert ticket.public_id == ticket_public_id
     assert ticket.status == TicketStatus.QUEUED
     assert command_log[0].attachment is not None
@@ -147,3 +166,13 @@ def _build_analytics_call() -> Any:
         )
 
     return call
+
+
+def _reserve_tcp_port() -> int:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            return cast(int, sock.getsockname()[1])
+    except PermissionError as exc:
+        pytest.skip(f"Sandbox blocks local TCP sockets: {exc}")

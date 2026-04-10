@@ -12,10 +12,10 @@ from app.runtime_factories import (
     build_authorization_service_factory,
     build_diagnostics_service,
     build_helpdesk_backend_client_factory,
-    build_helpdesk_backend_server,
     build_helpdesk_service_factory,
     build_redis_workflow_runtime,
 )
+from backend.grpc.client import ping_helpdesk_backend
 from bot.dispatcher import build_bot, build_dispatcher
 from infrastructure.config.settings import Settings
 from infrastructure.db.session import (
@@ -48,6 +48,10 @@ def _database_target(settings: Settings) -> str:
 
 def _redis_target(settings: Settings) -> str:
     return settings.redis.url or f"{settings.redis.host}:{settings.redis.port}/{settings.redis.db}"
+
+
+def _backend_target(settings: Settings) -> str:
+    return settings.backend_service.target
 
 
 async def _close_runtime_resources(
@@ -88,9 +92,10 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     logger = logging.getLogger(__name__)
     _validate_startup_settings(settings)
     logger.info(
-        "Initializing runtime dependencies database=%s redis=%s dry_run=%s",
+        "Initializing runtime dependencies database=%s redis=%s backend=%s dry_run=%s",
         _database_target(settings),
         _redis_target(settings),
+        _backend_target(settings),
         settings.app.dry_run,
     )
 
@@ -128,12 +133,12 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             super_admin_telegram_user_ids=super_admin_telegram_user_ids,
             sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
         )
-        helpdesk_backend_server = build_helpdesk_backend_server(
-            helpdesk_service_factory=helpdesk_service_factory
-        )
         helpdesk_backend_client_factory = build_helpdesk_backend_client_factory(
-            helpdesk_backend_server
+            settings.backend_service
         )
+        logger.info("Checking backend gRPC connectivity target=%s", settings.backend_service.target)
+        await ping_helpdesk_backend(settings.backend_service)
+        logger.info("Backend gRPC connectivity check passed.")
 
         if settings.bot.token.strip():
             logger.info("Initializing Telegram bot runtime.")
@@ -162,6 +167,7 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             settings=settings,
             db_engine=db_engine,
             redis=redis,
+            backend_check=lambda: ping_helpdesk_backend(settings.backend_service),
             fsm_storage=fsm_storage,
             redis_workflow=redis_workflow,
             bot=bot,

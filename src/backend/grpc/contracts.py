@@ -14,6 +14,11 @@ from application.contracts.tickets import (
     TicketAssignmentCommand,
 )
 from application.services.stats import AnalyticsWindow, HelpdeskAnalyticsSnapshot
+from application.use_cases.analytics.exports import (
+    AnalyticsExportFormat,
+    AnalyticsSection,
+    AnalyticsSnapshotExport,
+)
 from application.use_cases.tickets.exports import TicketReportExport, TicketReportFormat
 from application.use_cases.tickets.summaries import (
     MacroApplicationResult,
@@ -28,6 +33,8 @@ from application.use_cases.tickets.summaries import (
 
 
 class HelpdeskBackendClient(Protocol):
+    async def get_backend_status(self) -> tuple[str, str]: ...
+
     async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None: ...
 
     async def list_client_ticket_categories(self) -> Sequence[TicketCategorySummary]: ...
@@ -119,6 +126,15 @@ class HelpdeskBackendClient(Protocol):
         window: AnalyticsWindow,
         actor: RequestActor | None = None,
     ) -> HelpdeskAnalyticsSnapshot: ...
+
+    async def export_analytics_snapshot(
+        self,
+        *,
+        window: AnalyticsWindow,
+        section: AnalyticsSection,
+        format: AnalyticsExportFormat,
+        actor: RequestActor | None = None,
+    ) -> AnalyticsSnapshotExport: ...
 
 
 HelpdeskBackendClientFactory = Callable[

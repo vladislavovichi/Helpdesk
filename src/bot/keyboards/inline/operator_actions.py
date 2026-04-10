@@ -33,6 +33,12 @@ def build_ticket_actions_markup(
                 OperatorActionCallback(action="take", ticket_public_id=callback_value).pack(),
             ),
             _build_callback_button(
+                "Экспорт",
+                OperatorActionCallback(action="export", ticket_public_id=callback_value).pack(),
+            ),
+        )
+        builder.row(
+            _build_callback_button(
                 "Ещё",
                 OperatorActionCallback(action="more", ticket_public_id=callback_value).pack(),
             ),
@@ -49,12 +55,25 @@ def build_ticket_actions_markup(
                 "Макросы",
                 OperatorActionCallback(action="macros", ticket_public_id=callback_value).pack(),
             ),
+        )
+        builder.row(
+            _build_callback_button(
+                "Экспорт",
+                OperatorActionCallback(action="export", ticket_public_id=callback_value).pack(),
+            ),
             _build_callback_button(
                 "Ещё",
                 OperatorActionCallback(action="more", ticket_public_id=callback_value).pack(),
             ),
         )
+        return builder.as_markup()
 
+    builder.row(
+        _build_callback_button(
+            "Экспорт",
+            OperatorActionCallback(action="export", ticket_public_id=callback_value).pack(),
+        )
+    )
     return builder.as_markup()
 
 

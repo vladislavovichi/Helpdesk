@@ -5,6 +5,7 @@ from typing import cast
 
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.stats import HelpdeskStatsService
+from application.use_cases.analytics.exports import ExportAnalyticsSnapshotUseCase
 from application.use_cases.tickets.categories import (
     CreateTicketCategoryUseCase,
     GetTicketCategoryUseCase,
@@ -80,6 +81,8 @@ from domain.contracts.repositories import (
     TicketRepository,
     TicketTagRepository,
 )
+from infrastructure.exports.analytics_snapshot_csv import render_analytics_snapshot_csv
+from infrastructure.exports.analytics_snapshot_html import render_analytics_snapshot_html
 from infrastructure.exports.ticket_report_csv import render_ticket_report_csv
 from infrastructure.exports.ticket_report_html import render_ticket_report_html
 
@@ -111,6 +114,7 @@ class HelpdeskOperatorUseCases:
     list_operators: ListOperatorsUseCase
     promote_operator: PromoteOperatorUseCase
     revoke_operator: RevokeOperatorUseCase
+    export_analytics_snapshot: ExportAnalyticsSnapshotUseCase
 
 
 @dataclass(slots=True, frozen=True)
@@ -166,6 +170,9 @@ def build_helpdesk_components(
     ticket_tag_repository: TicketTagRepository,
     super_admin_telegram_user_ids: frozenset[int],
 ) -> HelpdeskComponents:
+    stats_service = HelpdeskStatsService(
+        analytics_repository=cast(TicketAnalyticsRepository, ticket_repository)
+    )
     return HelpdeskComponents(
         permissions=HelpdeskPermissionGuard(
             operator_repository=operator_repository,
@@ -252,6 +259,11 @@ def build_helpdesk_components(
                 operator_repository=operator_repository,
                 super_admin_telegram_user_ids=super_admin_telegram_user_ids,
             ),
+            export_analytics_snapshot=ExportAnalyticsSnapshotUseCase(
+                stats_service=stats_service,
+                csv_renderer=render_analytics_snapshot_csv,
+                html_renderer=render_analytics_snapshot_html,
+            ),
         ),
         catalog=HelpdeskCatalogUseCases(
             list_ticket_categories=ListTicketCategoriesUseCase(
@@ -323,7 +335,5 @@ def build_helpdesk_components(
                 sla_policy_repository=sla_policy_repository,
             ),
         ),
-        stats=HelpdeskStatsService(
-            analytics_repository=cast(TicketAnalyticsRepository, ticket_repository)
-        ),
+        stats=stats_service,
     )

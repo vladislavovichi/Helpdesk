@@ -17,7 +17,10 @@ from bot.formatters.operator_stats import (
     format_quality_analytics,
     format_sla_analytics,
 )
-from bot.keyboards.inline.operator_stats import build_operator_stats_markup
+from bot.keyboards.inline.operator_stats import (
+    build_operator_stats_export_markup,
+    build_operator_stats_markup,
+)
 
 
 def test_format_operational_stats_returns_operator_friendly_text() -> None:
@@ -116,7 +119,21 @@ def test_build_operator_stats_markup_contains_sections_and_windows() -> None:
     assert rows == (
         ("• Общая", "Операторы", "Темы"),
         ("Качество", "SLA"),
+        ("Экспорт",),
         ("Сегодня", "• 7 дн", "30 дн", "Всё"),
+    )
+
+
+def test_build_operator_stats_export_markup_contains_formats_and_back() -> None:
+    markup = build_operator_stats_export_markup(
+        section="operators",
+        window=AnalyticsWindow.DAYS_7,
+    )
+    rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
+
+    assert rows == (
+        ("CSV", "HTML"),
+        ("Назад",),
     )
 
 

@@ -11,31 +11,31 @@ message RequestActor {
 message OperatorIdentity {
   int64 telegram_user_id = 1;
   string display_name = 2;
-  string username = 3;
+  optional string username = 3;
 }
 
 message TicketAttachment {
   string kind = 1;
   string telegram_file_id = 2;
-  string telegram_file_unique_id = 3;
-  string filename = 4;
-  string mime_type = 5;
-  string storage_path = 6;
+  optional string telegram_file_unique_id = 3;
+  optional string filename = 4;
+  optional string mime_type = 5;
+  optional string storage_path = 6;
 }
 
 message ClientTicketMessageCommand {
   int64 client_chat_id = 1;
   int64 telegram_message_id = 2;
-  string text = 3;
+  optional string text = 3;
   TicketAttachment attachment = 4;
-  int32 category_id = 5;
+  optional int32 category_id = 5;
 }
 
 message OperatorTicketReplyCommand {
   string ticket_public_id = 1;
   OperatorIdentity operator = 2;
   int64 telegram_message_id = 3;
-  string text = 4;
+  optional string text = 4;
   TicketAttachment attachment = 5;
 }
 
@@ -60,7 +60,7 @@ message TicketSummary {
   string public_number = 2;
   string status = 3;
   bool created = 4;
-  string event_type = 5;
+  optional string event_type = 5;
 }
 
 message TicketCategorySummary {
@@ -77,7 +77,7 @@ message QueuedTicketSummary {
   string subject = 3;
   string priority = 4;
   string status = 5;
-  string category_title = 6;
+  optional string category_title = 6;
 }
 
 message OperatorTicketSummary {
@@ -86,14 +86,14 @@ message OperatorTicketSummary {
   string subject = 3;
   string priority = 4;
   string status = 5;
-  string category_title = 6;
+  optional string category_title = 6;
 }
 
 message TicketMessageSummary {
   string sender_type = 1;
-  int32 sender_operator_id = 2;
-  string sender_operator_name = 3;
-  string text = 4;
+  optional int32 sender_operator_id = 2;
+  optional string sender_operator_name = 3;
+  optional string text = 4;
   google.protobuf.Timestamp created_at = 5;
   TicketAttachment attachment = 6;
 }
@@ -101,7 +101,7 @@ message TicketMessageSummary {
 message TicketInternalNoteSummary {
   int32 id = 1;
   int32 author_operator_id = 2;
-  string author_operator_name = 3;
+  optional string author_operator_name = 3;
   string text = 4;
   google.protobuf.Timestamp created_at = 5;
 }
@@ -113,16 +113,16 @@ message TicketDetailsSummary {
   string status = 4;
   string priority = 5;
   string subject = 6;
-  int32 assigned_operator_id = 7;
-  string assigned_operator_name = 8;
-  int64 assigned_operator_telegram_user_id = 9;
+  optional int32 assigned_operator_id = 7;
+  optional string assigned_operator_name = 8;
+  optional int64 assigned_operator_telegram_user_id = 9;
   google.protobuf.Timestamp created_at = 10;
-  int32 category_id = 11;
-  string category_code = 12;
-  string category_title = 13;
+  optional int32 category_id = 11;
+  optional string category_code = 12;
+  optional string category_title = 13;
   repeated string tags = 14;
-  string last_message_text = 15;
-  string last_message_sender_type = 16;
+  optional string last_message_text = 15;
+  optional string last_message_sender_type = 16;
   TicketAttachment last_message_attachment = 17;
   repeated TicketMessageSummary message_history = 18;
   repeated TicketInternalNoteSummary internal_notes = 19;
@@ -132,6 +132,11 @@ message MacroSummary {
   int32 id = 1;
   string title = 2;
   string body = 3;
+}
+
+message OperatorReplyResult {
+  TicketSummary ticket = 1;
+  int64 client_chat_id = 2;
 }
 
 message MacroApplicationResult {
@@ -148,13 +153,27 @@ message TicketReportExport {
   string report_public_number = 5;
 }
 
+message AnalyticsReportExport {
+  string format = 1;
+  string filename = 2;
+  string content_type = 3;
+  bytes content = 4;
+  string section = 5;
+  string window = 6;
+}
+
+message BackendStatus {
+  string service = 1;
+  string status = 2;
+}
+
 message AnalyticsCategorySnapshot {
-  int32 category_id = 1;
+  optional int32 category_id = 1;
   string category_title = 2;
   int32 created_ticket_count = 3;
   int32 open_ticket_count = 4;
   int32 closed_ticket_count = 5;
-  double average_satisfaction = 6;
+  optional double average_satisfaction = 6;
   int32 feedback_count = 7;
   int32 sla_breach_count = 8;
 }
@@ -164,9 +183,9 @@ message AnalyticsOperatorSnapshot {
   string display_name = 2;
   int32 active_ticket_count = 3;
   int32 closed_ticket_count = 4;
-  int32 average_first_response_time_seconds = 5;
-  int32 average_resolution_time_seconds = 6;
-  double average_satisfaction = 7;
+  optional int32 average_first_response_time_seconds = 5;
+  optional int32 average_resolution_time_seconds = 6;
+  optional double average_satisfaction = 7;
   int32 feedback_count = 8;
 }
 
@@ -191,11 +210,11 @@ message HelpdeskAnalyticsSnapshot {
   repeated OperatorTicketLoad tickets_per_operator = 7;
   int32 period_created_tickets_count = 8;
   int32 period_closed_tickets_count = 9;
-  int32 average_first_response_time_seconds = 10;
-  int32 average_resolution_time_seconds = 11;
-  double satisfaction_average = 12;
+  optional int32 average_first_response_time_seconds = 10;
+  optional int32 average_resolution_time_seconds = 11;
+  optional double satisfaction_average = 12;
   int32 feedback_count = 13;
-  int32 feedback_coverage_percent = 14;
+  optional int32 feedback_coverage_percent = 14;
   repeated AnalyticsRatingBucket rating_distribution = 15;
   repeated AnalyticsOperatorSnapshot operator_snapshots = 16;
   repeated AnalyticsCategorySnapshot category_snapshots = 17;
@@ -279,7 +298,15 @@ message GetAnalyticsSnapshotRequest {
   RequestActor actor = 2;
 }
 
+message ExportAnalyticsSnapshotRequest {
+  string window = 1;
+  string section = 2;
+  string format = 3;
+  RequestActor actor = 4;
+}
+
 service HelpdeskBackendService {
+  rpc GetBackendStatus(Empty) returns (BackendStatus);
   rpc GetClientActiveTicket(GetClientActiveTicketRequest) returns (TicketSummary);
   rpc ListClientTicketCategories(Empty) returns (stream TicketCategorySummary);
   rpc CreateTicketFromClientMessage(CreateTicketFromClientMessageRequest) returns (TicketSummary);
@@ -296,4 +323,5 @@ service HelpdeskBackendService {
   rpc ApplyMacroToTicket(ApplyMacroToTicketRequest) returns (MacroApplicationResult);
   rpc ExportTicketReport(ExportTicketReportRequest) returns (TicketReportExport);
   rpc GetAnalyticsSnapshot(GetAnalyticsSnapshotRequest) returns (HelpdeskAnalyticsSnapshot);
+  rpc ExportAnalyticsSnapshot(ExportAnalyticsSnapshotRequest) returns (AnalyticsReportExport);
 }

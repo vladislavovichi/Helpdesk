@@ -1,10 +1,14 @@
+# mypy: disable-error-code="attr-defined,name-defined"
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
+
+import grpc
 
 from application.contracts.actors import RequestActor
 from application.contracts.tickets import (
@@ -15,6 +19,11 @@ from application.contracts.tickets import (
     TicketAssignmentCommand,
 )
 from application.services.stats import AnalyticsWindow, HelpdeskAnalyticsSnapshot
+from application.use_cases.analytics.exports import (
+    AnalyticsExportFormat,
+    AnalyticsSection,
+    AnalyticsSnapshotExport,
+)
 from application.use_cases.tickets.exports import TicketReportExport, TicketReportFormat
 from application.use_cases.tickets.summaries import (
     MacroApplicationResult,
@@ -26,27 +35,10 @@ from application.use_cases.tickets.summaries import (
     TicketDetailsSummary,
     TicketSummary,
 )
-from backend.grpc.contracts import HelpdeskBackendClient
-from backend.grpc.messages import (
-    ApplyMacroToTicketRequest,
-    AssignNextQueuedTicketRequest,
-    AssignTicketToOperatorRequest,
-    CloseTicketAsOperatorRequest,
-    CloseTicketRequest,
-    CreateTicketFromClientIntakeRequest,
-    CreateTicketFromClientMessageRequest,
-    ExportTicketReportRequest,
-    GetAnalyticsSnapshotRequest,
-    GetClientActiveTicketRequest,
-    GetTicketDetailsRequest,
-    ListClientTicketCategoriesRequest,
-    ListMacrosRequest,
-    ListOperatorTicketsRequest,
-    ListQueuedTicketsRequest,
-    ReplyToTicketAsOperatorRequest,
-)
-from backend.grpc.server import LocalHelpdeskGrpcServer
+from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from backend.grpc.generated import helpdesk_pb2, helpdesk_pb2_grpc
 from backend.grpc.translators import (
+    deserialize_analytics_export,
     deserialize_analytics_snapshot,
     deserialize_category,
     deserialize_export,
@@ -64,32 +56,51 @@ from backend.grpc.translators import (
     serialize_request_actor,
     serialize_ticket_assignment_command,
 )
+from domain.tickets import InvalidTicketTransitionError
+from infrastructure.config.settings import BackendServiceConfig
+
+CHANNEL_READY_TIMEOUT_SECONDS = 5.0
+RPC_TIMEOUT_SECONDS = 10.0
 
 
 @dataclass(slots=True)
-class LocalHelpdeskGrpcClient(HelpdeskBackendClient):
-    server: LocalHelpdeskGrpcServer
+class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
+    stub: helpdesk_pb2_grpc.HelpdeskBackendServiceStub
+
+    async def get_backend_status(self) -> tuple[str, str]:
+        response = await self.stub.GetBackendStatus(
+            helpdesk_pb2.Empty(),
+            timeout=RPC_TIMEOUT_SECONDS,
+        )
+        return response.service, response.status
 
     async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None:
-        result = await self.server.get_client_active_ticket(
-            GetClientActiveTicketRequest(client_chat_id=client_chat_id)
-        )
-        return None if result is None else deserialize_ticket_summary(result)
+        try:
+            result = await self.stub.GetClientActiveTicket(
+                helpdesk_pb2.GetClientActiveTicketRequest(client_chat_id=client_chat_id),
+                timeout=RPC_TIMEOUT_SECONDS,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
 
     async def list_client_ticket_categories(self) -> tuple[TicketCategorySummary, ...]:
-        result = await self.server.list_client_ticket_categories(
-            ListClientTicketCategoriesRequest()
+        response = self.stub.ListClientTicketCategories(
+            helpdesk_pb2.Empty(),
+            timeout=RPC_TIMEOUT_SECONDS,
         )
-        return tuple(deserialize_category(item) for item in result)
+        return tuple(deserialize_category(item) for item in await _collect_stream(response))
 
     async def create_ticket_from_client_message(
         self,
         command: ClientTicketMessageCommand,
     ) -> TicketSummary:
-        result = await self.server.create_ticket_from_client_message(
-            CreateTicketFromClientMessageRequest(
-                command=serialize_client_ticket_message_command(command)
-            )
+        request = helpdesk_pb2.CreateTicketFromClientMessageRequest()
+        request.command.CopyFrom(serialize_client_ticket_message_command(command))
+        result = await self.stub.CreateTicketFromClientMessage(
+            request,
+            timeout=RPC_TIMEOUT_SECONDS,
         )
         return deserialize_ticket_summary(result)
 
@@ -97,10 +108,11 @@ class LocalHelpdeskGrpcClient(HelpdeskBackendClient):
         self,
         command: ClientTicketMessageCommand,
     ) -> TicketSummary:
-        result = await self.server.create_ticket_from_client_intake(
-            CreateTicketFromClientIntakeRequest(
-                command=serialize_client_ticket_message_command(command)
-            )
+        request = helpdesk_pb2.CreateTicketFromClientIntakeRequest()
+        request.command.CopyFrom(serialize_client_ticket_message_command(command))
+        result = await self.stub.CreateTicketFromClientIntake(
+            request,
+            timeout=RPC_TIMEOUT_SECONDS,
         )
         return deserialize_ticket_summary(result)
 
@@ -110,23 +122,24 @@ class LocalHelpdeskGrpcClient(HelpdeskBackendClient):
         ticket_public_id: UUID,
         actor: RequestActor | None = None,
     ) -> TicketDetailsSummary | None:
-        result = await self.server.get_ticket_details(
-            GetTicketDetailsRequest(
-                ticket_public_id=str(ticket_public_id),
-                actor=serialize_request_actor(actor),
-            )
-        )
-        return None if result is None else deserialize_ticket_details(result)
+        request = helpdesk_pb2.GetTicketDetailsRequest(ticket_public_id=str(ticket_public_id))
+        _apply_actor(request, actor)
+        try:
+            result = await self.stub.GetTicketDetails(request, timeout=RPC_TIMEOUT_SECONDS)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_details(result)
 
     async def list_queued_tickets(
         self,
         *,
         actor: RequestActor | None = None,
     ) -> tuple[QueuedTicketSummary, ...]:
-        result = await self.server.list_queued_tickets(
-            ListQueuedTicketsRequest(actor=serialize_request_actor(actor))
-        )
-        return tuple(deserialize_queued_ticket(item) for item in result)
+        request = helpdesk_pb2.ListQueuedTicketsRequest()
+        _apply_actor(request, actor)
+        response = self.stub.ListQueuedTickets(request, timeout=RPC_TIMEOUT_SECONDS)
+        return tuple(deserialize_queued_ticket(item) for item in await _collect_stream(response))
 
     async def list_operator_tickets(
         self,
@@ -134,49 +147,57 @@ class LocalHelpdeskGrpcClient(HelpdeskBackendClient):
         operator_telegram_user_id: int,
         actor: RequestActor | None = None,
     ) -> tuple[OperatorTicketSummary, ...]:
-        result = await self.server.list_operator_tickets(
-            ListOperatorTicketsRequest(
-                operator_telegram_user_id=operator_telegram_user_id,
-                actor=serialize_request_actor(actor),
-            )
+        request = helpdesk_pb2.ListOperatorTicketsRequest(
+            operator_telegram_user_id=operator_telegram_user_id
         )
-        return tuple(deserialize_operator_ticket(item) for item in result)
+        _apply_actor(request, actor)
+        response = self.stub.ListOperatorTickets(request, timeout=RPC_TIMEOUT_SECONDS)
+        return tuple(deserialize_operator_ticket(item) for item in await _collect_stream(response))
 
     async def assign_next_ticket_to_operator(
         self,
         command: AssignNextQueuedTicketCommand,
         actor: RequestActor | None = None,
     ) -> TicketSummary | None:
-        result = await self.server.assign_next_ticket_to_operator(
-            AssignNextQueuedTicketRequest(
-                command=serialize_assign_next_command(command),
-                actor=serialize_request_actor(actor),
-            )
-        )
-        return None if result is None else deserialize_ticket_summary(result)
+        request = helpdesk_pb2.AssignNextQueuedTicketRequest()
+        request.command.CopyFrom(serialize_assign_next_command(command))
+        _apply_actor(request, actor)
+        try:
+            result = await self.stub.AssignNextQueuedTicket(request, timeout=RPC_TIMEOUT_SECONDS)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
 
     async def assign_ticket_to_operator(
         self,
         command: TicketAssignmentCommand,
         actor: RequestActor | None = None,
     ) -> TicketSummary | None:
-        result = await self.server.assign_ticket_to_operator(
-            AssignTicketToOperatorRequest(
-                command=serialize_ticket_assignment_command(command),
-                actor=serialize_request_actor(actor),
-            )
-        )
-        return None if result is None else deserialize_ticket_summary(result)
+        request = helpdesk_pb2.AssignTicketToOperatorRequest()
+        request.command.CopyFrom(serialize_ticket_assignment_command(command))
+        _apply_actor(request, actor)
+        try:
+            result = await self.stub.AssignTicketToOperator(request, timeout=RPC_TIMEOUT_SECONDS)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
 
     async def close_ticket(
         self,
         *,
         ticket_public_id: UUID,
     ) -> TicketSummary | None:
-        result = await self.server.close_ticket(
-            CloseTicketRequest(ticket_public_id=str(ticket_public_id))
-        )
-        return None if result is None else deserialize_ticket_summary(result)
+        try:
+            result = await self.stub.CloseTicket(
+                helpdesk_pb2.CloseTicketRequest(ticket_public_id=str(ticket_public_id)),
+                timeout=RPC_TIMEOUT_SECONDS,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
 
     async def close_ticket_as_operator(
         self,
@@ -184,49 +205,54 @@ class LocalHelpdeskGrpcClient(HelpdeskBackendClient):
         ticket_public_id: UUID,
         actor: RequestActor | None,
     ) -> TicketSummary | None:
-        result = await self.server.close_ticket_as_operator(
-            CloseTicketAsOperatorRequest(
-                ticket_public_id=str(ticket_public_id),
-                actor=serialize_request_actor(actor),
-            )
-        )
-        return None if result is None else deserialize_ticket_summary(result)
+        request = helpdesk_pb2.CloseTicketAsOperatorRequest(ticket_public_id=str(ticket_public_id))
+        _apply_actor(request, actor)
+        try:
+            result = await self.stub.CloseTicketAsOperator(request, timeout=RPC_TIMEOUT_SECONDS)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
 
     async def reply_to_ticket_as_operator(
         self,
         command: OperatorTicketReplyCommand,
         actor: RequestActor | None = None,
     ) -> OperatorReplyResult | None:
-        result = await self.server.reply_to_ticket_as_operator(
-            ReplyToTicketAsOperatorRequest(
-                command=serialize_operator_reply_command(command),
-                actor=serialize_request_actor(actor),
-            )
-        )
-        return None if result is None else deserialize_operator_reply_result(result)
+        request = helpdesk_pb2.ReplyToTicketAsOperatorRequest()
+        request.command.CopyFrom(serialize_operator_reply_command(command))
+        _apply_actor(request, actor)
+        try:
+            result = await self.stub.ReplyToTicketAsOperator(request, timeout=RPC_TIMEOUT_SECONDS)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_operator_reply_result(result)
 
     async def list_macros(
         self,
         *,
         actor: RequestActor | None = None,
     ) -> tuple[MacroSummary, ...]:
-        result = await self.server.list_macros(
-            ListMacrosRequest(actor=serialize_request_actor(actor))
-        )
-        return tuple(deserialize_macro(item) for item in result)
+        request = helpdesk_pb2.ListMacrosRequest()
+        _apply_actor(request, actor)
+        response = self.stub.ListMacros(request, timeout=RPC_TIMEOUT_SECONDS)
+        return tuple(deserialize_macro(item) for item in await _collect_stream(response))
 
     async def apply_macro_to_ticket(
         self,
         command: ApplyMacroToTicketCommand,
         actor: RequestActor | None = None,
     ) -> MacroApplicationResult | None:
-        result = await self.server.apply_macro_to_ticket(
-            ApplyMacroToTicketRequest(
-                command=serialize_apply_macro_command(command),
-                actor=serialize_request_actor(actor),
-            )
-        )
-        return None if result is None else deserialize_macro_application_result(result)
+        request = helpdesk_pb2.ApplyMacroToTicketRequest()
+        request.command.CopyFrom(serialize_apply_macro_command(command))
+        _apply_actor(request, actor)
+        try:
+            result = await self.stub.ApplyMacroToTicket(request, timeout=RPC_TIMEOUT_SECONDS)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_macro_application_result(result)
 
     async def export_ticket_report(
         self,
@@ -235,14 +261,17 @@ class LocalHelpdeskGrpcClient(HelpdeskBackendClient):
         format: TicketReportFormat,
         actor: RequestActor | None = None,
     ) -> TicketReportExport | None:
-        result = await self.server.export_ticket_report(
-            ExportTicketReportRequest(
-                ticket_public_id=str(ticket_public_id),
-                format=format.value,
-                actor=serialize_request_actor(actor),
-            )
+        request = helpdesk_pb2.ExportTicketReportRequest(
+            ticket_public_id=str(ticket_public_id),
+            format=format.value,
         )
-        return None if result is None else deserialize_export(result)
+        _apply_actor(request, actor)
+        try:
+            result = await self.stub.ExportTicketReport(request, timeout=RPC_TIMEOUT_SECONDS)
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_export(result)
 
     async def get_analytics_snapshot(
         self,
@@ -250,17 +279,79 @@ class LocalHelpdeskGrpcClient(HelpdeskBackendClient):
         window: AnalyticsWindow,
         actor: RequestActor | None = None,
     ) -> HelpdeskAnalyticsSnapshot:
-        result = await self.server.get_analytics_snapshot(
-            GetAnalyticsSnapshotRequest(
-                window=window.value,
-                actor=serialize_request_actor(actor),
-            )
-        )
+        request = helpdesk_pb2.GetAnalyticsSnapshotRequest(window=window.value)
+        _apply_actor(request, actor)
+        result = await self.stub.GetAnalyticsSnapshot(request, timeout=RPC_TIMEOUT_SECONDS)
         return deserialize_analytics_snapshot(result)
 
+    async def export_analytics_snapshot(
+        self,
+        *,
+        window: AnalyticsWindow,
+        section: AnalyticsSection,
+        format: AnalyticsExportFormat,
+        actor: RequestActor | None = None,
+    ) -> AnalyticsSnapshotExport:
+        request = helpdesk_pb2.ExportAnalyticsSnapshotRequest(
+            window=window.value,
+            section=section.value,
+            format=format.value,
+        )
+        _apply_actor(request, actor)
+        result = await self.stub.ExportAnalyticsSnapshot(request, timeout=RPC_TIMEOUT_SECONDS)
+        return deserialize_analytics_export(result)
 
-@asynccontextmanager
-async def provide_local_helpdesk_grpc_client(
-    server: LocalHelpdeskGrpcServer,
-) -> AsyncIterator[HelpdeskBackendClient]:
-    yield cast(HelpdeskBackendClient, LocalHelpdeskGrpcClient(server=server))
+
+def build_helpdesk_backend_client_factory(
+    config: BackendServiceConfig,
+) -> HelpdeskBackendClientFactory:
+    @asynccontextmanager
+    async def provide() -> AsyncIterator[HelpdeskBackendClient]:
+        channel = grpc.aio.insecure_channel(config.target)
+        try:
+            await asyncio.wait_for(channel.channel_ready(), timeout=CHANNEL_READY_TIMEOUT_SECONDS)
+            yield GrpcHelpdeskBackendClient(
+                stub=helpdesk_pb2_grpc.HelpdeskBackendServiceStub(channel)
+            )
+        finally:
+            await channel.close()
+
+    return provide
+
+
+async def ping_helpdesk_backend(config: BackendServiceConfig) -> bool:
+    async with build_helpdesk_backend_client_factory(config)() as client:
+        service, status = await client.get_backend_status()
+    return service == "helpdesk-backend" and status == "ready"
+
+
+async def _collect_stream(call: grpc.aio.UnaryStreamCall) -> list[object]:
+    items: list[object] = []
+    try:
+        async for item in call:
+            items.append(item)
+    except grpc.aio.AioRpcError as exc:
+        raise _translate_rpc_error(exc) from exc
+    return items
+
+
+def _apply_actor(message: Any, actor: RequestActor | None) -> None:
+    if actor is None:
+        return
+    message.actor.CopyFrom(serialize_request_actor(actor))
+
+
+def _raise_optional_rpc_error(exc: grpc.aio.AioRpcError) -> None:
+    if exc.code() == grpc.StatusCode.NOT_FOUND:
+        return
+    raise _translate_rpc_error(exc) from exc
+
+
+def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
+    if exc.code() == grpc.StatusCode.FAILED_PRECONDITION:
+        return InvalidTicketTransitionError(exc.details() or "Недопустимый переход заявки.")
+    if exc.code() == grpc.StatusCode.PERMISSION_DENIED:
+        return PermissionError(exc.details() or "Недостаточно прав.")
+    if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
+        return ValueError(exc.details() or "Некорректный запрос.")
+    return cast(Exception, exc)

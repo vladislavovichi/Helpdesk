@@ -66,7 +66,6 @@ async def test_build_runtime_wires_same_redis_client_into_fsm_and_workflow(
     fake_dispatcher = Mock()
     fake_dispatcher.workflow_data = {}
     fake_diagnostics_service = Mock()
-    fake_backend_server = Mock()
     fake_backend_client_factory = Mock()
 
     build_engine_mock = Mock(return_value=fake_engine)
@@ -76,10 +75,10 @@ async def test_build_runtime_wires_same_redis_client_into_fsm_and_workflow(
     build_redis_workflow_runtime_mock = Mock(return_value=fake_workflow)
     ping_redis_client_mock = AsyncMock(return_value=True)
     ping_database_engine_mock = AsyncMock(return_value=True)
+    ping_helpdesk_backend_mock = AsyncMock(return_value=True)
     build_bot_mock = Mock(return_value=fake_bot)
     build_dispatcher_mock = Mock(return_value=fake_dispatcher)
     build_diagnostics_service_mock = Mock(return_value=fake_diagnostics_service)
-    build_helpdesk_backend_server_mock = Mock(return_value=fake_backend_server)
     build_helpdesk_backend_client_factory_mock = Mock(return_value=fake_backend_client_factory)
     close_redis_client_mock = AsyncMock()
     dispose_engine_mock = AsyncMock()
@@ -99,14 +98,10 @@ async def test_build_runtime_wires_same_redis_client_into_fsm_and_workflow(
     monkeypatch.setattr(bootstrap, "build_dispatcher", build_dispatcher_mock)
     monkeypatch.setattr(
         bootstrap,
-        "build_helpdesk_backend_server",
-        build_helpdesk_backend_server_mock,
-    )
-    monkeypatch.setattr(
-        bootstrap,
         "build_helpdesk_backend_client_factory",
         build_helpdesk_backend_client_factory_mock,
     )
+    monkeypatch.setattr(bootstrap, "ping_helpdesk_backend", ping_helpdesk_backend_mock)
     monkeypatch.setattr(bootstrap, "build_diagnostics_service", build_diagnostics_service_mock)
     monkeypatch.setattr(bootstrap, "close_redis_client", close_redis_client_mock)
     monkeypatch.setattr(bootstrap, "dispose_engine", dispose_engine_mock)
@@ -122,10 +117,10 @@ async def test_build_runtime_wires_same_redis_client_into_fsm_and_workflow(
     build_fsm_storage_mock.assert_called_once_with(fake_redis)
     build_redis_workflow_runtime_mock.assert_called_once_with(fake_redis)
     ping_redis_client_mock.assert_awaited_once_with(fake_redis)
+    ping_helpdesk_backend_mock.assert_awaited_once_with(settings.backend_service)
     build_bot_mock.assert_called_once_with(settings.bot)
     build_dispatcher_mock.assert_called_once()
-    build_helpdesk_backend_server_mock.assert_called_once()
-    build_helpdesk_backend_client_factory_mock.assert_called_once_with(fake_backend_server)
+    build_helpdesk_backend_client_factory_mock.assert_called_once_with(settings.backend_service)
     build_diagnostics_service_mock.assert_called_once()
     dispatcher_kwargs = build_dispatcher_mock.call_args.kwargs
     assert dispatcher_kwargs["storage"] is fake_storage
@@ -175,9 +170,9 @@ async def test_build_runtime_skips_dispatcher_wiring_without_bot_token(
         Mock(return_value=fake_workflow),
     )
     monkeypatch.setattr(bootstrap, "ping_redis_client", AsyncMock(return_value=True))
+    monkeypatch.setattr(bootstrap, "ping_helpdesk_backend", AsyncMock(return_value=True))
     monkeypatch.setattr(bootstrap, "build_bot", build_bot)
     monkeypatch.setattr(bootstrap, "build_dispatcher", build_dispatcher)
-    monkeypatch.setattr(bootstrap, "build_helpdesk_backend_server", Mock(return_value=Mock()))
     monkeypatch.setattr(
         bootstrap,
         "build_helpdesk_backend_client_factory",

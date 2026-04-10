@@ -7,6 +7,7 @@ async def test_collect_report_returns_healthy_status_for_ready_runtime() -> None
     service = DiagnosticsService(
         database_check=_ok_check,
         redis_check=_ok_check,
+        backend_check=_ok_check,
         dry_run=False,
         bot_configured=True,
         bot_initialized=True,
@@ -22,6 +23,7 @@ async def test_collect_report_returns_healthy_status_for_ready_runtime() -> None
         ("bootstrap", True),
         ("postgresql", True),
         ("redis", True),
+        ("backend_grpc", True),
         ("bot_runtime", True),
     ]
 
@@ -30,6 +32,7 @@ async def test_collect_report_marks_failed_dependency_and_bot_runtime() -> None:
     service = DiagnosticsService(
         database_check=_ok_check,
         redis_check=_failing_check,
+        backend_check=_ok_check,
         dry_run=False,
         bot_configured=False,
         bot_initialized=False,
@@ -52,6 +55,7 @@ async def test_collect_report_accepts_dry_run_without_bot_initialization() -> No
     service = DiagnosticsService(
         database_check=_ok_check,
         redis_check=_ok_check,
+        backend_check=_ok_check,
         dry_run=True,
         bot_configured=False,
         bot_initialized=False,

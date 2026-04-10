@@ -1,5 +1,5 @@
 services:
-  app:
+  backend:
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile
@@ -10,12 +10,51 @@ services:
       DATABASE__PORT: 5432
       REDIS__HOST: redis
       REDIS__PORT: 6379
+      BACKEND_SERVICE__PORT: 50051
+      RUN_MIGRATIONS: "true"
+      SERVICE_MODULE: backend.main
     env_file:
       - ../../.env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "backend.healthcheck"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "${BACKEND_EXPOSE_PORT:-50071}:50051"
+    restart: unless-stopped
+    volumes:
+      - ../..:/app
+
+  bot:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    command: ["sh", "/app/ops/docker/entrypoint.sh"]
+    environment:
+      PYTHONPATH: /app/src
+      DATABASE__HOST: postgres
+      DATABASE__PORT: 5432
+      REDIS__HOST: redis
+      REDIS__PORT: 6379
+      BACKEND_SERVICE__HOST: backend
+      BACKEND_SERVICE__PORT: 50051
+      RUN_MIGRATIONS: "false"
+      SERVICE_MODULE: app.main
+    env_file:
+      - ../../.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-m", "app.healthcheck"]

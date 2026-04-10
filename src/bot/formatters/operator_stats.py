@@ -9,6 +9,12 @@ from application.services.stats import (
     OperatorTicketLoad,
     get_analytics_window_label,
 )
+from application.use_cases.analytics.exports import (
+    AnalyticsSection as ExportAnalyticsSection,
+)
+from application.use_cases.analytics.exports import (
+    get_analytics_section_label,
+)
 from bot.formatters.operator_primitives import format_duration
 
 AnalyticsSection = str
@@ -57,6 +63,22 @@ def format_analytics_section(
     if section == "sla":
         return format_sla_analytics(snapshot)
     return format_analytics_overview(snapshot)
+
+
+def format_analytics_export_actions(
+    snapshot: HelpdeskAnalyticsSnapshot,
+    *,
+    section: AnalyticsSection,
+) -> str:
+    return "\n".join(
+        [
+            format_analytics_section(snapshot, section=section),
+            "",
+            "Экспорт",
+            "CSV · HTML",
+            f"Секция · {get_analytics_section_label(ExportAnalyticsSection(section))}",
+        ]
+    )
 
 
 def format_analytics_overview(snapshot: HelpdeskAnalyticsSnapshot) -> str:

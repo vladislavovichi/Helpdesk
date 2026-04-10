@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import ANY, AsyncMock
+from unittest.mock import ANY, AsyncMock, Mock
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Chat, Message, User
@@ -18,10 +18,26 @@ from application.services.stats import (
     AnalyticsWindow,
     HelpdeskAnalyticsSnapshot,
     OperatorTicketLoad,
+    get_analytics_window_label,
+)
+from application.use_cases.analytics.exports import (
+    AnalyticsExportFormat,
+    AnalyticsSection,
+    AnalyticsSnapshotExport,
+    get_analytics_section_label,
 )
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
-from bot.handlers.operator.stats import handle_stats, handle_stats_navigation
-from bot.texts.operator import build_analytics_opened_text
+from bot.handlers.operator.stats import (
+    handle_stats,
+    handle_stats_export_file,
+    handle_stats_export_menu,
+    handle_stats_navigation,
+)
+from bot.texts.operator import (
+    build_analytics_export_opened_text,
+    build_analytics_export_ready_text,
+    build_analytics_opened_text,
+)
 
 
 def _build_helpdesk_backend_client_factory(service: object) -> HelpdeskBackendClientFactory:
@@ -101,6 +117,70 @@ async def test_handle_stats_navigation_updates_surface() -> None:
     )
     assert isinstance(callback.message, Message)
     cast(AsyncMock, callback.message.edit_text).assert_awaited_once_with(ANY, reply_markup=ANY)
+
+
+async def test_handle_stats_export_menu_updates_surface() -> None:
+    callback = _build_callback()
+    snapshot = _build_snapshot()
+    service = SimpleNamespace(get_analytics_snapshot=AsyncMock(return_value=snapshot))
+    global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
+    operator_presence = SimpleNamespace(touch=AsyncMock())
+
+    await handle_stats_export_menu(
+        callback=callback,
+        callback_data=SimpleNamespace(action="open", section="operators", window="7d"),
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+    )
+
+    cast(AsyncMock, callback.answer).assert_awaited_once_with(
+        build_analytics_export_opened_text(section="operators", window=AnalyticsWindow.DAYS_7)
+    )
+    assert isinstance(callback.message, Message)
+    cast(AsyncMock, callback.message.edit_text).assert_awaited_once_with(ANY, reply_markup=ANY)
+
+
+async def test_handle_stats_export_file_delivers_document() -> None:
+    callback = _build_callback()
+    bot = Mock()
+    bot.send_document = AsyncMock()
+    export = AnalyticsSnapshotExport(
+        format=AnalyticsExportFormat.CSV,
+        filename="analytics-operators-7d.csv",
+        content_type="text/csv",
+        content=b"metric,value\nclosed,4\n",
+        section=AnalyticsSection.OPERATORS,
+        window=AnalyticsWindow.DAYS_7,
+    )
+    service = SimpleNamespace(export_analytics_snapshot=AsyncMock(return_value=export))
+    global_rate_limiter = SimpleNamespace(allow=AsyncMock(return_value=True))
+    operator_presence = SimpleNamespace(touch=AsyncMock())
+
+    await handle_stats_export_file(
+        callback=callback,
+        callback_data=SimpleNamespace(action="csv", section="operators", window="7d"),
+        bot=bot,
+        helpdesk_backend_client_factory=_build_helpdesk_backend_client_factory(service),
+        global_rate_limiter=global_rate_limiter,
+        operator_presence=operator_presence,
+    )
+
+    service.export_analytics_snapshot.assert_awaited_once_with(
+        window=AnalyticsWindow.DAYS_7,
+        section=AnalyticsSection.OPERATORS,
+        format=AnalyticsExportFormat.CSV,
+        actor=RequestActor(telegram_user_id=1001),
+    )
+    cast(AsyncMock, callback.answer).assert_awaited_once_with(
+        build_analytics_export_ready_text(section="operators", format_name="CSV")
+    )
+    _, kwargs = bot.send_document.await_args
+    assert kwargs["caption"] == (
+        f"Аналитика · {get_analytics_section_label(AnalyticsSection.OPERATORS)} · "
+        f"{get_analytics_window_label(AnalyticsWindow.DAYS_7)}"
+    )
+    assert kwargs["document"].filename == "analytics-operators-7d.csv"
 
 
 def _build_snapshot() -> HelpdeskAnalyticsSnapshot:

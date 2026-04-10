@@ -224,14 +224,14 @@ def test_build_ticket_actions_markup_adds_macro_action_for_active_ticket() -> No
     markup = build_ticket_actions_markup(ticket_public_id=uuid4(), status=TicketStatus.ASSIGNED)
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert rows == (("Закрыть", "Макросы", "Ещё"),)
+    assert rows == (("Закрыть", "Макросы"), ("Экспорт", "Ещё"))
 
 
 def test_build_ticket_actions_markup_hides_transfer_for_queued_ticket() -> None:
     markup = build_ticket_actions_markup(ticket_public_id=uuid4(), status=TicketStatus.QUEUED)
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert ("Взять", "Ещё") in rows
+    assert ("Взять", "Экспорт") in rows
     assert all("Передать" not in row for row in rows)
 
 

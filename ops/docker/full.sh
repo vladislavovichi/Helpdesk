@@ -3,7 +3,7 @@
 set -eu
 
 COMPOSE="${COMPOSE:-docker compose}"
-SERVICES="${FULL_SERVICES:-postgres redis app}"
+SERVICES="${FULL_SERVICES:-postgres redis backend bot}"
 TIMEOUT="${FULL_TIMEOUT:-180}"
 INTERVAL="${FULL_INTERVAL:-2}"
 LOG_TAIL="${FULL_LOG_TAIL:-120}"
@@ -41,9 +41,10 @@ print_diagnostics() {
 	reason="$1"
 	printf '\n%s\n' "Stack startup failed: $reason"
 	print_ps
-	print_logs app
+	print_logs backend
+	print_logs bot
 	for service in $SERVICES; do
-		if [ "$service" = "app" ]; then
+		if [ "$service" = "backend" ] || [ "$service" = "bot" ]; then
 			continue
 		fi
 		print_logs "$service"

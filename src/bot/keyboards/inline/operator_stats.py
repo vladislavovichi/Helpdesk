@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.services.stats import AnalyticsWindow
-from bot.callbacks import OperatorStatsCallback
+from bot.callbacks import OperatorStatsCallback, OperatorStatsExportCallback
 
 AnalyticsSection = Literal["overview", "operators", "topics", "quality", "sla"]
 
@@ -25,6 +25,16 @@ def build_operator_stats_markup(
     builder.row(
         _button("Качество", section="quality", active=section == "quality", window=window),
         _button("SLA", section="sla", active=section == "sla", window=window),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="Экспорт",
+            callback_data=OperatorStatsExportCallback(
+                action="open",
+                section=section,
+                window=window.value,
+            ).pack(),
+        )
     )
     builder.row(
         _button(
@@ -51,6 +61,41 @@ def build_operator_stats_markup(
             active=window == AnalyticsWindow.ALL,
             window=AnalyticsWindow.ALL,
         ),
+    )
+    return builder.as_markup()
+
+
+def build_operator_stats_export_markup(
+    *,
+    section: AnalyticsSection,
+    window: AnalyticsWindow,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="CSV",
+            callback_data=OperatorStatsExportCallback(
+                action="csv",
+                section=section,
+                window=window.value,
+            ).pack(),
+        ),
+        InlineKeyboardButton(
+            text="HTML",
+            callback_data=OperatorStatsExportCallback(
+                action="html",
+                section=section,
+                window=window.value,
+            ).pack(),
+        ),
+    )
+    builder.row(
+        _button(
+            "Назад",
+            section=section,
+            active=False,
+            window=window,
+        )
     )
     return builder.as_markup()
 

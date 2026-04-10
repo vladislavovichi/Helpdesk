@@ -10,6 +10,11 @@ from application.services.stats import (
     HelpdeskAnalyticsSnapshot,
     HelpdeskOperationalStats,
 )
+from application.use_cases.analytics.exports import (
+    AnalyticsExportFormat,
+    AnalyticsSection,
+    AnalyticsSnapshotExport,
+)
 from application.use_cases.tickets.summaries import OperatorRoleMutationResult, OperatorSummary
 
 
@@ -75,3 +80,21 @@ class HelpdeskOperatorOperations:
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
         return await self._components.stats.get_analytics_snapshot(window=window)
+
+    async def export_analytics_snapshot(
+        self,
+        *,
+        window: AnalyticsWindow,
+        section: AnalyticsSection,
+        format: AnalyticsExportFormat,
+        actor: RequestActor | None = None,
+    ) -> AnalyticsSnapshotExport:
+        await self._require_permission_if_actor(
+            permission=Permission.ACCESS_OPERATOR,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
+        )
+        return await self._components.operators.export_analytics_snapshot(
+            window=window,
+            section=section,
+            format=format,
+        )
