@@ -118,12 +118,14 @@ class ExportTicketReportUseCase:
         ticket_event_repository: TicketEventRepository,
         csv_renderer: TicketReportRenderer,
         html_renderer: TicketReportRenderer,
+        include_internal_notes: bool = True,
     ) -> None:
         self.ticket_repository = ticket_repository
         self.ticket_feedback_repository = ticket_feedback_repository
         self.ticket_event_repository = ticket_event_repository
         self.csv_renderer = csv_renderer
         self.html_renderer = html_renderer
+        self.include_internal_notes = include_internal_notes
 
     async def __call__(
         self,
@@ -137,7 +139,12 @@ class ExportTicketReportUseCase:
 
         feedback = await self.ticket_feedback_repository.get_by_ticket_id(ticket_id=ticket.id)
         events = await self.ticket_event_repository.list_for_ticket(ticket_id=ticket.id)
-        report = build_ticket_report(ticket=ticket, feedback=feedback, events=events)
+        report = build_ticket_report(
+            ticket=ticket,
+            feedback=feedback,
+            events=events,
+            include_internal_notes=self.include_internal_notes,
+        )
 
         if format == TicketReportFormat.CSV:
             return TicketReportExport(
@@ -162,6 +169,7 @@ def build_ticket_report(
     ticket: TicketDetails,
     feedback: TicketFeedback | None,
     events: Sequence[TicketEventDetails],
+    include_internal_notes: bool = True,
 ) -> TicketReport:
     first_response_seconds: int | None = None
     if ticket.first_response_at is not None:
@@ -218,7 +226,9 @@ def build_ticket_report(
                 created_at=note.created_at,
             )
             for note in ticket.internal_notes
-        ),
+        )
+        if include_internal_notes
+        else (),
         events=tuple(
             TicketReportEvent(
                 event_type=event.event_type,

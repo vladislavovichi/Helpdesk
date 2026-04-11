@@ -12,6 +12,7 @@ def sample_settings() -> Settings:
             "app": {"dry_run": True},
             "bot": {"token": ""},
             "authorization": {"super_admin_telegram_user_ids": [42]},
+            "backend_auth": {"token": "test-internal-token"},
             "postgres_expose_port": None,
             "redis_expose_port": None,
             "database": {

@@ -6,6 +6,7 @@ from uuid import UUID
 
 from application.contracts.actors import RequestActor, actor_telegram_user_id
 from application.contracts.tickets import ApplyMacroToTicketCommand
+from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
 from application.services.helpdesk.ticket_operations import HelpdeskSLASync
@@ -21,6 +22,7 @@ from application.use_cases.tickets.summaries import (
 
 class HelpdeskCatalogOperations:
     _components: HelpdeskComponents
+    _audit: AuditTrail
     _require_permission_if_actor: Callable[..., Awaitable[None]]
 
     async def list_ticket_categories(
@@ -56,7 +58,16 @@ class HelpdeskCatalogOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.catalog.create_ticket_category(title=title)
+        result = await self._components.catalog.create_ticket_category(title=title)
+        await self._audit.write(
+            action="category.create",
+            entity_type="ticket_category",
+            outcome="applied",
+            actor_telegram_user_id=actor_telegram_user_id(actor),
+            entity_id=result.id,
+            metadata={"code": result.code, "title": result.title},
+        )
+        return result
 
     async def update_ticket_category_title(
         self,
@@ -69,10 +80,20 @@ class HelpdeskCatalogOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.catalog.update_ticket_category_title(
+        result = await self._components.catalog.update_ticket_category_title(
             category_id=category_id,
             title=title,
         )
+        if result is not None:
+            await self._audit.write(
+                action="category.update_title",
+                entity_type="ticket_category",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_id=result.id,
+                metadata={"code": result.code, "title": result.title},
+            )
+        return result
 
     async def set_ticket_category_active(
         self,
@@ -85,10 +106,20 @@ class HelpdeskCatalogOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.catalog.set_ticket_category_active(
+        result = await self._components.catalog.set_ticket_category_active(
             category_id=category_id,
             is_active=is_active,
         )
+        if result is not None:
+            await self._audit.write(
+                action="category.set_active",
+                entity_type="ticket_category",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_id=result.id,
+                metadata={"code": result.code, "is_active": result.is_active},
+            )
+        return result
 
     async def list_macros(
         self,
@@ -124,7 +155,16 @@ class HelpdeskCatalogOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.catalog.create_macro(title=title, body=body)
+        result = await self._components.catalog.create_macro(title=title, body=body)
+        await self._audit.write(
+            action="macro.create",
+            entity_type="macro",
+            outcome="applied",
+            actor_telegram_user_id=actor_telegram_user_id(actor),
+            entity_id=result.id,
+            metadata={"title": result.title},
+        )
+        return result
 
     async def update_macro_title(
         self,
@@ -137,10 +177,20 @@ class HelpdeskCatalogOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.catalog.update_macro_title(
+        result = await self._components.catalog.update_macro_title(
             macro_id=macro_id,
             title=title,
         )
+        if result is not None:
+            await self._audit.write(
+                action="macro.update_title",
+                entity_type="macro",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_id=result.id,
+                metadata={"title": result.title},
+            )
+        return result
 
     async def update_macro_body(
         self,
@@ -153,10 +203,20 @@ class HelpdeskCatalogOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.catalog.update_macro_body(
+        result = await self._components.catalog.update_macro_body(
             macro_id=macro_id,
             body=body,
         )
+        if result is not None:
+            await self._audit.write(
+                action="macro.update_body",
+                entity_type="macro",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_id=result.id,
+                metadata={"title": result.title},
+            )
+        return result
 
     async def delete_macro(
         self,
@@ -168,7 +228,17 @@ class HelpdeskCatalogOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.catalog.delete_macro(macro_id=macro_id)
+        result = await self._components.catalog.delete_macro(macro_id=macro_id)
+        if result is not None:
+            await self._audit.write(
+                action="macro.delete",
+                entity_type="macro",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_id=result.id,
+                metadata={"title": result.title},
+            )
+        return result
 
     async def apply_macro_to_ticket(
         self,
@@ -183,6 +253,18 @@ class HelpdeskCatalogOperations:
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(
                 ticket_public_id=result.ticket.public_id
+            )
+            await self._audit.write(
+                action="ticket.macro.apply",
+                entity_type="ticket",
+                outcome="applied" if result.ticket.event_type is not None else "noop",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.ticket.public_id,
+                metadata={
+                    "ticket_public_number": result.ticket.public_number,
+                    "macro_id": result.macro.id,
+                    "macro_title": result.macro.title,
+                },
             )
         return result
 
@@ -228,6 +310,14 @@ class HelpdeskCatalogOperations:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(
                 ticket_public_id=result.ticket.public_id
             )
+            await self._audit.write(
+                action="ticket.tag.add",
+                entity_type="ticket",
+                outcome="applied" if result.changed else "noop",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.ticket.public_id,
+                metadata={"tag": result.tag, "tags": result.tags},
+            )
         return result
 
     async def remove_tag_from_ticket(
@@ -248,5 +338,13 @@ class HelpdeskCatalogOperations:
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(
                 ticket_public_id=result.ticket.public_id
+            )
+            await self._audit.write(
+                action="ticket.tag.remove",
+                entity_type="ticket",
+                outcome="applied" if result.changed else "noop",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.ticket.public_id,
+                metadata={"tag": result.tag, "tags": result.tags},
             )
         return result

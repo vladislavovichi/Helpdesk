@@ -25,6 +25,7 @@ from bot.texts.common import (
 )
 from bot.texts.operator import (
     APPLY_MACRO_FAILED_TEXT,
+    build_macro_already_applied_text,
     build_macro_delivery_failed_text,
     build_macro_saved_text,
     build_macro_sent_text,
@@ -103,6 +104,12 @@ async def handle_apply_macro(
         return
     if macro_result is None:
         await respond_to_operator(callback, APPLY_MACRO_FAILED_TEXT)
+        return
+    if macro_result.ticket.event_type is None:
+        await respond_to_operator(
+            callback,
+            build_macro_already_applied_text(macro_result.macro.title),
+        )
         return
 
     is_active_context = False

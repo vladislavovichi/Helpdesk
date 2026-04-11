@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 
 from application.contracts.actors import OperatorIdentity, RequestActor, actor_telegram_user_id
+from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
 from application.services.stats import (
@@ -20,6 +21,7 @@ from application.use_cases.tickets.summaries import OperatorRoleMutationResult, 
 
 class HelpdeskOperatorOperations:
     _components: HelpdeskComponents
+    _audit: AuditTrail
     _require_permission_if_actor: Callable[..., Awaitable[None]]
 
     async def list_operators(
@@ -42,7 +44,18 @@ class HelpdeskOperatorOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.operators.promote_operator(operator)
+        result = await self._components.operators.promote_operator(operator)
+        await self._audit.write(
+            action="operator.promote",
+            entity_type="operator",
+            outcome="applied" if result.changed else "noop",
+            actor_telegram_user_id=actor_telegram_user_id(actor),
+            metadata={
+                "target_telegram_user_id": result.operator.telegram_user_id,
+                "display_name": result.operator.display_name,
+            },
+        )
+        return result
 
     async def revoke_operator(
         self,
@@ -54,9 +67,29 @@ class HelpdeskOperatorOperations:
             permission=Permission.MANAGE_OPERATORS,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.operators.revoke_operator(
+        result = await self._components.operators.revoke_operator(
             telegram_user_id=telegram_user_id,
         )
+        if result is None:
+            await self._audit.write(
+                action="operator.revoke",
+                entity_type="operator",
+                outcome="noop",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                metadata={"target_telegram_user_id": telegram_user_id},
+            )
+            return None
+        await self._audit.write(
+            action="operator.revoke",
+            entity_type="operator",
+            outcome="applied",
+            actor_telegram_user_id=actor_telegram_user_id(actor),
+            metadata={
+                "target_telegram_user_id": result.operator.telegram_user_id,
+                "display_name": result.operator.display_name,
+            },
+        )
+        return result
 
     async def get_operational_stats(
         self,
@@ -93,8 +126,21 @@ class HelpdeskOperatorOperations:
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.operators.export_analytics_snapshot(
+        result = await self._components.operators.export_analytics_snapshot(
             window=window,
             section=section,
             format=format,
         )
+        await self._audit.write(
+            action="analytics.export",
+            entity_type="analytics_snapshot",
+            outcome="generated",
+            actor_telegram_user_id=actor_telegram_user_id(actor),
+            metadata={
+                "window": window.value,
+                "section": section.value,
+                "format": format.value,
+                "filename": result.filename,
+            },
+        )
+        return result

@@ -3,6 +3,7 @@ from __future__ import annotations
 import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
@@ -25,7 +26,7 @@ from backend.grpc.client import build_helpdesk_backend_client_factory
 from backend.grpc.server import build_helpdesk_backend_server
 from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketAttachmentKind, TicketStatus
-from infrastructure.config.settings import BackendServiceConfig
+from infrastructure.config.settings import BackendAuthConfig, BackendServiceConfig, ResilienceConfig
 
 
 @asynccontextmanager
@@ -49,11 +50,14 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     server = build_helpdesk_backend_server(
         helpdesk_service_factory=helpdesk_service_factory,
         bind_target=f"127.0.0.1:{port}",
+        auth_config=BackendAuthConfig(token="internal-test-token", caller="test-client"),
     )
     await server.start()
 
     client_factory = build_helpdesk_backend_client_factory(
-        BackendServiceConfig(host="127.0.0.1", port=port)
+        BackendServiceConfig(host="127.0.0.1", port=port),
+        auth_config=BackendAuthConfig(token="internal-test-token", caller="test-client"),
+        resilience_config=ResilienceConfig(),
     )
 
     try:
@@ -96,6 +100,37 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     assert snapshot.feedback_count == 4
     assert archived_tickets[0].public_id == ticket_public_id
     assert archived_tickets[0].mini_title == "Не могу войти в кабинет после обновления пароля"
+
+
+async def test_helpdesk_grpc_rejects_invalid_internal_token() -> None:
+    helpdesk_service_factory = cast(
+        HelpdeskServiceFactory,
+        lambda: _build_service_factory(SimpleNamespace()),
+    )
+    port = _reserve_tcp_port()
+    server = build_helpdesk_backend_server(
+        helpdesk_service_factory=helpdesk_service_factory,
+        bind_target=f"127.0.0.1:{port}",
+        auth_config=BackendAuthConfig(token="expected-token", caller="test-client"),
+    )
+    await server.start()
+
+    client_factory = build_helpdesk_backend_client_factory(
+        BackendServiceConfig(host="127.0.0.1", port=port),
+        auth_config=BackendAuthConfig(token="wrong-token", caller="test-client"),
+        resilience_config=ResilienceConfig(),
+    )
+
+    try:
+        async with client_factory() as client:
+            try:
+                await client.get_backend_status()
+            except PermissionError as exc:
+                assert "отклонён" in str(exc)
+            else:
+                raise AssertionError("expected PermissionError")
+    finally:
+        await server.stop()
 
 
 def _capture_create_call(

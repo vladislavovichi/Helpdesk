@@ -39,6 +39,7 @@ OPERATORS_EMPTY_TEXT = "Оператор не найден."
 OPERATORS_REFRESHED_TEXT = "Список обновлён."
 REVOKE_CONFIRM_PROMPT_TEXT = "Подтвердите снятие роли."
 REVOKE_CANCELLED_TEXT = "Снятие роли отменено."
+REVOKE_ALREADY_DONE_TEXT = "Роль уже снята."
 OPERATOR_ADD_STARTED_TEXT = "Добавляем оператора."
 OPERATOR_ADD_PROMPT_TEXT = (
     "Отправьте Telegram ID и, если нужно, имя одной строкой.\nНапример: 123456789 Анна Смирнова"
@@ -182,6 +183,10 @@ def build_macro_sent_text(title: str) -> str:
 
 def build_macro_saved_text(title: str) -> str:
     return f"Макрос «{title}» сохранён."
+
+
+def build_macro_already_applied_text(title: str) -> str:
+    return f"Макрос «{title}» уже применён."
 
 
 def build_macro_delivery_failed_text(title: str, error_text: str) -> str:

@@ -92,6 +92,7 @@ class HelpdeskBackendClient(Protocol):
         self,
         *,
         ticket_public_id: UUID,
+        actor: RequestActor | None = None,
     ) -> TicketSummary | None: ...
 
     async def close_ticket_as_operator(

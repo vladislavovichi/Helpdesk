@@ -469,14 +469,26 @@ def test_format_ticket_history_chunks_returns_calm_conversation_blocks() -> None
 def test_format_diagnostics_report_uses_compact_russian_output() -> None:
     report = DiagnosticsReport(
         checks=(
-            DiagnosticsCheck(name="bootstrap", ok=True, detail="runtime инициализирован"),
-            DiagnosticsCheck(name="redis", ok=False, detail="RuntimeError: timeout"),
+            DiagnosticsCheck(
+                name="bootstrap",
+                category="liveness",
+                ok=True,
+                detail="runtime инициализирован",
+            ),
+            DiagnosticsCheck(
+                name="redis",
+                category="dependency",
+                ok=False,
+                detail="RuntimeError: timeout",
+            ),
         )
     )
 
     result = format_diagnostics_report(report)
 
-    assert "Есть проблемы с сервисом." in result
+    assert "Есть проблемы с готовностью сервиса." in result
+    assert "- liveness: в порядке" in result
+    assert "- readiness: ошибка" in result
     assert "- bootstrap: в порядке (runtime инициализирован)" in result
     assert "- redis: ошибка (RuntimeError: timeout)" in result
 

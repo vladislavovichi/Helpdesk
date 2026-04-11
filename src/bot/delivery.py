@@ -21,8 +21,6 @@ from bot.texts.ticket_messages import build_client_delivery_body, build_operator
 from infrastructure.assets.storage import LocalTicketAssetStorage
 from infrastructure.config.settings import get_settings
 
-DEFAULT_SEND_ATTEMPTS = 3
-
 
 async def send_message_with_retry(
     bot: Bot,
@@ -33,9 +31,13 @@ async def send_message_with_retry(
     logger: logging.Logger,
     operation: str,
 ) -> None:
-    for attempt in range(1, DEFAULT_SEND_ATTEMPTS + 1):
+    attempts, timeout = _resolve_delivery_policy()
+    for attempt in range(1, attempts + 1):
         try:
-            await bot.send_message(chat_id, text, reply_markup=reply_markup)
+            await asyncio.wait_for(
+                bot.send_message(chat_id, text, reply_markup=reply_markup),
+                timeout=timeout,
+            )
             if attempt > 1:
                 logger.info(
                     "Telegram delivery recovered operation=%s chat_id=%s attempt=%s",
@@ -52,7 +54,7 @@ async def send_message_with_retry(
                 attempt,
                 exc.retry_after,
             )
-            if attempt >= DEFAULT_SEND_ATTEMPTS:
+            if attempt >= attempts:
                 raise
             await asyncio.sleep(min(max(exc.retry_after, 1), 5))
         except (TelegramNetworkError, TelegramServerError) as exc:
@@ -63,7 +65,18 @@ async def send_message_with_retry(
                 attempt,
                 exc,
             )
-            if attempt >= DEFAULT_SEND_ATTEMPTS:
+            if attempt >= attempts:
+                raise
+            await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
+        except TimeoutError:
+            logger.warning(
+                "Telegram delivery timeout operation=%s chat_id=%s attempt=%s timeout_seconds=%s",
+                operation,
+                chat_id,
+                attempt,
+                timeout,
+            )
+            if attempt >= attempts:
                 raise
             await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
         except TelegramAPIError:
@@ -94,9 +107,10 @@ async def _send_with_retry(
     chat_id: int,
     **kwargs: Any,
 ) -> None:
-    for attempt in range(1, DEFAULT_SEND_ATTEMPTS + 1):
+    attempts, timeout = _resolve_delivery_policy()
+    for attempt in range(1, attempts + 1):
         try:
-            await send_operation(chat_id=chat_id, **kwargs)
+            await asyncio.wait_for(send_operation(chat_id=chat_id, **kwargs), timeout=timeout)
             if attempt > 1:
                 logger.info(
                     "Telegram delivery recovered operation=%s chat_id=%s attempt=%s",
@@ -113,7 +127,7 @@ async def _send_with_retry(
                 attempt,
                 exc.retry_after,
             )
-            if attempt >= DEFAULT_SEND_ATTEMPTS:
+            if attempt >= attempts:
                 raise
             await asyncio.sleep(min(max(exc.retry_after, 1), 5))
         except (TelegramNetworkError, TelegramServerError) as exc:
@@ -124,7 +138,18 @@ async def _send_with_retry(
                 attempt,
                 exc,
             )
-            if attempt >= DEFAULT_SEND_ATTEMPTS:
+            if attempt >= attempts:
+                raise
+            await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
+        except TimeoutError:
+            logger.warning(
+                "Telegram delivery timeout operation=%s chat_id=%s attempt=%s timeout_seconds=%s",
+                operation,
+                chat_id,
+                attempt,
+                timeout,
+            )
+            if attempt >= attempts:
                 raise
             await asyncio.sleep(min(0.5 * (2 ** (attempt - 1)), 2.0))
         except TelegramAPIError:
@@ -384,7 +409,20 @@ def _build_local_input_file(attachment: TicketAttachmentSummary) -> FSInputFile 
     if not attachment.storage_path:
         return None
     storage = LocalTicketAssetStorage(get_settings().assets.path)
-    absolute_path = storage.resolve_path(attachment.storage_path)
+    try:
+        absolute_path = storage.resolve_path(attachment.storage_path)
+    except ValueError:
+        return None
     if not absolute_path.exists():
         return None
     return FSInputFile(absolute_path, filename=attachment.filename)
+
+
+def _resolve_delivery_policy() -> tuple[int, float]:
+    settings = get_settings()
+    resilience = getattr(settings, "resilience", None)
+    attempts = getattr(resilience, "telegram_send_attempts", 3)
+    timeout = getattr(resilience, "telegram_send_timeout_seconds", 10.0)
+    safe_attempts = attempts if isinstance(attempts, int) else 3
+    safe_timeout = timeout if isinstance(timeout, (int, float)) else 10.0
+    return max(safe_attempts, 1), max(float(safe_timeout), 0.1)

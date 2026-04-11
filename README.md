@@ -14,6 +14,18 @@
 - роли `user`, `operator`, `super_admin`;
 - Redis-backed FSM, runtime locks и явный gRPC boundary.
 
+## Production Hardening
+
+Текущий контур дополнительно усиливает эксплуатационную часть:
+
+- fail-fast startup checks для PostgreSQL, Redis, bot config и internal gRPC auth;
+- internal auth metadata между bot и backend;
+- correlation id через bot -> gRPC -> backend logs;
+- structured audit log для чувствительных действий;
+- более безопасные `CSV` / `HTML` экспорты;
+- ограничение и валидация входящих вложений;
+- более предсказуемые timeout/retry правила для Telegram delivery и read-only gRPC calls.
+
 ## Архитектурная Идея
 
 Направление потока простое:

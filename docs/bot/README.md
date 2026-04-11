@@ -35,3 +35,13 @@
 - фильтр по темам;
 - архивная карточка;
 - мгновенный `HTML` / `CSV` экспорт из карточки.
+
+## Runtime Hardening
+
+Bot-слой дополнительно учитывает production-ограничения:
+
+- timeout/retry для Telegram delivery без бесконечных циклов;
+- correlation id на каждый update;
+- fail-fast startup при критичной конфигурации или недоступном backend;
+- спокойные user-facing ответы на stale и duplicate callback cases;
+- attachment policy с ограничением размера и отказом от исполняемых документов.

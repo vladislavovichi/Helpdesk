@@ -171,6 +171,7 @@ def build_helpdesk_components(
     ticket_category_repository: TicketCategoryRepository,
     ticket_tag_repository: TicketTagRepository,
     super_admin_telegram_user_ids: frozenset[int],
+    include_internal_notes_in_ticket_reports: bool = True,
 ) -> HelpdeskComponents:
     stats_service = HelpdeskStatsService(
         analytics_repository=cast(TicketAnalyticsRepository, ticket_repository)
@@ -232,6 +233,7 @@ def build_helpdesk_components(
                 ticket_event_repository=ticket_event_repository,
                 csv_renderer=render_ticket_report_csv,
                 html_renderer=render_ticket_report_html,
+                include_internal_notes=include_internal_notes_in_ticket_reports,
             ),
             reply_as_operator=ReplyToTicketAsOperatorUseCase(
                 ticket_repository=ticket_repository,

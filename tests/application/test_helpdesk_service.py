@@ -497,6 +497,17 @@ def build_event_repository_mock(initial_events: list[SimpleNamespace] | None = N
     return repository
 
 
+def build_audit_repository_mock() -> Mock:
+    repository = Mock()
+    repository.entries = []
+
+    async def add(**kwargs: object) -> None:
+        repository.entries.append(dict(kwargs))
+
+    repository.add = AsyncMock(side_effect=add)
+    return repository
+
+
 def build_operator_repository_mock(operator_ids: dict[int, int]) -> Mock:
     repository = Mock()
     repository.calls = []
@@ -959,6 +970,7 @@ def build_service(
             internal_note_repository or build_internal_note_repository_mock()
         ),
         ticket_event_repository=event_repository or build_event_repository_mock(),
+        audit_log_repository=build_audit_repository_mock(),
         operator_repository=operator_repository or build_operator_repository_mock({}),
         macro_repository=macro_repository or build_macro_repository_mock(),
         sla_policy_repository=sla_policy_repository

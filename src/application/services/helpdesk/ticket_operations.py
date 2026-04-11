@@ -12,6 +12,7 @@ from application.contracts.tickets import (
     OperatorTicketReplyCommand,
     TicketAssignmentCommand,
 )
+from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
 from application.use_cases.tickets.exports import (
@@ -38,6 +39,7 @@ from infrastructure.redis.contracts import SLADeadlineScheduler
 class HelpdeskTicketOperations:
     _components: HelpdeskComponents
     sla_deadline_scheduler: SLADeadlineScheduler | None
+    _audit: AuditTrail
     _ensure_permission: Callable[..., Awaitable[None]]
     _require_permission_if_actor: Callable[..., Awaitable[None]]
 
@@ -76,11 +78,21 @@ class HelpdeskTicketOperations:
         client_chat_id: int,
         rating: int,
     ) -> TicketFeedbackMutationResult:
-        return await self._components.tickets.submit_feedback_rating(
+        result = await self._components.tickets.submit_feedback_rating(
             ticket_public_id=ticket_public_id,
             client_chat_id=client_chat_id,
             rating=rating,
         )
+        if result.feedback is not None:
+            await self._audit.write(
+                action="ticket.feedback.rating",
+                entity_type="ticket",
+                outcome=result.status.value,
+                actor_telegram_user_id=client_chat_id,
+                entity_public_id=result.feedback.public_id,
+                metadata={"rating": result.feedback.rating},
+            )
+        return result
 
     async def add_ticket_feedback_comment(
         self,
@@ -89,11 +101,21 @@ class HelpdeskTicketOperations:
         client_chat_id: int,
         comment: str,
     ) -> TicketFeedbackMutationResult:
-        return await self._components.tickets.add_feedback_comment(
+        result = await self._components.tickets.add_feedback_comment(
             ticket_public_id=ticket_public_id,
             client_chat_id=client_chat_id,
             comment=comment,
         )
+        if result.feedback is not None:
+            await self._audit.write(
+                action="ticket.feedback.comment",
+                entity_type="ticket",
+                outcome=result.status.value,
+                actor_telegram_user_id=client_chat_id,
+                entity_public_id=result.feedback.public_id,
+                metadata={"comment_present": bool(result.feedback.comment)},
+            )
+        return result
 
     async def list_client_ticket_categories(self) -> Sequence[TicketCategorySummary]:
         return await self._components.catalog.list_ticket_categories(include_inactive=False)
@@ -132,16 +154,39 @@ class HelpdeskTicketOperations:
         result = await self._components.tickets.assign_ticket(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._audit.write(
+                action="ticket.assign",
+                entity_type="ticket",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.public_id,
+                metadata={
+                    "ticket_public_number": result.public_number,
+                    "operator_telegram_user_id": command.operator.telegram_user_id,
+                    "event_type": (
+                        result.event_type.value if result.event_type is not None else None
+                    ),
+                },
+            )
         return result
 
     async def close_ticket(
         self,
         *,
         ticket_public_id: UUID,
+        actor: RequestActor | None = None,
     ) -> TicketSummary | None:
         result = await self._components.tickets.close_ticket(ticket_public_id=ticket_public_id)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._audit.write(
+                action="ticket.close",
+                entity_type="ticket",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.public_id,
+                metadata={"ticket_public_number": result.public_number},
+            )
         return result
 
     async def close_ticket_as_operator(
@@ -154,7 +199,7 @@ class HelpdeskTicketOperations:
             permission=Permission.ACCESS_OPERATOR,
             telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self.close_ticket(ticket_public_id=ticket_public_id)
+        return await self.close_ticket(ticket_public_id=ticket_public_id, actor=actor)
 
     async def get_next_queued_ticket(
         self,
@@ -193,6 +238,18 @@ class HelpdeskTicketOperations:
         result = await self._components.tickets.assign_next_queued(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._audit.write(
+                action="ticket.take_next",
+                entity_type="ticket",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.public_id,
+                metadata={
+                    "ticket_public_number": result.public_number,
+                    "operator_telegram_user_id": command.operator.telegram_user_id,
+                    "prioritize_priority": command.prioritize_priority,
+                },
+            )
         return result
 
     async def list_operator_tickets(
@@ -250,10 +307,24 @@ class HelpdeskTicketOperations:
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._components.tickets.export_report(
+        result = await self._components.tickets.export_report(
             ticket_public_id=ticket_public_id,
             format=format,
         )
+        if result is not None:
+            await self._audit.write(
+                action="ticket.export",
+                entity_type="ticket",
+                outcome="generated",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.report.public_id,
+                metadata={
+                    "format": result.format.value,
+                    "filename": result.filename,
+                    "internal_notes_included": bool(result.report.internal_notes),
+                },
+            )
+        return result
 
     async def reply_to_ticket_as_operator(
         self,
@@ -269,6 +340,19 @@ class HelpdeskTicketOperations:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(
                 ticket_public_id=result.ticket.public_id
             )
+            await self._audit.write(
+                action="ticket.reply",
+                entity_type="ticket",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.ticket.public_id,
+                metadata={
+                    "ticket_public_number": result.ticket.public_number,
+                    "operator_telegram_user_id": command.operator.telegram_user_id,
+                    "has_text": command.text is not None,
+                    "has_attachment": command.attachment is not None,
+                },
+            )
         return result
 
     async def add_internal_note_to_ticket(
@@ -283,16 +367,36 @@ class HelpdeskTicketOperations:
         result = await self._components.tickets.add_internal_note(command)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._audit.write(
+                action="ticket.internal_note.create",
+                entity_type="ticket",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.public_id,
+                metadata={
+                    "ticket_public_number": result.public_number,
+                    "author_telegram_user_id": command.author.telegram_user_id,
+                },
+            )
         return result
 
     async def escalate_ticket(
         self,
         *,
         ticket_public_id: UUID,
+        actor: RequestActor | None = None,
     ) -> TicketSummary | None:
         result = await self._components.tickets.escalate_ticket(ticket_public_id=ticket_public_id)
         if result is not None:
             await cast(HelpdeskSLASync, self)._sync_sla_deadline(ticket_public_id=result.public_id)
+            await self._audit.write(
+                action="ticket.escalate",
+                entity_type="ticket",
+                outcome="applied",
+                actor_telegram_user_id=actor_telegram_user_id(actor),
+                entity_public_id=result.public_id,
+                metadata={"ticket_public_number": result.public_number},
+            )
         return result
 
     async def escalate_ticket_as_operator(
@@ -305,7 +409,7 @@ class HelpdeskTicketOperations:
             permission=Permission.ACCESS_OPERATOR,
             telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self.escalate_ticket(ticket_public_id=ticket_public_id)
+        return await self.escalate_ticket(ticket_public_id=ticket_public_id, actor=actor)
 
     async def get_basic_stats(self) -> TicketStats:
         return await self._components.tickets.basic_stats()

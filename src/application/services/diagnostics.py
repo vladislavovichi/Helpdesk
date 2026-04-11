@@ -9,6 +9,7 @@ AsyncDependencyCheck = Callable[[], Awaitable[bool]]
 @dataclass(slots=True, frozen=True)
 class DiagnosticsCheck:
     name: str
+    category: str
     ok: bool
     detail: str
 
@@ -19,7 +20,15 @@ class DiagnosticsReport:
 
     @property
     def is_healthy(self) -> bool:
-        return all(check.ok for check in self.checks)
+        return self.readiness_ok
+
+    @property
+    def liveness_ok(self) -> bool:
+        return all(check.ok for check in self.checks if check.category == "liveness")
+
+    @property
+    def readiness_ok(self) -> bool:
+        return all(check.ok for check in self.checks if check.category != "liveness")
 
 
 @dataclass(slots=True)
@@ -27,6 +36,7 @@ class DiagnosticsService:
     database_check: AsyncDependencyCheck
     redis_check: AsyncDependencyCheck
     backend_check: AsyncDependencyCheck
+    backend_auth_configured: bool
     dry_run: bool
     bot_configured: bool
     bot_initialized: bool
@@ -38,26 +48,41 @@ class DiagnosticsService:
         checks = [
             DiagnosticsCheck(
                 name="bootstrap",
+                category="liveness",
                 ok=True,
                 detail="runtime инициализирован",
             ),
+            DiagnosticsCheck(
+                name="backend_auth",
+                category="readiness",
+                ok=self.backend_auth_configured,
+                detail=(
+                    "internal backend auth настроен"
+                    if self.backend_auth_configured
+                    else "BACKEND_AUTH__TOKEN не задан"
+                ),
+            ),
             await self._run_check(
                 name="postgresql",
+                category="dependency",
                 check=self.database_check,
                 success_detail="подключение установлено",
             ),
             await self._run_check(
                 name="redis",
+                category="dependency",
                 check=self.redis_check,
                 success_detail="подключение установлено",
             ),
             await self._run_check(
                 name="backend_grpc",
+                category="dependency",
                 check=self.backend_check,
                 success_detail="внутренний gRPC backend доступен",
             ),
             DiagnosticsCheck(
                 name="bot_runtime",
+                category="readiness",
                 ok=self._is_bot_runtime_ready(),
                 detail=self._build_bot_runtime_detail(),
             ),
@@ -68,6 +93,7 @@ class DiagnosticsService:
         self,
         *,
         name: str,
+        category: str,
         check: AsyncDependencyCheck,
         success_detail: str,
     ) -> DiagnosticsCheck:
@@ -76,15 +102,22 @@ class DiagnosticsService:
         except Exception as exc:
             return DiagnosticsCheck(
                 name=name,
+                category=category,
                 ok=False,
                 detail=f"{exc.__class__.__name__}: {exc}",
             )
 
         if is_ready:
-            return DiagnosticsCheck(name=name, ok=True, detail=success_detail)
+            return DiagnosticsCheck(
+                name=name,
+                category=category,
+                ok=True,
+                detail=success_detail,
+            )
 
         return DiagnosticsCheck(
             name=name,
+            category=category,
             ok=False,
             detail="проверка вернула отрицательный результат",
         )

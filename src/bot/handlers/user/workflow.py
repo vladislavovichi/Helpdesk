@@ -10,7 +10,11 @@ from application.use_cases.tickets.summaries import build_ticket_attachment_summ
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_client_ticket_message_command
 from bot.delivery import deliver_client_message_to_operator
-from bot.handlers.common.ticket_attachments import IncomingTicketContent, extract_ticket_content
+from bot.handlers.common.ticket_attachments import (
+    AttachmentRejectedError,
+    IncomingTicketContent,
+    extract_ticket_content,
+)
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.keyboards.inline.operator_actions import (
     build_ticket_actions_markup,
@@ -40,7 +44,11 @@ async def process_client_ticket_message(
 ) -> None:
     effective_content = content
     if effective_content is None:
-        effective_content = await extract_ticket_content(message, bot=bot)
+        try:
+            effective_content = await extract_ticket_content(message, bot=bot)
+        except AttachmentRejectedError as exc:
+            await message.answer(str(exc))
+            return
     if effective_content is None:
         return
 

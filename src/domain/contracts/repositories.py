@@ -499,6 +499,22 @@ class TicketEventRepository(Protocol):
         """Return workflow events for the ticket ordered by creation time."""
 
 
+class AuditLogRepository(Protocol):
+    async def add(
+        self,
+        *,
+        action: str,
+        entity_type: str,
+        outcome: str,
+        actor_telegram_user_id: int | None = None,
+        entity_id: int | None = None,
+        entity_public_id: UUID | None = None,
+        correlation_id: str | None = None,
+        metadata_json: Mapping[str, object] | None = None,
+    ) -> None:
+        """Persist a structured audit event."""
+
+
 class SLAPolicyRecord(Protocol):
     id: int
     name: str

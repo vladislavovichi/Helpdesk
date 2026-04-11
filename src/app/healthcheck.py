@@ -22,14 +22,16 @@ async def run() -> int:
         await close_runtime(runtime)
 
     lines = [
-        "OK" if report.is_healthy else "DEGRADED",
+        "OK" if report.readiness_ok else "DEGRADED",
+        f"[{'OK' if report.liveness_ok else 'FAIL'}] liveness",
+        f"[{'OK' if report.readiness_ok else 'FAIL'}] readiness",
         *[
-            f"[{'OK' if check.ok else 'FAIL'}] {check.name}: {check.detail}"
+            f"[{'OK' if check.ok else 'FAIL'}] {check.category}/{check.name}: {check.detail}"
             for check in report.checks
         ],
     ]
     print(_format_healthcheck_output(lines))
-    return 0 if report.is_healthy else 1
+    return 0 if report.readiness_ok else 1
 
 
 def main() -> None:

@@ -14,9 +14,19 @@ async def run() -> int:
     runtime = await build_runtime(settings)
     try:
         print("OK")
-        print("[OK] postgresql: подключение установлено")
-        print("[OK] redis: подключение установлено")
-        print(f"[OK] backend_grpc: готов к запуску на {settings.backend_service.bind_target}")
+        print("[OK] liveness")
+        print("[OK] readiness")
+        print(
+            "[OK] readiness/backend_auth: internal backend auth настроен"
+            if settings.backend_auth.token.strip()
+            else "[FAIL] readiness/backend_auth: BACKEND_AUTH__TOKEN не задан"
+        )
+        print("[OK] dependency/postgresql: подключение установлено")
+        print("[OK] dependency/redis: подключение установлено")
+        print(
+            "[OK] readiness/backend_grpc: "
+            f"готов к запуску на {settings.backend_service.bind_target}"
+        )
         return 0
     finally:
         await close_runtime(runtime)

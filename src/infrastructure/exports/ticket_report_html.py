@@ -24,6 +24,14 @@ from infrastructure.assets.storage import LocalTicketAssetStorage
 from infrastructure.config.settings import get_settings
 
 EMBEDDED_PHOTO_MAX_BYTES = 8 * 1024 * 1024
+SAFE_EMBEDDED_IMAGE_MIME_TYPES = frozenset(
+    {
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    }
+)
 
 
 def render_ticket_report_html(report: TicketReport) -> bytes:
@@ -766,6 +774,12 @@ def _resolve_asset_path(storage_path: str) -> Path | None:
 
 def _resolve_photo_mime_type(attachment: TicketReportAttachment, asset_path: Path) -> str:
     if attachment.mime_type:
-        return attachment.mime_type
+        mime_type = attachment.mime_type.strip().lower()
+        if mime_type in SAFE_EMBEDDED_IMAGE_MIME_TYPES:
+            return mime_type
+        return "image/jpeg"
     guessed, _ = mimetypes.guess_type(asset_path.name)
-    return guessed or "image/jpeg"
+    guessed_mime = (guessed or "image/jpeg").lower()
+    if guessed_mime not in SAFE_EMBEDDED_IMAGE_MIME_TYPES:
+        return "image/jpeg"
+    return guessed_mime

@@ -25,6 +25,7 @@ from domain.enums.tickets import (
     TicketStatus,
 )
 from infrastructure.exports.analytics_snapshot_html import render_analytics_snapshot_html
+from infrastructure.exports.ticket_report_csv import render_ticket_report_csv
 from infrastructure.exports.ticket_report_html import render_ticket_report_html
 
 
@@ -89,6 +90,47 @@ def test_render_ticket_report_html_embeds_local_photo(
     assert "Материалы дела" in html
     assert "data:image/png;base64," in html
     assert "Скриншот ошибки во вложении" in html
+
+
+def test_render_ticket_report_csv_sanitizes_formula_like_cells() -> None:
+    report = TicketReport(
+        public_id=uuid4(),
+        public_number="HD-ARCH0002",
+        client_chat_id=3003,
+        status=TicketStatus.CLOSED,
+        priority="high",
+        subject="=cmd|' /C calc'!A0",
+        assigned_operator_id=7,
+        assigned_operator_name="@bad",
+        assigned_operator_telegram_user_id=1001,
+        created_at=datetime(2026, 4, 7, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 7, 13, 0, tzinfo=UTC),
+        first_response_at=None,
+        first_response_seconds=None,
+        closed_at=datetime(2026, 4, 7, 14, 0, tzinfo=UTC),
+        category_code="access",
+        category_title="Доступ и вход",
+        tags=("+urgent",),
+        feedback=None,
+        messages=(
+            TicketReportMessage(
+                sender_type=TicketMessageSenderType.CLIENT,
+                sender_operator_name=None,
+                text="-danger",
+                created_at=datetime(2026, 4, 7, 12, 1, tzinfo=UTC),
+                attachment=None,
+            ),
+        ),
+        events=(),
+    )
+
+    csv_bytes = render_ticket_report_csv(report)
+    csv_text = csv_bytes.decode("utf-8-sig")
+
+    assert "'=cmd|' /C calc'!A0" in csv_text
+    assert "'@bad" in csv_text
+    assert "'+urgent" in csv_text
+    assert "'-danger" in csv_text
 
 
 def test_render_analytics_snapshot_html_contains_svg_charts() -> None:

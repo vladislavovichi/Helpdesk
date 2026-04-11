@@ -9,9 +9,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from backend.grpc.contracts import HelpdeskBackendClientFactory
+from bot.adapters.helpdesk import build_request_actor
 from bot.callbacks import ClientTicketCallback
 from bot.delivery import deliver_ticket_closed_to_operator
-from bot.handlers.common.ticket_attachments import extract_ticket_content
+from bot.handlers.common.ticket_attachments import AttachmentRejectedError, extract_ticket_content
 from bot.handlers.operator.active_context import delete_live_session_for_ticket
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.user.intake import start_client_intake
@@ -78,7 +79,11 @@ async def handle_client_text(
         await message.answer(CHAT_RATE_LIMIT_TEXT)
         return
 
-    content = await extract_ticket_content(message, bot=bot)
+    try:
+        content = await extract_ticket_content(message, bot=bot)
+    except AttachmentRejectedError as exc:
+        await message.answer(str(exc))
+        return
     if content is None:
         return
 
@@ -223,7 +228,8 @@ async def handle_finish_ticket_confirm(
 
             try:
                 closed_ticket = await helpdesk_backend.close_ticket(
-                    ticket_public_id=ticket_public_id
+                    ticket_public_id=ticket_public_id,
+                    actor=build_request_actor(callback.from_user),
                 )
             except InvalidTicketTransitionError:
                 refreshed_ticket_details = await helpdesk_backend.get_ticket_details(

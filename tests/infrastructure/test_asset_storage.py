@@ -31,3 +31,14 @@ async def test_local_ticket_asset_storage_downloads_file_into_assets(tmp_path: P
 
     assert attachment.storage_path == "document/unique-file-id.pdf"
     assert (tmp_path / "document" / "unique-file-id.pdf").read_bytes() == b"hello"
+
+
+def test_local_ticket_asset_storage_rejects_path_escape(tmp_path: Path) -> None:
+    storage = LocalTicketAssetStorage(tmp_path)
+
+    try:
+        storage.resolve_path("../etc/passwd")
+    except ValueError as exc:
+        assert "unsafe storage path" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import timedelta
 
 from application.contracts.tickets import ApplyMacroToTicketCommand
+from application.use_cases.tickets.common import build_ticket_summary, utcnow
 from application.use_cases.tickets.messaging import AddMessageToTicketUseCase
 from application.use_cases.tickets.summaries import (
     MacroApplicationResult,
@@ -18,6 +20,8 @@ from domain.contracts.repositories import (
 )
 from domain.enums.tickets import TicketMessageSenderType
 from domain.tickets import InvalidTicketTransitionError, ensure_operator_replyable
+
+RECENT_DUPLICATE_MACRO_WINDOW = timedelta(seconds=15)
 
 
 class ListMacrosUseCase:
@@ -149,6 +153,17 @@ class ApplyMacroToTicketUseCase:
         ):
             raise InvalidTicketTransitionError("С этой заявкой уже работает другой оператор.")
 
+        if _is_recent_duplicate_macro_application(
+            ticket_details=ticket_details,
+            operator_id=operator_id,
+            macro_body=macro.body,
+        ):
+            return MacroApplicationResult(
+                ticket=build_ticket_summary(ticket_details),
+                client_chat_id=ticket_details.client_chat_id,
+                macro=MacroSummary(id=macro.id, title=macro.title, body=macro.body),
+            )
+
         telegram_message_id = (
             await self.ticket_message_repository.allocate_internal_telegram_message_id(
                 ticket_id=ticket_details.id,
@@ -188,3 +203,25 @@ def _normalize_macro_body(body: str) -> str:
     if not normalized:
         raise MacroManagementError("Текст макроса не должен быть пустым.")
     return normalized
+
+
+def _is_recent_duplicate_macro_application(
+    *,
+    ticket_details: object,
+    operator_id: int,
+    macro_body: str,
+) -> bool:
+    from domain.entities.ticket import TicketDetails
+    from domain.enums.tickets import TicketMessageSenderType
+
+    assert isinstance(ticket_details, TicketDetails)
+    if not ticket_details.message_history:
+        return False
+
+    last_message = ticket_details.message_history[-1]
+    return (
+        last_message.sender_type == TicketMessageSenderType.OPERATOR
+        and last_message.sender_operator_id == operator_id
+        and (last_message.text or "").strip() == macro_body.strip()
+        and (utcnow() - last_message.created_at) <= RECENT_DUPLICATE_MACRO_WINDOW
+    )

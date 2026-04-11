@@ -31,7 +31,7 @@ from bot.texts.operator import (
     OPERATOR_ADD_PROMPT_TEXT,
     OPERATOR_ADD_STARTED_TEXT,
     OPERATOR_INPUT_NAVIGATION_BLOCK_TEXT,
-    OPERATORS_EMPTY_TEXT,
+    REVOKE_ALREADY_DONE_TEXT,
     REVOKE_CANCELLED_TEXT,
     REVOKE_CONFIRM_PROMPT_TEXT,
     build_promote_operator_result_text,
@@ -172,7 +172,7 @@ async def handle_confirm_revoke_operator(
         )
 
     answer_text = (
-        OPERATORS_EMPTY_TEXT
+        REVOKE_ALREADY_DONE_TEXT
         if result is None
         else build_revoke_operator_result_text(
             result.operator.display_name,

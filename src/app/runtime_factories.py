@@ -17,7 +17,8 @@ from application.services.diagnostics import DiagnosticsService
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
-from infrastructure.config.settings import BackendServiceConfig, Settings
+from infrastructure.config.settings import Settings
+from infrastructure.db.repositories.audit import SqlAlchemyAuditLogRepository
 from infrastructure.db.repositories.catalog import (
     SqlAlchemyMacroRepository,
     SqlAlchemySLAPolicyRepository,
@@ -78,6 +79,7 @@ def build_helpdesk_service(
     session: AsyncSession,
     *,
     super_admin_telegram_user_ids: frozenset[int],
+    include_internal_notes_in_ticket_reports: bool = True,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskService:
     return HelpdeskService(
@@ -86,6 +88,7 @@ def build_helpdesk_service(
         ticket_message_repository=SqlAlchemyTicketMessageRepository(session),
         ticket_internal_note_repository=SqlAlchemyTicketInternalNoteRepository(session),
         ticket_event_repository=SqlAlchemyTicketEventRepository(session),
+        audit_log_repository=SqlAlchemyAuditLogRepository(session),
         operator_repository=SqlAlchemyOperatorRepository(session),
         macro_repository=SqlAlchemyMacroRepository(session),
         sla_policy_repository=SqlAlchemySLAPolicyRepository(session),
@@ -94,6 +97,7 @@ def build_helpdesk_service(
         ticket_tag_repository=SqlAlchemyTicketTagRepository(session),
         sla_deadline_scheduler=sla_deadline_scheduler,
         super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+        include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
     )
 
 
@@ -101,6 +105,7 @@ def build_helpdesk_service_factory(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     super_admin_telegram_user_ids: frozenset[int],
+    include_internal_notes_in_ticket_reports: bool = True,
     sla_deadline_scheduler: SLADeadlineScheduler | None = None,
 ) -> HelpdeskServiceFactory:
     @asynccontextmanager
@@ -109,6 +114,7 @@ def build_helpdesk_service_factory(
             yield build_helpdesk_service(
                 session,
                 super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+                include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
                 sla_deadline_scheduler=sla_deadline_scheduler,
             )
 
@@ -116,9 +122,13 @@ def build_helpdesk_service_factory(
 
 
 def build_helpdesk_backend_client_factory(
-    config: BackendServiceConfig,
+    settings: Settings,
 ) -> HelpdeskBackendClientFactory:
-    return build_grpc_client_factory(config)
+    return build_grpc_client_factory(
+        settings.backend_service,
+        auth_config=settings.backend_auth,
+        resilience_config=settings.resilience,
+    )
 
 
 def build_redis_workflow_runtime(redis: Redis) -> RedisWorkflowRuntime:
@@ -153,6 +163,7 @@ def build_diagnostics_service(
         database_check=lambda: ping_database_engine(db_engine),
         redis_check=lambda: ping_redis_client(redis),
         backend_check=backend_check,
+        backend_auth_configured=bool(settings.backend_auth.token.strip()),
         dry_run=settings.app.dry_run,
         bot_configured=bool(settings.bot.token.strip()),
         bot_initialized=bot is not None,

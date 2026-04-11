@@ -18,6 +18,7 @@ from application.contracts.tickets import (
 from application.services.authorization import AuthorizationError, AuthorizationService, Permission
 from application.services.helpdesk.service import HelpdeskService
 from domain.contracts.repositories import (
+    AuditLogRepository,
     MacroRepository,
     OperatorRepository,
     SLAPolicyRepository,
@@ -613,6 +614,11 @@ class EmptyTicketTagRepository:
         return False
 
 
+class EmptyAuditLogRepository:
+    async def add(self, **_: object) -> None:
+        return None
+
+
 @dataclass(slots=True)
 class HelpdeskScenario:
     helpdesk_service: HelpdeskService
@@ -647,6 +653,7 @@ def helpdesk_scenario() -> HelpdeskScenario:
                 TicketInternalNoteRepository, internal_note_repository
             ),
             ticket_event_repository=cast(TicketEventRepository, event_repository),
+            audit_log_repository=cast(AuditLogRepository, EmptyAuditLogRepository()),
             operator_repository=cast(OperatorRepository, operator_repository),
             macro_repository=cast(MacroRepository, EmptyMacroRepository()),
             sla_policy_repository=cast(SLAPolicyRepository, StaticSLAPolicyRepository()),

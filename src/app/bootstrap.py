@@ -30,13 +30,11 @@ from infrastructure.redis.client import (
     ping_redis_client,
 )
 from infrastructure.redis.fsm import build_fsm_storage
-
-
-def _validate_startup_settings(settings: Settings) -> None:
-    if settings.app.dry_run:
-        return
-    if not settings.bot.token.strip():
-        raise RuntimeError("Невозможно запустить polling: BOT__TOKEN не задан.")
+from infrastructure.startup_checks import (
+    StartupDependencyCheck,
+    run_startup_dependency_checks,
+    validate_app_startup_settings,
+)
 
 
 def _database_target(settings: Settings) -> str:
@@ -90,7 +88,11 @@ async def _close_runtime_resources(
 
 async def build_runtime(settings: Settings) -> AppRuntime:
     logger = logging.getLogger(__name__)
-    _validate_startup_settings(settings)
+    try:
+        validate_app_startup_settings(settings)
+    except Exception:
+        logger.exception("Runtime startup configuration is invalid.")
+        raise
     logger.info(
         "Initializing runtime dependencies database=%s redis=%s backend=%s dry_run=%s",
         _database_target(settings),
@@ -117,28 +119,47 @@ async def build_runtime(settings: Settings) -> AppRuntime:
     dispatcher: Dispatcher | None = None
 
     try:
-        logger.info("Checking PostgreSQL connectivity.")
-        await ping_database_engine(db_engine)
-        logger.info("PostgreSQL connectivity check passed.")
-
         redis = build_redis_client(settings.redis)
-        logger.info("Checking Redis connectivity.")
-        await ping_redis_client(redis)
-        logger.info("Redis connectivity check passed.")
+        await run_startup_dependency_checks(
+            component="bot",
+            checks=(
+                StartupDependencyCheck(
+                    name="postgresql",
+                    target=_database_target(settings),
+                    check=lambda: ping_database_engine(db_engine),
+                ),
+                StartupDependencyCheck(
+                    name="redis",
+                    target=_redis_target(settings),
+                    check=lambda: ping_redis_client(redis),
+                ),
+                StartupDependencyCheck(
+                    name="backend_grpc",
+                    target=settings.backend_service.target,
+                    check=lambda: ping_helpdesk_backend(
+                        settings.backend_service,
+                        auth_config=settings.backend_auth,
+                        resilience_config=settings.resilience,
+                    ),
+                ),
+            ),
+            settings=settings,
+            logger=logger,
+        )
 
         fsm_storage = build_fsm_storage(redis)
         redis_workflow = build_redis_workflow_runtime(redis)
         helpdesk_service_factory = build_helpdesk_service_factory(
             db_session_factory,
             super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+            include_internal_notes_in_ticket_reports=(
+                settings.exports.include_internal_notes_in_ticket_reports
+            ),
             sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
         )
         helpdesk_backend_client_factory = build_helpdesk_backend_client_factory(
-            settings.backend_service
+            settings
         )
-        logger.info("Checking backend gRPC connectivity target=%s", settings.backend_service.target)
-        await ping_helpdesk_backend(settings.backend_service)
-        logger.info("Backend gRPC connectivity check passed.")
 
         if settings.bot.token.strip():
             logger.info("Initializing Telegram bot runtime.")
@@ -167,7 +188,11 @@ async def build_runtime(settings: Settings) -> AppRuntime:
             settings=settings,
             db_engine=db_engine,
             redis=redis,
-            backend_check=lambda: ping_helpdesk_backend(settings.backend_service),
+            backend_check=lambda: ping_helpdesk_backend(
+                settings.backend_service,
+                auth_config=settings.backend_auth,
+                resilience_config=settings.resilience,
+            ),
             fsm_storage=fsm_storage,
             redis_workflow=redis_workflow,
             bot=bot,

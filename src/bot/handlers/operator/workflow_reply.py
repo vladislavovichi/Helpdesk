@@ -20,7 +20,7 @@ from bot.adapters.helpdesk import (
 )
 from bot.callbacks import OperatorActionCallback
 from bot.delivery import deliver_operator_reply_to_client
-from bot.handlers.common.ticket_attachments import extract_ticket_content
+from bot.handlers.common.ticket_attachments import AttachmentRejectedError, extract_ticket_content
 from bot.handlers.operator.active_context import (
     activate_ticket_for_operator,
     clear_active_ticket_for_operator,
@@ -158,7 +158,11 @@ async def _handle_operator_message(
     ticket_lock_manager: TicketLockManager,
     explicit_ticket_public_id: UUID | None = None,
 ) -> None:
-    content = await extract_ticket_content(message, bot=bot)
+    try:
+        content = await extract_ticket_content(message, bot=bot)
+    except AttachmentRejectedError as exc:
+        await message.answer(str(exc))
+        return
     if message.from_user is None or content is None:
         await message.answer(OPERATOR_UNKNOWN_TEXT)
         return

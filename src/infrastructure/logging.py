@@ -5,8 +5,16 @@ import logging
 from datetime import UTC, datetime
 
 from infrastructure.config.settings import AppConfig, LoggingConfig
+from infrastructure.runtime_context import get_correlation_id
 
 PLAIN_LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+_STANDARD_RECORD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__.keys())
+
+
+class RuntimeContextFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.correlation_id = get_correlation_id() or "-"
+        return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -23,6 +31,7 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
             "app": self.app_name,
             "environment": self.environment,
+            "correlation_id": getattr(record, "correlation_id", "-"),
         }
 
         if record.exc_info:
@@ -31,11 +40,21 @@ class JsonFormatter(logging.Formatter):
         if record.stack_info:
             payload["stack"] = self.formatStack(record.stack_info)
 
+        extra = {
+            key: _normalize_log_value(value)
+            for key, value in record.__dict__.items()
+            if key not in _STANDARD_RECORD_FIELDS
+            and key not in {"message", "asctime", "correlation_id"}
+        }
+        if extra:
+            payload["context"] = extra
+
         return json.dumps(payload, ensure_ascii=True)
 
 
 def configure_logging(config: LoggingConfig, *, app: AppConfig) -> None:
     handler = logging.StreamHandler()
+    handler.addFilter(RuntimeContextFilter())
     handler.setFormatter(
         JsonFormatter(app_name=app.name, environment=app.environment)
         if config.structured
@@ -46,3 +65,15 @@ def configure_logging(config: LoggingConfig, *, app: AppConfig) -> None:
         handlers=[handler],
         force=True,
     )
+
+
+def _normalize_log_value(value: object) -> object:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, list):
+        return [_normalize_log_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_log_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _normalize_log_value(item) for key, item in value.items()}
+    return str(value)

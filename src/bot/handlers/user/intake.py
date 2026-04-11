@@ -12,7 +12,11 @@ from application.use_cases.tickets.summaries import TicketCategorySummary
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_client_ticket_message_command_from_values
 from bot.callbacks import ClientIntakeCallback
-from bot.handlers.common.ticket_attachments import IncomingTicketContent, extract_ticket_content
+from bot.handlers.common.ticket_attachments import (
+    AttachmentRejectedError,
+    IncomingTicketContent,
+    extract_ticket_content,
+)
 from bot.handlers.user.intake_draft import (
     build_pending_client_intake_draft,
     load_pending_client_intake_draft,
@@ -205,7 +209,11 @@ async def handle_client_intake_message(
         return
 
     draft = load_pending_client_intake_draft(state_data)
-    current_content = await extract_ticket_content(message, bot=bot)
+    try:
+        current_content = await extract_ticket_content(message, bot=bot)
+    except AttachmentRejectedError as exc:
+        await message.answer(str(exc))
+        return
     if current_content is None:
         return
 

@@ -17,6 +17,7 @@ def build_settings(*, bot_token: str) -> Settings:
             "app": {"dry_run": True},
             "bot": {"token": bot_token},
             "authorization": {"super_admin_telegram_user_ids": [42]},
+            "backend_auth": {"token": "internal-test-token"},
             "postgres_expose_port": None,
             "redis_expose_port": None,
             "database": {
@@ -117,10 +118,14 @@ async def test_build_runtime_wires_same_redis_client_into_fsm_and_workflow(
     build_fsm_storage_mock.assert_called_once_with(fake_redis)
     build_redis_workflow_runtime_mock.assert_called_once_with(fake_redis)
     ping_redis_client_mock.assert_awaited_once_with(fake_redis)
-    ping_helpdesk_backend_mock.assert_awaited_once_with(settings.backend_service)
+    ping_helpdesk_backend_mock.assert_awaited_once_with(
+        settings.backend_service,
+        auth_config=settings.backend_auth,
+        resilience_config=settings.resilience,
+    )
     build_bot_mock.assert_called_once_with(settings.bot)
     build_dispatcher_mock.assert_called_once()
-    build_helpdesk_backend_client_factory_mock.assert_called_once_with(settings.backend_service)
+    build_helpdesk_backend_client_factory_mock.assert_called_once_with(settings)
     build_diagnostics_service_mock.assert_called_once()
     dispatcher_kwargs = build_dispatcher_mock.call_args.kwargs
     assert dispatcher_kwargs["storage"] is fake_storage

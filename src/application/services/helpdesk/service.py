@@ -4,6 +4,7 @@ from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 
+from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.catalog_operations import HelpdeskCatalogOperations
 from application.services.helpdesk.components import (
@@ -15,6 +16,7 @@ from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.helpdesk.sla_operations import HelpdeskSLAOperations
 from application.services.helpdesk.ticket_operations import HelpdeskTicketOperations
 from domain.contracts.repositories import (
+    AuditLogRepository,
     MacroRepository,
     OperatorRepository,
     SLAPolicyRepository,
@@ -44,6 +46,7 @@ class HelpdeskService(
     ticket_message_repository: TicketMessageRepository
     ticket_internal_note_repository: TicketInternalNoteRepository
     ticket_event_repository: TicketEventRepository
+    audit_log_repository: AuditLogRepository
     operator_repository: OperatorRepository
     macro_repository: MacroRepository
     sla_policy_repository: SLAPolicyRepository
@@ -51,8 +54,10 @@ class HelpdeskService(
     ticket_category_repository: TicketCategoryRepository
     ticket_tag_repository: TicketTagRepository
     super_admin_telegram_user_ids: frozenset[int]
+    include_internal_notes_in_ticket_reports: bool = True
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
     _components: HelpdeskComponents = field(init=False, repr=False)
+    _audit_trail: AuditTrail = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.super_admin_telegram_user_ids:
@@ -71,7 +76,9 @@ class HelpdeskService(
             ticket_category_repository=self.ticket_category_repository,
             ticket_tag_repository=self.ticket_tag_repository,
             super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
+            include_internal_notes_in_ticket_reports=self.include_internal_notes_in_ticket_reports,
         )
+        self._audit_trail = AuditTrail(self.audit_log_repository)
 
     async def _ensure_permission(
         self,
@@ -100,3 +107,7 @@ class HelpdeskService(
     @property
     def _permissions(self) -> HelpdeskPermissionGuard:
         return self._components.permissions
+
+    @property
+    def _audit(self) -> AuditTrail:
+        return self._audit_trail

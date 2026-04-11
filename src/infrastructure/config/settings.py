@@ -141,6 +141,47 @@ class LoggingConfig(BaseModel):
     structured: bool = True
 
 
+class BackendAuthConfig(BaseModel):
+    token: str = ""
+    caller: str = "telegram-bot"
+
+
+class ResilienceConfig(BaseModel):
+    startup_check_timeout_seconds: float = 5.0
+    startup_retry_attempts: int = 3
+    startup_retry_backoff_seconds: float = 0.5
+    grpc_connect_timeout_seconds: float = 5.0
+    grpc_request_timeout_seconds: float = 10.0
+    grpc_read_retry_attempts: int = 2
+    grpc_retry_backoff_seconds: float = 0.25
+    telegram_send_timeout_seconds: float = 10.0
+    telegram_send_attempts: int = 3
+
+
+class AttachmentLimitsConfig(BaseModel):
+    photo_max_bytes: int = 10 * 1024 * 1024
+    document_max_bytes: int = 20 * 1024 * 1024
+    voice_max_bytes: int = 10 * 1024 * 1024
+    video_max_bytes: int = 20 * 1024 * 1024
+    blocked_document_extensions: tuple[str, ...] = (
+        ".bat",
+        ".cmd",
+        ".com",
+        ".exe",
+        ".js",
+        ".jar",
+        ".msi",
+        ".ps1",
+        ".scr",
+        ".sh",
+        ".vbs",
+    )
+
+
+class ExportConfig(BaseModel):
+    include_internal_notes_in_ticket_reports: bool = True
+
+
 class AssetsConfig(BaseModel):
     path: Path = Path("assets")
 
@@ -172,7 +213,11 @@ class Settings(BaseSettings):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     backend_service: BackendServiceConfig = Field(default_factory=BackendServiceConfig)
+    backend_auth: BackendAuthConfig = Field(default_factory=BackendAuthConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    resilience: ResilienceConfig = Field(default_factory=ResilienceConfig)
+    attachments: AttachmentLimitsConfig = Field(default_factory=AttachmentLimitsConfig)
+    exports: ExportConfig = Field(default_factory=ExportConfig)
     assets: AssetsConfig = Field(default_factory=AssetsConfig)
 
     @model_validator(mode="after")

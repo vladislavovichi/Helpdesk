@@ -21,6 +21,11 @@ from infrastructure.redis.client import (
     close_redis_client,
     ping_redis_client,
 )
+from infrastructure.startup_checks import (
+    StartupDependencyCheck,
+    run_startup_dependency_checks,
+    validate_backend_startup_settings,
+)
 
 
 def _database_target(settings: Settings) -> str:
@@ -56,6 +61,11 @@ async def _close_runtime_resources(
 
 async def build_runtime(settings: Settings) -> BackendRuntime:
     logger = logging.getLogger(__name__)
+    try:
+        validate_backend_startup_settings(settings)
+    except Exception:
+        logger.exception("Backend startup configuration is invalid.")
+        raise
     logger.info(
         "Initializing backend runtime database=%s redis=%s grpc_bind=%s",
         _database_target(settings),
@@ -69,14 +79,24 @@ async def build_runtime(settings: Settings) -> BackendRuntime:
     redis_workflow: RedisWorkflowRuntime | None = None
 
     try:
-        logger.info("Checking PostgreSQL connectivity for backend service.")
-        await ping_database_engine(db_engine)
-        logger.info("PostgreSQL connectivity check passed.")
-
         redis = build_redis_client(settings.redis)
-        logger.info("Checking Redis connectivity for backend service.")
-        await ping_redis_client(redis)
-        logger.info("Redis connectivity check passed.")
+        await run_startup_dependency_checks(
+            component="backend",
+            checks=(
+                StartupDependencyCheck(
+                    name="postgresql",
+                    target=_database_target(settings),
+                    check=lambda: ping_database_engine(db_engine),
+                ),
+                StartupDependencyCheck(
+                    name="redis",
+                    target=_redis_target(settings),
+                    check=lambda: ping_redis_client(redis),
+                ),
+            ),
+            settings=settings,
+            logger=logger,
+        )
 
         redis_workflow = build_redis_workflow_runtime(redis)
         helpdesk_service_factory = build_helpdesk_service_factory(
@@ -84,11 +104,15 @@ async def build_runtime(settings: Settings) -> BackendRuntime:
             super_admin_telegram_user_ids=frozenset(
                 settings.authorization.super_admin_telegram_user_ids
             ),
+            include_internal_notes_in_ticket_reports=(
+                settings.exports.include_internal_notes_in_ticket_reports
+            ),
             sla_deadline_scheduler=redis_workflow.sla_deadline_scheduler,
         )
         grpc_server = build_helpdesk_backend_server(
             helpdesk_service_factory=helpdesk_service_factory,
             bind_target=settings.backend_service.bind_target,
+            auth_config=settings.backend_auth,
         )
 
         logger.info("Backend runtime dependencies initialized successfully.")
