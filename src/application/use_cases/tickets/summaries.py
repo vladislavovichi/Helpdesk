@@ -10,6 +10,7 @@ from domain.contracts.repositories import OperatorRecord
 from domain.entities.ticket import (
     Ticket,
     TicketAttachmentDetails,
+    TicketHistoryEntry,
     TicketInternalNoteDetails,
     TicketMessageDetails,
 )
@@ -105,6 +106,44 @@ def build_operator_ticket_summary(ticket: Ticket) -> OperatorTicketSummary:
 
 
 @dataclass(slots=True)
+class HistoricalTicketSummary:
+    public_id: UUID
+    public_number: str
+    status: TicketStatus
+    created_at: datetime
+    closed_at: datetime | None
+    mini_title: str
+    category_id: int | None = None
+    category_code: str | None = None
+    category_title: str | None = None
+
+
+def build_historical_ticket_summary(ticket: TicketHistoryEntry) -> HistoricalTicketSummary:
+    return HistoricalTicketSummary(
+        public_id=ticket.public_id,
+        public_number=format_public_ticket_number(ticket.public_id),
+        status=ticket.status,
+        created_at=ticket.created_at,
+        closed_at=ticket.closed_at,
+        mini_title=_build_ticket_mini_title(
+            ticket.first_client_message_text,
+            fallback=ticket.subject,
+        ),
+        category_id=ticket.category_id,
+        category_code=ticket.category_code,
+        category_title=ticket.category_title,
+    )
+
+
+def _build_ticket_mini_title(text: str | None, *, fallback: str) -> str:
+    normalized = " ".join((text or "").split())
+    if normalized:
+        return normalized
+    fallback_normalized = " ".join(fallback.split())
+    return fallback_normalized or "Без описания"
+
+
+@dataclass(slots=True)
 class TicketAttachmentSummary:
     kind: TicketAttachmentKind
     telegram_file_id: str
@@ -185,6 +224,7 @@ class TicketDetailsSummary:
     assigned_operator_name: str | None
     assigned_operator_telegram_user_id: int | None
     created_at: datetime
+    closed_at: datetime | None = None
     category_id: int | None = None
     category_code: str | None = None
     category_title: str | None = None
@@ -208,6 +248,7 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         assigned_operator_name=ticket.assigned_operator_name,
         assigned_operator_telegram_user_id=ticket.assigned_operator_telegram_user_id,
         created_at=ticket.created_at,
+        closed_at=ticket.closed_at,
         category_id=ticket.category_id,
         category_code=ticket.category_code,
         category_title=ticket.category_title,

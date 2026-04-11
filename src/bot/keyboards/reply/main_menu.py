@@ -3,6 +3,7 @@ from __future__ import annotations
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 from bot.texts.buttons import (
+    ARCHIVE_BUTTON_TEXT,
     CANCEL_BUTTON_TEXT,
     CATEGORIES_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
@@ -30,9 +31,10 @@ def build_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
                     KeyboardButton(text=MY_TICKETS_BUTTON_TEXT),
                 ],
                 [
-                    KeyboardButton(text=TAKE_NEXT_BUTTON_TEXT),
+                    KeyboardButton(text=ARCHIVE_BUTTON_TEXT),
                     KeyboardButton(text=STATS_BUTTON_TEXT),
                 ],
+                [KeyboardButton(text=TAKE_NEXT_BUTTON_TEXT)],
             ]
         )
         placeholder = "Главное меню"

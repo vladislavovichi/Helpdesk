@@ -75,7 +75,8 @@ def format_analytics_export_actions(
             format_analytics_section(snapshot, section=section),
             "",
             "Экспорт",
-            "CSV · HTML",
+            "HTML — внутренний отчёт с графиками и спокойной визуализацией.",
+            "CSV — практичная выгрузка для таблиц и сверки.",
             f"Секция · {get_analytics_section_label(ExportAnalyticsSection(section))}",
         ]
     )
@@ -111,6 +112,7 @@ def format_analytics_overview(snapshot: HelpdeskAnalyticsSnapshot) -> str:
             empty="Активных назначений сейчас нет.",
         )
     )
+    lines.extend(["", "Отчёт", "Экспорт отчёта доступен прямо с этого экрана."])
     return "\n".join(lines)
 
 

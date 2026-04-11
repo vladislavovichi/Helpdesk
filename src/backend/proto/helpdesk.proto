@@ -89,6 +89,18 @@ message OperatorTicketSummary {
   optional string category_title = 6;
 }
 
+message ArchivedTicketSummary {
+  string public_id = 1;
+  string public_number = 2;
+  string status = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp closed_at = 5;
+  string mini_title = 6;
+  optional int32 category_id = 7;
+  optional string category_code = 8;
+  optional string category_title = 9;
+}
+
 message TicketMessageSummary {
   string sender_type = 1;
   optional int32 sender_operator_id = 2;
@@ -126,6 +138,7 @@ message TicketDetailsSummary {
   TicketAttachment last_message_attachment = 17;
   repeated TicketMessageSummary message_history = 18;
   repeated TicketInternalNoteSummary internal_notes = 19;
+  google.protobuf.Timestamp closed_at = 20;
 }
 
 message MacroSummary {
@@ -254,6 +267,10 @@ message ListOperatorTicketsRequest {
   RequestActor actor = 2;
 }
 
+message ListArchivedTicketsRequest {
+  RequestActor actor = 1;
+}
+
 message AssignNextQueuedTicketRequest {
   AssignNextQueuedTicketCommand command = 1;
   RequestActor actor = 2;
@@ -314,6 +331,7 @@ service HelpdeskBackendService {
   rpc GetTicketDetails(GetTicketDetailsRequest) returns (TicketDetailsSummary);
   rpc ListQueuedTickets(ListQueuedTicketsRequest) returns (stream QueuedTicketSummary);
   rpc ListOperatorTickets(ListOperatorTicketsRequest) returns (stream OperatorTicketSummary);
+  rpc ListArchivedTickets(ListArchivedTicketsRequest) returns (stream ArchivedTicketSummary);
   rpc AssignNextQueuedTicket(AssignNextQueuedTicketRequest) returns (TicketSummary);
   rpc AssignTicketToOperator(AssignTicketToOperatorRequest) returns (TicketSummary);
   rpc CloseTicket(CloseTicketRequest) returns (TicketSummary);

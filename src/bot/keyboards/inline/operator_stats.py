@@ -28,7 +28,7 @@ def build_operator_stats_markup(
     )
     builder.row(
         InlineKeyboardButton(
-            text="Экспорт",
+            text="Экспорт отчёта",
             callback_data=OperatorStatsExportCallback(
                 action="open",
                 section=section,
@@ -81,7 +81,7 @@ def build_operator_stats_export_markup(
             ).pack(),
         ),
         InlineKeyboardButton(
-            text="HTML",
+            text="HTML отчёт",
             callback_data=OperatorStatsExportCallback(
                 action="html",
                 section=section,

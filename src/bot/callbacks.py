@@ -49,6 +49,13 @@ class OperatorQueueCallback(CallbackData, prefix="operator_queue"):
     page: int
 
 
+class OperatorArchiveCallback(CallbackData, prefix="operator_archive"):
+    action: Literal["page", "filter", "view", "back", "noop"]
+    page: int
+    category_id: int
+    ticket_public_id: str
+
+
 class OperatorMacroCallback(CallbackData, prefix="operator_macro"):
     action: Literal["page", "noop", "preview", "apply", "back", "ticket"]
     ticket_public_id: str

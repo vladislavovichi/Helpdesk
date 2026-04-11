@@ -2,6 +2,7 @@ HELP_BUTTON_TEXT = "Справка"
 QUEUE_BUTTON_TEXT = "Очередь"
 TAKE_NEXT_BUTTON_TEXT = "Взять следующую"
 MY_TICKETS_BUTTON_TEXT = "Мои заявки"
+ARCHIVE_BUTTON_TEXT = "Архив"
 STATS_BUTTON_TEXT = "Статистика"
 CANCEL_BUTTON_TEXT = "Отмена"
 BACK_BUTTON_TEXT = "Назад"
@@ -21,6 +22,7 @@ OPERATOR_NAVIGATION_BUTTONS = frozenset(
         QUEUE_BUTTON_TEXT,
         TAKE_NEXT_BUTTON_TEXT,
         MY_TICKETS_BUTTON_TEXT,
+        ARCHIVE_BUTTON_TEXT,
         STATS_BUTTON_TEXT,
         CANCEL_BUTTON_TEXT,
     }

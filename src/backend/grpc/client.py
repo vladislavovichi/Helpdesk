@@ -26,6 +26,7 @@ from application.use_cases.analytics.exports import (
 )
 from application.use_cases.tickets.exports import TicketReportExport, TicketReportFormat
 from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
@@ -40,6 +41,7 @@ from backend.grpc.generated import helpdesk_pb2, helpdesk_pb2_grpc
 from backend.grpc.translators import (
     deserialize_analytics_export,
     deserialize_analytics_snapshot,
+    deserialize_archived_ticket,
     deserialize_category,
     deserialize_export,
     deserialize_macro,
@@ -153,6 +155,16 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
         _apply_actor(request, actor)
         response = self.stub.ListOperatorTickets(request, timeout=RPC_TIMEOUT_SECONDS)
         return tuple(deserialize_operator_ticket(item) for item in await _collect_stream(response))
+
+    async def list_archived_tickets(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> tuple[HistoricalTicketSummary, ...]:
+        request = helpdesk_pb2.ListArchivedTicketsRequest()
+        _apply_actor(request, actor)
+        response = self.stub.ListArchivedTickets(request, timeout=RPC_TIMEOUT_SECONDS)
+        return tuple(deserialize_archived_ticket(item) for item in await _collect_stream(response))
 
     async def assign_next_ticket_to_operator(
         self,

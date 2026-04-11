@@ -27,6 +27,9 @@ FIELDNAMES = (
     "feedback_rating",
     "feedback_comment",
     "feedback_submitted_at",
+    "record_type",
+    "record_sequence",
+    "record_timestamp",
     "transcript_index",
     "transcript_timestamp",
     "transcript_sender_role",
@@ -51,66 +54,13 @@ def render_ticket_report_csv(report: TicketReport) -> bytes:
     writer = csv.DictWriter(buffer, fieldnames=FIELDNAMES)
     writer.writeheader()
 
-    if report.messages:
-        for index, message in enumerate(report.messages, start=1):
-            writer.writerow(
-                {
-                    **_build_base_row(report),
-                    "transcript_index": index,
-                    "transcript_timestamp": _format_timestamp(message.created_at),
-                    "transcript_sender_role": message.sender_type.value,
-                    "transcript_sender_name": message.sender_operator_name or "",
-                    "transcript_text": message.text or "",
-                    "transcript_attachment_kind": (
-                        message.attachment.kind.value if message.attachment is not None else ""
-                    ),
-                    "transcript_attachment_file_id": (
-                        message.attachment.telegram_file_id
-                        if message.attachment is not None
-                        else ""
-                    ),
-                    "transcript_attachment_file_unique_id": (
-                        message.attachment.telegram_file_unique_id
-                        if message.attachment is not None
-                        and message.attachment.telegram_file_unique_id is not None
-                        else ""
-                    ),
-                    "transcript_attachment_filename": (
-                        message.attachment.filename
-                        if (
-                            message.attachment is not None
-                            and message.attachment.filename is not None
-                        )
-                        else ""
-                    ),
-                    "transcript_attachment_mime_type": (
-                        message.attachment.mime_type
-                        if message.attachment is not None
-                        and message.attachment.mime_type is not None
-                        else ""
-                    ),
-                    "transcript_attachment_storage_path": (
-                        message.attachment.storage_path
-                        if message.attachment is not None
-                        and message.attachment.storage_path is not None
-                        else ""
-                    ),
-                }
-            )
-    elif not report.internal_notes:
+    rows = _build_record_rows(report)
+    if not rows:
         writer.writerow(_build_base_row(report))
+        return buffer.getvalue().encode("utf-8-sig")
 
-    for index, note in enumerate(report.internal_notes, start=1):
-        writer.writerow(
-            {
-                **_build_base_row(report),
-                "internal_note_index": index,
-                "internal_note_timestamp": _format_timestamp(note.created_at),
-                "internal_note_author_id": note.author_operator_id,
-                "internal_note_author_name": note.author_operator_name or "",
-                "internal_note_text": note.text,
-            }
-        )
+    for row in rows:
+        writer.writerow(row)
 
     return buffer.getvalue().encode("utf-8-sig")
 
@@ -143,6 +93,9 @@ def _build_base_row(report: TicketReport) -> dict[str, str | int]:
         "feedback_submitted_at": (
             _format_timestamp(report.feedback.submitted_at) if report.feedback is not None else ""
         ),
+        "record_type": "",
+        "record_sequence": "",
+        "record_timestamp": "",
         "transcript_index": "",
         "transcript_timestamp": "",
         "transcript_sender_role": "",
@@ -159,6 +112,120 @@ def _build_base_row(report: TicketReport) -> dict[str, str | int]:
         "internal_note_author_id": "",
         "internal_note_author_name": "",
         "internal_note_text": "",
+    }
+
+
+def _build_record_rows(report: TicketReport) -> list[dict[str, str | int]]:
+    rows: list[dict[str, str | int]] = []
+    sequence = 1
+    note_indexes = {id(note): index for index, note in enumerate(report.internal_notes, start=1)}
+
+    records = sorted(
+        (
+            *(
+                ("message", index, message.created_at, message)
+                for index, message in enumerate(report.messages, start=1)
+            ),
+            *(
+                ("internal_note", note_indexes[id(note)], note.created_at, note)
+                for note in report.internal_notes
+            ),
+        ),
+        key=lambda item: (item[2], 0 if item[0] == "message" else 1, item[1]),
+    )
+
+    for record_type, index, created_at, payload in records:
+        base_row = {
+            **_build_base_row(report),
+            "record_type": record_type,
+            "record_sequence": sequence,
+            "record_timestamp": _format_timestamp(created_at),
+        }
+        if record_type == "message":
+            rows.append(
+                {
+                    **base_row,
+                    **_build_message_row(index=index, message=payload),
+                }
+            )
+        else:
+            rows.append(
+                {
+                    **base_row,
+                    **_build_internal_note_row(index=index, note=payload),
+                }
+            )
+        sequence += 1
+
+    return rows
+
+
+def _build_message_row(*, index: int, message: object) -> dict[str, str]:
+    from application.use_cases.tickets.exports import TicketReportMessage
+
+    assert isinstance(message, TicketReportMessage)
+    return {
+        "transcript_index": str(index),
+        "transcript_timestamp": _format_timestamp(message.created_at),
+        "transcript_sender_role": message.sender_type.value,
+        "transcript_sender_name": message.sender_operator_name or "",
+        "transcript_text": message.text or "",
+        "transcript_attachment_kind": (
+            message.attachment.kind.value if message.attachment is not None else ""
+        ),
+        "transcript_attachment_file_id": (
+            message.attachment.telegram_file_id if message.attachment is not None else ""
+        ),
+        "transcript_attachment_file_unique_id": (
+            message.attachment.telegram_file_unique_id
+            if message.attachment is not None
+            and message.attachment.telegram_file_unique_id is not None
+            else ""
+        ),
+        "transcript_attachment_filename": (
+            message.attachment.filename
+            if message.attachment is not None and message.attachment.filename is not None
+            else ""
+        ),
+        "transcript_attachment_mime_type": (
+            message.attachment.mime_type
+            if message.attachment is not None and message.attachment.mime_type is not None
+            else ""
+        ),
+        "transcript_attachment_storage_path": (
+            message.attachment.storage_path
+            if message.attachment is not None and message.attachment.storage_path is not None
+            else ""
+        ),
+        "internal_note_index": "",
+        "internal_note_timestamp": "",
+        "internal_note_author_id": "",
+        "internal_note_author_name": "",
+        "internal_note_text": "",
+    }
+
+
+def _build_internal_note_row(*, index: int, note: object) -> dict[str, str]:
+    from application.use_cases.tickets.exports import TicketReportInternalNote
+
+    assert isinstance(note, TicketReportInternalNote)
+    return {
+        "transcript_index": "",
+        "transcript_timestamp": "",
+        "transcript_sender_role": "",
+        "transcript_sender_name": "",
+        "transcript_text": "",
+        "transcript_attachment_kind": "",
+        "transcript_attachment_file_id": "",
+        "transcript_attachment_file_unique_id": "",
+        "transcript_attachment_filename": "",
+        "transcript_attachment_mime_type": "",
+        "transcript_attachment_storage_path": "",
+        "internal_note_index": str(index),
+        "internal_note_timestamp": _format_timestamp(note.created_at),
+        "internal_note_author_id": str(note.author_operator_id),
+        "internal_note_author_name": note.author_operator_name or "",
+        "internal_note_text": note.text,
     }
 
 

@@ -47,6 +47,7 @@ from application.use_cases.tickets.queue import (
     AssignTicketToOperatorUseCase,
     GetNextQueuedTicketUseCase,
     GetTicketDetailsUseCase,
+    ListArchivedTicketsUseCase,
     ListOperatorTicketsUseCase,
     ListQueuedTicketsUseCase,
 )
@@ -100,6 +101,7 @@ class HelpdeskTicketUseCases:
     get_next_queued: GetNextQueuedTicketUseCase
     list_queued: ListQueuedTicketsUseCase
     list_operator_tickets: ListOperatorTicketsUseCase
+    list_archived_tickets: ListArchivedTicketsUseCase
     assign_next_queued: AssignNextQueuedTicketUseCase
     get_details: GetTicketDetailsUseCase
     export_report: ExportTicketReportUseCase
@@ -217,6 +219,7 @@ def build_helpdesk_components(
             get_next_queued=GetNextQueuedTicketUseCase(ticket_repository=ticket_repository),
             list_queued=ListQueuedTicketsUseCase(ticket_repository=ticket_repository),
             list_operator_tickets=ListOperatorTicketsUseCase(ticket_repository=ticket_repository),
+            list_archived_tickets=ListArchivedTicketsUseCase(ticket_repository=ticket_repository),
             assign_next_queued=AssignNextQueuedTicketUseCase(
                 ticket_repository=ticket_repository,
                 ticket_event_repository=ticket_event_repository,

@@ -34,6 +34,7 @@ from application.use_cases.tickets.exports import (
     TicketReportFormat,
 )
 from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
@@ -314,6 +315,45 @@ def deserialize_operator_ticket(
     )
 
 
+def serialize_archived_ticket(
+    ticket: HistoricalTicketSummary,
+) -> helpdesk_pb2.ArchivedTicketSummary:
+    message = helpdesk_pb2.ArchivedTicketSummary(
+        public_id=str(ticket.public_id),
+        public_number=ticket.public_number,
+        status=ticket.status.value,
+        created_at=_serialize_timestamp(ticket.created_at),
+        mini_title=ticket.mini_title,
+    )
+    if ticket.closed_at is not None:
+        message.closed_at.CopyFrom(_serialize_timestamp(ticket.closed_at))
+    if ticket.category_id is not None:
+        message.category_id = ticket.category_id
+    if ticket.category_code is not None:
+        message.category_code = ticket.category_code
+    if ticket.category_title is not None:
+        message.category_title = ticket.category_title
+    return message
+
+
+def deserialize_archived_ticket(
+    ticket: helpdesk_pb2.ArchivedTicketSummary,
+) -> HistoricalTicketSummary:
+    return HistoricalTicketSummary(
+        public_id=UUID(ticket.public_id),
+        public_number=ticket.public_number,
+        status=TicketStatus(ticket.status),
+        created_at=_deserialize_timestamp(ticket.created_at),
+        closed_at=_deserialize_timestamp(ticket.closed_at)
+        if ticket.HasField("closed_at")
+        else None,
+        mini_title=ticket.mini_title,
+        category_id=ticket.category_id if _has(ticket, "category_id") else None,
+        category_code=ticket.category_code if _has(ticket, "category_code") else None,
+        category_title=ticket.category_title if _has(ticket, "category_title") else None,
+    )
+
+
 def serialize_category(
     category: TicketCategorySummary,
 ) -> helpdesk_pb2.TicketCategorySummary:
@@ -418,6 +458,8 @@ def serialize_ticket_details(
         created_at=_serialize_timestamp(ticket.created_at),
         tags=ticket.tags,
     )
+    if ticket.closed_at is not None:
+        message.closed_at.CopyFrom(_serialize_timestamp(ticket.closed_at))
     if ticket.assigned_operator_id is not None:
         message.assigned_operator_id = ticket.assigned_operator_id
     if ticket.assigned_operator_name is not None:
@@ -467,6 +509,9 @@ def deserialize_ticket_details(
             else None
         ),
         created_at=_deserialize_timestamp(ticket.created_at),
+        closed_at=_deserialize_timestamp(ticket.closed_at)
+        if ticket.HasField("closed_at")
+        else None,
         category_id=ticket.category_id if _has(ticket, "category_id") else None,
         category_code=ticket.category_code if _has(ticket, "category_code") else None,
         category_title=ticket.category_title if _has(ticket, "category_title") else None,

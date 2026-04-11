@@ -7,10 +7,12 @@ from aiogram.types import ReplyKeyboardMarkup
 
 from application.services.diagnostics import DiagnosticsCheck, DiagnosticsReport
 from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
     QueuedTicketSummary,
     TicketDetailsSummary,
     TicketMessageSummary,
 )
+from bot.formatters.operator_archive_views import format_archive_page
 from bot.formatters.operator_ticket_views import (
     format_active_ticket_context,
     format_queue_page,
@@ -40,6 +42,7 @@ from bot.keyboards.inline.operator_actions import (
 from bot.keyboards.inline.tags import build_ticket_tags_markup
 from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import (
+    ARCHIVE_BUTTON_TEXT,
     BACK_BUTTON_TEXT,
     BACK_TO_TICKET_BUTTON_TEXT,
     CANCEL_BUTTON_TEXT,
@@ -118,7 +121,8 @@ def test_build_main_menu_for_operator_contains_operator_navigation() -> None:
 
     assert _keyboard_rows(keyboard) == (
         (QUEUE_BUTTON_TEXT, MY_TICKETS_BUTTON_TEXT),
-        (TAKE_NEXT_BUTTON_TEXT, STATS_BUTTON_TEXT),
+        (ARCHIVE_BUTTON_TEXT, STATS_BUTTON_TEXT),
+        (TAKE_NEXT_BUTTON_TEXT,),
         (HELP_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
     )
     assert keyboard.input_field_placeholder == "Главное меню"
@@ -129,7 +133,8 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
 
     assert _keyboard_rows(keyboard) == (
         (QUEUE_BUTTON_TEXT, MY_TICKETS_BUTTON_TEXT),
-        (TAKE_NEXT_BUTTON_TEXT, STATS_BUTTON_TEXT),
+        (ARCHIVE_BUTTON_TEXT, STATS_BUTTON_TEXT),
+        (TAKE_NEXT_BUTTON_TEXT,),
         (OPERATORS_BUTTON_TEXT, MACROS_BUTTON_TEXT),
         (CATEGORIES_BUTTON_TEXT,),
         (HELP_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
@@ -163,6 +168,33 @@ def test_format_queue_page_returns_compact_paginated_text() -> None:
     assert "   В очереди • высокий приоритет" in result
     assert "   Не приходит письмо" in result
     assert "Откройте заявку, чтобы посмотреть историю и действия." in result
+
+
+def test_format_archive_page_returns_case_list_with_mini_titles() -> None:
+    tickets = (
+        HistoricalTicketSummary(
+            public_id=uuid4(),
+            public_number="HD-ARCH0001",
+            status=TicketStatus.CLOSED,
+            created_at=datetime(2026, 4, 1, 9, 0, tzinfo=UTC),
+            closed_at=datetime(2026, 4, 1, 12, 0, tzinfo=UTC),
+            mini_title="Не могу войти в кабинет после смены пароля",
+            category_id=2,
+            category_title="Доступ и вход",
+        ),
+    )
+
+    result = format_archive_page(
+        tickets,
+        current_page=1,
+        total_pages=2,
+        selected_category_title="Доступ и вход",
+    )
+
+    assert "Архив · Доступ и вход" in result
+    assert "1. HD-ARCH0001" in result
+    assert "Закрыта • Доступ и вход" in result
+    assert "Не могу войти в кабинет после смены пароля" in result
 
 
 def test_build_queue_markup_contains_ticket_actions_and_pagination() -> None:
@@ -255,7 +287,7 @@ def test_build_ticket_export_actions_markup_offers_two_formats() -> None:
     markup = build_ticket_export_actions_markup(ticket_public_id=uuid4())
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
-    assert rows == (("CSV", "HTML"), ("Назад",))
+    assert rows == (("CSV", "HTML отчёт"), ("Назад",))
 
 
 def test_build_client_ticket_finish_confirmation_markup_fits_telegram_callback_limit() -> None:
@@ -389,7 +421,8 @@ def test_format_ticket_export_actions_reads_like_report_surface() -> None:
 
     assert result.startswith("Текущий диалог")
     assert "\nЭкспорт" in result
-    assert "\nФорматы\nCSV · HTML" in result
+    assert "\nФорматы\nHTML — спокойный отчёт с перепиской, вложениями и заметками." in result
+    assert "\nCSV — машинная выгрузка для анализа и передачи." in result
     assert "полную переписку" in result
 
 

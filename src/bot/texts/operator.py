@@ -6,6 +6,7 @@ QUEUE_EMPTY_TEXT = "Очередь пока пуста."
 QUEUE_HEADER_TEXT = "Очередь"
 NO_QUEUE_TICKETS_TEXT = "Сейчас новых заявок нет."
 MY_TICKETS_EMPTY_TEXT = "У вас пока нет активных заявок."
+ARCHIVE_EMPTY_TEXT = "Архив пока пуст."
 QUEUE_BUSY_TEXT = "Очередь сейчас занята. Попробуйте ещё раз через пару секунд."
 OPERATOR_ACTION_IDLE_TEXT = "Сейчас нечего отменять."
 OPERATOR_ACTION_CANCELLED_TEXT = "Действие отменено."
@@ -216,6 +217,16 @@ def build_revoke_confirm_message(telegram_user_id: int) -> str:
 
 def build_queue_page_callback_text(page: int) -> str:
     return f"Страница {page}"
+
+
+def build_archive_page_callback_text(page: int, *, category_title: str | None = None) -> str:
+    if category_title:
+        return f"Архив · {category_title} · страница {page}"
+    return f"Архив · страница {page}"
+
+
+def build_archived_ticket_opened_text(public_number: str) -> str:
+    return f"Архивное дело {public_number} открыто."
 
 
 def _analytics_section_title(section: str) -> str:

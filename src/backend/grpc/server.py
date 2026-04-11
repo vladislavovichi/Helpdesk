@@ -21,6 +21,7 @@ from backend.grpc.translators import (
     deserialize_ticket_assignment_command,
     serialize_analytics_export,
     serialize_analytics_snapshot,
+    serialize_archived_ticket,
     serialize_category,
     serialize_export,
     serialize_macro,
@@ -158,6 +159,22 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
 
         for ticket in tickets:
             yield serialize_operator_ticket(ticket)
+
+    async def ListArchivedTickets(
+        self,
+        request: helpdesk_pb2.ListArchivedTicketsRequest,
+        context: grpc.aio.ServicerContext,
+    ):
+        try:
+            async with self.helpdesk_service_factory() as helpdesk_service:
+                tickets = await helpdesk_service.list_archived_tickets(
+                    actor=_request_actor(request)
+                )
+        except Exception as exc:
+            await _abort_for_exception(context, exc)
+
+        for ticket in tickets:
+            yield serialize_archived_ticket(ticket)
 
     async def AssignNextQueuedTicket(
         self,

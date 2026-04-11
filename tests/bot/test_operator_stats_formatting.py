@@ -119,7 +119,7 @@ def test_build_operator_stats_markup_contains_sections_and_windows() -> None:
     assert rows == (
         ("• Общая", "Операторы", "Темы"),
         ("Качество", "SLA"),
-        ("Экспорт",),
+        ("Экспорт отчёта",),
         ("Сегодня", "• 7 дн", "30 дн", "Всё"),
     )
 
@@ -132,7 +132,7 @@ def test_build_operator_stats_export_markup_contains_formats_and_back() -> None:
     rows = tuple(tuple(button.text for button in row) for row in markup.inline_keyboard)
 
     assert rows == (
-        ("CSV", "HTML"),
+        ("CSV", "HTML отчёт"),
         ("Назад",),
     )
 

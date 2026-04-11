@@ -20,7 +20,7 @@ from application.services.stats import (
     HelpdeskAnalyticsSnapshot,
     OperatorTicketLoad,
 )
-from application.use_cases.tickets.summaries import TicketSummary
+from application.use_cases.tickets.summaries import HistoricalTicketSummary, TicketSummary
 from backend.grpc.client import build_helpdesk_backend_client_factory
 from backend.grpc.server import build_helpdesk_backend_server
 from domain.entities.ticket import TicketAttachmentDetails
@@ -39,6 +39,7 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     service = SimpleNamespace(
         create_ticket_from_client_intake=_capture_create_call(command_log, ticket_public_id),
         get_analytics_snapshot=_build_analytics_call(),
+        list_archived_tickets=_build_archived_tickets_call(ticket_public_id),
     )
     helpdesk_service_factory = cast(
         HelpdeskServiceFactory,
@@ -78,6 +79,9 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
                 window=AnalyticsWindow.DAYS_7,
                 actor=RequestActor(telegram_user_id=1001),
             )
+            archived_tickets = await client.list_archived_tickets(
+                actor=RequestActor(telegram_user_id=1001),
+            )
     finally:
         await server.stop()
 
@@ -90,6 +94,8 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     assert command_log[0].category_id == 2
     assert snapshot.window == AnalyticsWindow.DAYS_7
     assert snapshot.feedback_count == 4
+    assert archived_tickets[0].public_id == ticket_public_id
+    assert archived_tickets[0].mini_title == "Не могу войти в кабинет после обновления пароля"
 
 
 def _capture_create_call(
@@ -163,6 +169,33 @@ def _build_analytics_call() -> Any:
             first_response_breach_count=2,
             resolution_breach_count=1,
             sla_categories=(),
+        )
+
+    return call
+
+
+def _build_archived_tickets_call(ticket_public_id: Any) -> Any:
+    async def call(
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        actor: RequestActor | None = None,
+    ) -> tuple[HistoricalTicketSummary, ...]:
+        assert actor == RequestActor(telegram_user_id=1001)
+        assert limit is None
+        assert offset == 0
+        return (
+            HistoricalTicketSummary(
+                public_id=ticket_public_id,
+                public_number="HD-AAAA1111",
+                status=TicketStatus.CLOSED,
+                created_at=datetime(2026, 4, 7, 9, 0, tzinfo=UTC),
+                closed_at=datetime(2026, 4, 7, 11, 45, tzinfo=UTC),
+                mini_title="Не могу войти в кабинет после обновления пароля",
+                category_id=2,
+                category_code="access",
+                category_title="Доступ и вход",
+            ),
         )
 
     return call

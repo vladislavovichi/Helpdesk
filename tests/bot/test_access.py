@@ -10,6 +10,7 @@ from bot.access.policies import (
     resolve_required_permission,
 )
 from bot.texts.buttons import (
+    ARCHIVE_BUTTON_TEXT,
     CATEGORIES_BUTTON_TEXT,
     HELP_BUTTON_TEXT,
     MACROS_BUTTON_TEXT,
@@ -61,6 +62,7 @@ def test_protected_command_permissions_cover_admin_commands() -> None:
 
 def test_protected_message_permissions_cover_navigation_buttons() -> None:
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[QUEUE_BUTTON_TEXT] == Permission.ACCESS_OPERATOR
+    assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[ARCHIVE_BUTTON_TEXT] == Permission.ACCESS_OPERATOR
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[OPERATORS_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[MACROS_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
     assert PROTECTED_MESSAGE_TEXT_PERMISSIONS[CATEGORIES_BUTTON_TEXT] == Permission.MANAGE_OPERATORS
@@ -70,6 +72,7 @@ def test_protected_callback_permissions_cover_operator_and_admin_prefixes() -> N
     assert ("operator:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_queue:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_macro:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
+    assert ("operator_archive:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert ("operator_stats:", Permission.ACCESS_OPERATOR) in PROTECTED_CALLBACK_PREFIX_PERMISSIONS
     assert (
         "operator_stats_export:",
@@ -131,6 +134,12 @@ def test_resolve_required_permission_for_take_navigation_button() -> None:
 
 def test_resolve_required_permission_for_my_tickets_navigation_button() -> None:
     result = resolve_required_permission(message_text=MY_TICKETS_BUTTON_TEXT)
+
+    assert result == Permission.ACCESS_OPERATOR
+
+
+def test_resolve_required_permission_for_archive_navigation_button() -> None:
+    result = resolve_required_permission(message_text=ARCHIVE_BUTTON_TEXT)
 
     assert result == Permission.ACCESS_OPERATOR
 

@@ -11,6 +11,7 @@ from domain.entities.ticket import (
     TicketAttachmentDetails,
     TicketDetails,
     TicketEventDetails,
+    TicketHistoryEntry,
     TicketInternalNoteDetails,
 )
 from domain.enums.tickets import (
@@ -62,6 +63,14 @@ class TicketRepository(Protocol):
         limit: int | None = None,
     ) -> Sequence[Ticket]:
         """Return open tickets currently assigned to the operator."""
+
+    async def list_closed_tickets(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Sequence[TicketHistoryEntry]:
+        """Return archived tickets ordered for historical browsing."""
 
     async def enqueue(self, *, ticket_public_id: UUID) -> Ticket | None:
         """Move a ticket into the queue."""

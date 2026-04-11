@@ -14,6 +14,7 @@ from domain.entities.ticket import (
 from domain.entities.ticket import (
     TicketAttachmentDetails,
     TicketDetails,
+    TicketHistoryEntry,
     TicketInternalNoteDetails,
     TicketMessageDetails,
 )
@@ -153,6 +154,61 @@ class SqlAlchemyTicketReadRepository:
 
         result = await self.session.execute(statement)
         return cast(Sequence[TicketEntity], result.scalars().all())
+
+    async def list_closed_tickets(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Sequence[TicketHistoryEntry]:
+        first_client_message_text = (
+            select(TicketMessage.text)
+            .where(TicketMessage.ticket_id == TicketModel.id)
+            .where(TicketMessage.sender_type == TicketMessageSenderType.CLIENT)
+            .where(TicketMessage.text.is_not(None))
+            .order_by(TicketMessage.created_at.asc(), TicketMessage.id.asc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        statement = (
+            select(
+                TicketModel.public_id,
+                TicketModel.status,
+                TicketModel.subject,
+                TicketModel.created_at,
+                TicketModel.closed_at,
+                TicketCategory.id,
+                TicketCategory.code,
+                TicketCategory.title,
+                first_client_message_text.label("first_client_message_text"),
+            )
+            .join(TicketCategory, TicketModel.category_id == TicketCategory.id, isouter=True)
+            .where(TicketModel.status == TicketStatus.CLOSED)
+            .order_by(
+                desc(TicketModel.closed_at),
+                desc(TicketModel.updated_at),
+                desc(TicketModel.id),
+            )
+            .offset(offset)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        result = await self.session.execute(statement)
+        return tuple(
+            TicketHistoryEntry(
+                public_id=cast(UUID, row[0]),
+                status=cast(TicketStatus, row[1]),
+                subject=cast(str, row[2]),
+                created_at=cast(datetime, row[3]),
+                closed_at=cast(datetime | None, row[4]),
+                category_id=cast(int | None, row[5]),
+                category_code=cast(str | None, row[6]),
+                category_title=cast(str | None, row[7]),
+                first_client_message_text=cast(str | None, row[8]),
+            )
+            for row in result.all()
+        )
 
     async def _get_assigned_operator_details(
         self,

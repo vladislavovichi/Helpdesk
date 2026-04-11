@@ -69,6 +69,19 @@ class TicketInternalNoteDetails:
 
 
 @dataclass(slots=True)
+class TicketHistoryEntry:
+    public_id: UUID
+    status: TicketStatus
+    subject: str
+    created_at: datetime
+    closed_at: datetime | None
+    category_id: int | None = None
+    category_code: str | None = None
+    category_title: str | None = None
+    first_client_message_text: str | None = None
+
+
+@dataclass(slots=True)
 class TicketDetails:
     id: int
     public_id: UUID

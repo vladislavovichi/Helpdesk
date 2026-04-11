@@ -6,10 +6,12 @@ from uuid import UUID
 from application.contracts.tickets import AssignNextQueuedTicketCommand, TicketAssignmentCommand
 from application.use_cases.tickets.common import build_status_payload, build_ticket_summary
 from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
     OperatorTicketSummary,
     QueuedTicketSummary,
     TicketDetailsSummary,
     TicketSummary,
+    build_historical_ticket_summary,
     build_operator_ticket_summary,
     build_queued_ticket_summary,
     build_ticket_details_summary,
@@ -138,6 +140,20 @@ class ListOperatorTicketsUseCase:
             limit=limit,
         )
         return [build_operator_ticket_summary(ticket) for ticket in tickets]
+
+
+class ListArchivedTicketsUseCase:
+    def __init__(self, ticket_repository: TicketRepository) -> None:
+        self.ticket_repository = ticket_repository
+
+    async def __call__(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Sequence[HistoricalTicketSummary]:
+        tickets = await self.ticket_repository.list_closed_tickets(limit=limit, offset=offset)
+        return [build_historical_ticket_summary(ticket) for ticket in tickets]
 
 
 class AssignNextQueuedTicketUseCase:

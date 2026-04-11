@@ -153,7 +153,7 @@ def build_ticket_export_actions_markup(*, ticket_public_id: UUID) -> InlineKeybo
             OperatorActionCallback(action="export_csv", ticket_public_id=callback_value).pack(),
         ),
         _build_callback_button(
-            "HTML",
+            "HTML отчёт",
             OperatorActionCallback(action="export_html", ticket_public_id=callback_value).pack(),
         ),
     )

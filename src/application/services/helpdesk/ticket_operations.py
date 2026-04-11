@@ -19,6 +19,7 @@ from application.use_cases.tickets.exports import (
     TicketReportFormat,
 )
 from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
     OperatorReplyResult,
     OperatorTicketSummary,
     QueuedTicketSummary,
@@ -208,6 +209,22 @@ class HelpdeskTicketOperations:
         return await self._components.tickets.list_operator_tickets(
             operator_telegram_user_id=operator_telegram_user_id,
             limit=limit,
+        )
+
+    async def list_archived_tickets(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        actor: RequestActor | None = None,
+    ) -> Sequence[HistoricalTicketSummary]:
+        await self._require_permission_if_actor(
+            permission=Permission.ACCESS_OPERATOR,
+            actor_telegram_user_id=actor_telegram_user_id(actor),
+        )
+        return await self._components.tickets.list_archived_tickets(
+            limit=limit,
+            offset=offset,
         )
 
     async def get_ticket_details(

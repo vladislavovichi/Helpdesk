@@ -21,6 +21,7 @@ from application.use_cases.analytics.exports import (
 )
 from application.use_cases.tickets.exports import TicketReportExport, TicketReportFormat
 from application.use_cases.tickets.summaries import (
+    HistoricalTicketSummary,
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
@@ -68,6 +69,12 @@ class HelpdeskBackendClient(Protocol):
         operator_telegram_user_id: int,
         actor: RequestActor | None = None,
     ) -> Sequence[OperatorTicketSummary]: ...
+
+    async def list_archived_tickets(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> Sequence[HistoricalTicketSummary]: ...
 
     async def assign_next_ticket_to_operator(
         self,
