@@ -32,6 +32,23 @@ def build_intake_message_prompt_text(category_title: str) -> str:
     )
 
 
+def build_intake_category_prompt_text(
+    *,
+    suggested_category_title: str | None = None,
+    reason: str | None = None,
+) -> str:
+    if not suggested_category_title:
+        return INTAKE_CATEGORY_PROMPT_TEXT
+    lines = [
+        "Выберите тему обращения.",
+        f"Вероятнее всего подойдёт «{suggested_category_title}».",
+    ]
+    if reason:
+        lines.append(reason)
+    lines.append("Если нет, просто выберите другую тему.")
+    return "\n".join(lines)
+
+
 def build_intake_category_selected_text(category_title: str) -> str:
     return "\n".join(
         [

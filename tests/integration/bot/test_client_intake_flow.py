@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from aiogram.types import CallbackQuery, Chat, Message, User
 
+from application.ai.summaries import TicketCategoryPrediction
 from application.use_cases.tickets.summaries import (
     TicketCategorySummary,
     TicketDetailsSummary,
@@ -68,6 +69,7 @@ async def test_client_first_message_without_active_ticket_starts_intake_flow() -
                 )
             ]
         ),
+        predict_ticket_category=AsyncMock(return_value=TicketCategoryPrediction(available=False)),
     )
 
     await handle_client_text(

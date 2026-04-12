@@ -6,7 +6,12 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.runtime import RedisWorkflowRuntime
-from app.runtime_factories import build_helpdesk_service_factory, build_redis_workflow_runtime
+from app.runtime_factories import (
+    build_helpdesk_ai_generation_profile,
+    build_helpdesk_ai_provider,
+    build_helpdesk_service_factory,
+    build_redis_workflow_runtime,
+)
 from backend.grpc.server import build_helpdesk_backend_server
 from backend.runtime import BackendRuntime
 from infrastructure.config.settings import Settings
@@ -99,11 +104,15 @@ async def build_runtime(settings: Settings) -> BackendRuntime:
         )
 
         redis_workflow = build_redis_workflow_runtime(redis)
+        ai_provider = build_helpdesk_ai_provider(settings)
+        ai_generation_profile = build_helpdesk_ai_generation_profile(settings)
         helpdesk_service_factory = build_helpdesk_service_factory(
             db_session_factory,
             super_admin_telegram_user_ids=frozenset(
                 settings.authorization.super_admin_telegram_user_ids
             ),
+            ai_provider=ai_provider,
+            ai_generation_profile=ai_generation_profile,
             include_internal_notes_in_ticket_reports=(
                 settings.exports.include_internal_notes_in_ticket_reports
             ),

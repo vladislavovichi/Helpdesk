@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from backend.grpc.contracts import HelpdeskBackendClientFactory
-from bot.adapters.helpdesk import build_request_actor
+from bot.adapters.helpdesk import build_predict_ticket_category_command, build_request_actor
 from bot.callbacks import ClientTicketCallback
 from bot.delivery import deliver_ticket_closed_to_operator
 from bot.handlers.common.ticket_attachments import AttachmentRejectedError, extract_ticket_content
@@ -98,11 +98,16 @@ async def handle_client_text(
         if active_ticket is None:
             categories = await helpdesk_backend.list_client_ticket_categories()
             if categories:
+                prediction = await helpdesk_backend.predict_ticket_category(
+                    build_predict_ticket_category_command(content=content),
+                    actor=build_request_actor(message.from_user),
+                )
                 await start_client_intake(
                     message=message,
                     state=state,
                     categories=categories,
                     content=content,
+                    prediction=prediction,
                 )
                 return
 

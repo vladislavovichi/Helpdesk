@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from application.ai.contracts import AIProvider
 from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.tickets import (
     AssignNextQueuedTicketCommand,
@@ -17,6 +18,7 @@ from application.contracts.tickets import (
 )
 from application.services.authorization import AuthorizationError, AuthorizationService, Permission
 from application.services.helpdesk.service import HelpdeskService
+from application.use_cases.ai.assist import AIGenerationProfile
 from domain.contracts.repositories import (
     AuditLogRepository,
     MacroRepository,
@@ -40,6 +42,26 @@ from domain.enums.tickets import (
     TicketPriority,
     TicketStatus,
 )
+
+
+class DisabledTestAIProvider(AIProvider):
+    @property
+    def is_enabled(self) -> bool:
+        return False
+
+    @property
+    def model_id(self) -> str | None:
+        return None
+
+    async def complete(
+        self,
+        *,
+        messages: object,
+        max_output_tokens: int,
+        temperature: float,
+    ) -> str:
+        del messages, max_output_tokens, temperature
+        raise RuntimeError("AI is disabled in scenario tests.")
 
 
 @dataclass(slots=True)
@@ -688,6 +710,8 @@ def helpdesk_scenario() -> HelpdeskScenario:
                 TicketCategoryRepository, EmptyTicketCategoryRepository()
             ),
             ticket_tag_repository=cast(TicketTagRepository, EmptyTicketTagRepository()),
+            ai_provider=DisabledTestAIProvider(),
+            ai_generation_profile=AIGenerationProfile(),
             super_admin_telegram_user_ids=frozenset({super_admin_telegram_user_id}),
         ),
         authorization_service=AuthorizationService(

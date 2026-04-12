@@ -7,8 +7,62 @@ on:
       - master
   pull_request:
 
+env:
+  AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS: 42
+  DATABASE__HOST: 127.0.0.1
+  DATABASE__PORT: 5432
+  DATABASE__USER: helpdesk
+  DATABASE__PASSWORD: helpdesk
+  DATABASE__DATABASE: helpdesk
+  REDIS__HOST: 127.0.0.1
+  REDIS__PORT: 6379
+  REDIS__DB: 0
+  PYTHONPATH: src
+
 jobs:
-  checks:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Ruff
+        run: poetry run ruff check .
+
+  typing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Mypy
+        run: poetry run mypy src tests
+
+  grpc-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Proto drift
+        run: make proto-check
+
+  tests:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -33,38 +87,42 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    env:
-      AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS: 42
-      DATABASE__HOST: 127.0.0.1
-      DATABASE__PORT: 5432
-      DATABASE__USER: helpdesk
-      DATABASE__PASSWORD: helpdesk
-      DATABASE__DATABASE: helpdesk
-      REDIS__HOST: 127.0.0.1
-      REDIS__PORT: 6379
-      REDIS__DB: 0
-      PYTHONPATH: src
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install Poetry
         run: pipx install poetry
-
       - name: Install dependencies
         run: poetry install --no-interaction
-
-      - name: Ruff
-        run: poetry run ruff check .
-
-      - name: Mypy
-        run: poetry run mypy src tests
-
       - name: Pytest
         run: poetry run pytest
 
+  migration-consistency:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: helpdesk
+          POSTGRES_USER: helpdesk
+          POSTGRES_PASSWORD: helpdesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U helpdesk -d helpdesk"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
       - name: Migration consistency
         run: make migration-check

@@ -296,6 +296,7 @@ def test_build_ticket_more_actions_markup_groups_secondary_actions() -> None:
 
     assert rows == (
         ("Метки", "Передать"),
+        ("Подсказки",),
         ("Заметки",),
         ("Экспорт",),
         ("Эскалация", "Карточка"),

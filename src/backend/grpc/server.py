@@ -23,6 +23,7 @@ from backend.grpc.translators import (
     deserialize_assign_next_command,
     deserialize_client_ticket_message_command,
     deserialize_operator_reply_command,
+    deserialize_predict_ticket_category_command,
     deserialize_request_actor,
     deserialize_ticket_assignment_command,
     serialize_analytics_export,
@@ -35,6 +36,8 @@ from backend.grpc.translators import (
     serialize_operator_reply_result,
     serialize_operator_ticket,
     serialize_queued_ticket,
+    serialize_ticket_assist_snapshot,
+    serialize_ticket_category_prediction,
     serialize_ticket_details,
     serialize_ticket_summary,
 )
@@ -413,6 +416,51 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
             assert result is not None
             return serialize_macro_application_result(result)
+
+    async def GetTicketAssistSnapshot(
+        self,
+        request: helpdesk_pb2.GetTicketAssistSnapshotRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> helpdesk_pb2.TicketAssistSnapshot:
+        async with self._rpc_scope(
+            context,
+            method="GetTicketAssistSnapshot",
+            fallback_actor=_request_actor(request),
+        ) as request_context:
+            try:
+                async with self.helpdesk_service_factory() as helpdesk_service:
+                    snapshot = await helpdesk_service.get_ticket_ai_assist_snapshot(
+                        ticket_public_id=UUID(request.ticket_public_id),
+                        actor=request_context.actor,
+                    )
+            except Exception as exc:
+                await _abort_for_exception(context, exc, method="GetTicketAssistSnapshot")
+
+            if snapshot is None:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
+            assert snapshot is not None
+            return serialize_ticket_assist_snapshot(snapshot)
+
+    async def PredictTicketCategory(
+        self,
+        request: helpdesk_pb2.PredictTicketCategoryRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> helpdesk_pb2.TicketCategoryPrediction:
+        async with self._rpc_scope(
+            context,
+            method="PredictTicketCategory",
+            fallback_actor=_request_actor(request),
+        ) as request_context:
+            try:
+                async with self.helpdesk_service_factory() as helpdesk_service:
+                    prediction = await helpdesk_service.predict_ticket_category(
+                        deserialize_predict_ticket_category_command(request.command),
+                        actor=request_context.actor,
+                    )
+            except Exception as exc:
+                await _abort_for_exception(context, exc, method="PredictTicketCategory")
+
+            return serialize_ticket_category_prediction(prediction)
 
     async def ExportTicketReport(
         self,

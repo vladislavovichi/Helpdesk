@@ -18,6 +18,7 @@ from bot.formatters.operator_admin_views import (
 from bot.handlers.user.states import UserOperatorInviteStates
 from bot.keyboards.inline.operator_invites import build_operator_invite_confirmation_markup
 from bot.keyboards.reply.main_menu import build_main_menu
+from bot.texts.buttons import ALL_NAVIGATION_BUTTONS, CANCEL_BUTTON_TEXT
 from bot.texts.operator_invites import (
     INVITE_ONBOARDING_CONFIRMED_TEXT,
     INVITE_ONBOARDING_EDIT_TEXT,
@@ -67,6 +68,9 @@ async def handle_operator_invite_display_name(
     message: Message,
     state: FSMContext,
 ) -> None:
+    if message.text in ALL_NAVIGATION_BUTTONS and message.text != CANCEL_BUTTON_TEXT:
+        await message.answer(INVITE_ONBOARDING_NAME_INVALID_TEXT)
+        return
     display_name = _normalize_display_name(message.text)
     if display_name is None:
         await message.answer(INVITE_ONBOARDING_NAME_INVALID_TEXT)

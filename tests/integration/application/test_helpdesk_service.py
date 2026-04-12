@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
+from application.ai.contracts import AIProvider
 from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.tickets import (
     ApplyMacroToTicketCommand,
@@ -19,6 +20,7 @@ from application.contracts.tickets import (
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
 from application.services.stats import AnalyticsWindow
+from application.use_cases.ai.assist import AIGenerationProfile
 from application.use_cases.tickets.exports import TicketReportFormat
 from application.use_cases.tickets.operator_invites import OPERATOR_INVITE_PREFIX
 from application.use_cases.tickets.summaries import (
@@ -36,6 +38,26 @@ from domain.enums.tickets import (
     TicketStatus,
 )
 from domain.tickets import InvalidTicketTransitionError
+
+
+class DisabledTestAIProvider(AIProvider):
+    @property
+    def is_enabled(self) -> bool:
+        return False
+
+    @property
+    def model_id(self) -> str | None:
+        return None
+
+    async def complete(
+        self,
+        *,
+        messages: Any,
+        max_output_tokens: int,
+        temperature: float,
+    ) -> str:
+        del messages, max_output_tokens, temperature
+        raise RuntimeError("AI is disabled in tests.")
 
 
 def normalize_tag_name(name: str) -> str:
@@ -1079,6 +1101,8 @@ def build_service(
         ),
         ticket_tag_repository=ticket_tag_repository
         or StubTicketTagRepository(tag_repository=active_tag_repository),
+        ai_provider=DisabledTestAIProvider(),
+        ai_generation_profile=AIGenerationProfile(),
         super_admin_telegram_user_ids=super_admin_telegram_user_ids or frozenset({42}),
     )
 

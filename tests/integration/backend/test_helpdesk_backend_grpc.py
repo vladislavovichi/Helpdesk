@@ -10,7 +10,14 @@ from uuid import uuid4
 
 import pytest
 
+from application.ai.summaries import (
+    AIPredictionConfidence,
+    TicketAssistSnapshot,
+    TicketCategoryPrediction,
+    TicketMacroSuggestion,
+)
 from application.contracts.actors import RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import ClientTicketMessageCommand
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.services.stats import (
@@ -39,6 +46,8 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     command_log: list[ClientTicketMessageCommand] = []
     service = SimpleNamespace(
         create_ticket_from_client_intake=_capture_create_call(command_log, ticket_public_id),
+        get_ticket_ai_assist_snapshot=_build_ticket_assist_call(),
+        predict_ticket_category=_build_category_prediction_call(),
         get_analytics_snapshot=_build_analytics_call(),
         list_archived_tickets=_build_archived_tickets_call(ticket_public_id),
     )
@@ -83,6 +92,14 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
                 window=AnalyticsWindow.DAYS_7,
                 actor=RequestActor(telegram_user_id=1001),
             )
+            ticket_assist = await client.get_ticket_ai_assist_snapshot(
+                ticket_public_id=ticket_public_id,
+                actor=RequestActor(telegram_user_id=1001),
+            )
+            category_prediction = await client.predict_ticket_category(
+                PredictTicketCategoryCommand(text="Не удаётся войти после смены пароля"),
+                actor=RequestActor(telegram_user_id=2002),
+            )
             archived_tickets = await client.list_archived_tickets(
                 actor=RequestActor(telegram_user_id=1001),
             )
@@ -98,6 +115,11 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     assert command_log[0].category_id == 2
     assert snapshot.window == AnalyticsWindow.DAYS_7
     assert snapshot.feedback_count == 4
+    assert ticket_assist is not None
+    assert ticket_assist.short_summary == "Клиент потерял доступ после смены пароля."
+    assert ticket_assist.macro_suggestions[0].macro_id == 11
+    assert category_prediction.category_id == 2
+    assert category_prediction.confidence == AIPredictionConfidence.HIGH
     assert archived_tickets[0].public_id == ticket_public_id
     assert archived_tickets[0].mini_title == "Не могу войти в кабинет после обновления пароля"
 
@@ -204,6 +226,55 @@ def _build_analytics_call() -> Any:
             first_response_breach_count=2,
             resolution_breach_count=1,
             sla_categories=(),
+        )
+
+    return call
+
+
+def _build_ticket_assist_call() -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        actor: RequestActor | None = None,
+    ) -> TicketAssistSnapshot:
+        assert actor == RequestActor(telegram_user_id=1001)
+        assert ticket_public_id is not None
+        return TicketAssistSnapshot(
+            available=True,
+            short_summary="Клиент потерял доступ после смены пароля.",
+            user_goal="Хочет быстро восстановить вход без новой регистрации.",
+            actions_taken="Оператор проверил карточку профиля и подготовил сброс доступа.",
+            current_status="Ожидается подтверждение входа после обновления ссылки.",
+            macro_suggestions=(
+                TicketMacroSuggestion(
+                    macro_id=11,
+                    title="Сброс доступа",
+                    body="Сбросили пароль и обновили ссылку.",
+                    reason="Подходит под типовой сценарий восстановления входа.",
+                ),
+            ),
+            model_id="Qwen/Qwen3.5-4B",
+        )
+
+    return call
+
+
+def _build_category_prediction_call() -> Any:
+    async def call(
+        command: PredictTicketCategoryCommand,
+        *,
+        actor: RequestActor | None = None,
+    ) -> TicketCategoryPrediction:
+        assert actor == RequestActor(telegram_user_id=2002)
+        assert command.text == "Не удаётся войти после смены пароля"
+        return TicketCategoryPrediction(
+            available=True,
+            category_id=2,
+            category_code="access",
+            category_title="Доступ и вход",
+            confidence=AIPredictionConfidence.HIGH,
+            reason="В тексте явный запрос на восстановление доступа.",
+            model_id="Qwen/Qwen3.5-4B",
         )
 
     return call

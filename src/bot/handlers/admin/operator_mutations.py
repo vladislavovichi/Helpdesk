@@ -136,7 +136,7 @@ async def handle_add_operator_message(
     if message.from_user is None:
         return
 
-        await operator_presence.touch(operator_id=message.from_user.id)
+    await operator_presence.touch(operator_id=message.from_user.id)
     telegram_user_id, display_name = parsed
 
     async with helpdesk_service_factory() as helpdesk_service:

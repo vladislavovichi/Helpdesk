@@ -146,6 +146,25 @@ class BackendAuthConfig(BaseModel):
     caller: str = "telegram-bot"
 
 
+class AIConfig(BaseModel):
+    provider: str = "disabled"
+    model_id: str | None = None
+    api_token: str | None = None
+    base_url: str = "https://router.huggingface.co/v1/chat/completions"
+    timeout_seconds: float = 20.0
+    summary_temperature: float = 0.15
+    summary_max_output_tokens: int = 320
+    macros_temperature: float = 0.2
+    macros_max_output_tokens: int = 280
+    category_temperature: float = 0.1
+    category_max_output_tokens: int = 160
+
+    @property
+    def normalized_provider(self) -> str:
+        provider = self.provider.strip().lower()
+        return provider or "disabled"
+
+
 class ResilienceConfig(BaseModel):
     startup_check_timeout_seconds: float = 5.0
     startup_retry_attempts: int = 3
@@ -226,6 +245,7 @@ class Settings(BaseSettings):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     backend_service: BackendServiceConfig = Field(default_factory=BackendServiceConfig)
     backend_auth: BackendAuthConfig = Field(default_factory=BackendAuthConfig)
+    ai: AIConfig = Field(default_factory=AIConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     resilience: ResilienceConfig = Field(default_factory=ResilienceConfig)
     attachments: AttachmentLimitsConfig = Field(default_factory=AttachmentLimitsConfig)

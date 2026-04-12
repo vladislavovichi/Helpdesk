@@ -14,6 +14,7 @@ from bot.callbacks import ClientFeedbackCallback
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.user.states import UserFeedbackStates
 from bot.keyboards.inline.feedback import build_ticket_feedback_comment_markup
+from bot.texts.buttons import ALL_NAVIGATION_BUTTONS, CANCEL_BUTTON_TEXT
 from bot.texts.common import CHAT_RATE_LIMIT_TEXT, SERVICE_UNAVAILABLE_TEXT
 from bot.texts.feedback import (
     TICKET_FEEDBACK_ALREADY_SAVED_TEXT,
@@ -189,6 +190,9 @@ async def handle_ticket_feedback_comment(
         return
 
     comment = message.text.strip()
+    if comment in ALL_NAVIGATION_BUTTONS and comment != CANCEL_BUTTON_TEXT:
+        await message.answer(TICKET_FEEDBACK_COMMENT_PROMPT_TEXT)
+        return
     if not comment:
         await message.answer(TICKET_FEEDBACK_COMMENT_EMPTY_TEXT)
         return

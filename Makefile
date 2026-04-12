@@ -10,6 +10,9 @@ BACKEND_MODULE ?= backend.main
 FULL_SCRIPT ?= ops/docker/full.sh
 FULL_SERVICES ?= postgres redis backend bot
 FULL_TIMEOUT ?= 180
+PROTO_SRC ?= src/backend/proto/helpdesk.proto
+PROTO_INCLUDE ?= src/backend/proto
+PROTO_OUT ?= src/backend/grpc/generated
 
 define ensure_poetry_env
 	@if ! command -v "$(PYTHON)" >/dev/null 2>&1; then \
@@ -21,7 +24,7 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test check ci health health-backend run run-backend run-bot migrate migration-check make-migration docker-up docker-down full full-down logs up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test proto proto-check check ci health health-backend run run-backend run-bot migrate migration-check make-migration docker-up docker-down full full-down logs up down pre-commit-install pre-commit-run
 
 help:
 	@printf "Available targets:\n"
@@ -30,8 +33,10 @@ help:
 	@printf "  format             Auto-fix Ruff issues and format code\n"
 	@printf "  typecheck          Run mypy\n"
 	@printf "  test               Run the test suite\n"
+	@printf "  proto              Regenerate gRPC Python stubs from proto\n"
+	@printf "  proto-check        Verify that generated gRPC stubs are up to date\n"
 	@printf "  check              Run lint and tests\n"
-	@printf "  ci                 Run lint, tests, and migration consistency checks\n"
+	@printf "  ci                 Run lint, typing, tests, proto-check, and migration consistency\n"
 	@printf "  health             Run the bot-side health check\n"
 	@printf "  health-backend     Run the backend-side health check\n"
 	@printf "  run                Start the Telegram bot runtime locally\n"
@@ -70,6 +75,14 @@ test:
 	$(call ensure_poetry_env)
 	$(POETRY) run pytest
 
+proto:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m grpc_tools.protoc -I $(PROTO_INCLUDE) --python_out=$(PROTO_OUT) --grpc_python_out=$(PROTO_OUT) $(PROTO_SRC)
+	$(POETRY) run python -c "from pathlib import Path; path = Path('$(PROTO_OUT)/helpdesk_pb2_grpc.py'); path.write_text(path.read_text().replace('import helpdesk_pb2 as helpdesk__pb2', 'from . import helpdesk_pb2 as helpdesk__pb2'))"
+
+proto-check: proto
+	git diff --exit-code -- $(PROTO_OUT)
+
 health:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m app.healthcheck
@@ -103,9 +116,9 @@ make-migration:
 	$(call ensure_poetry_env)
 	$(ALEMBIC) revision --autogenerate -m "$(name)"
 
-check: lint test
+check: lint typecheck test
 
-ci: lint test migration-check
+ci: lint typecheck test proto-check migration-check
 
 docker-up:
 	$(COMPOSE) -f $(COMPOSE_FILE) up --build -d

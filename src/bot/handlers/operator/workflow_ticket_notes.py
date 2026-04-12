@@ -23,6 +23,7 @@ from bot.handlers.operator.common import respond_to_operator
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.operator.states import OperatorTicketStates
 from bot.keyboards.inline.operator_actions import build_ticket_notes_markup
+from bot.texts.buttons import ALL_NAVIGATION_BUTTONS, CANCEL_BUTTON_TEXT
 from bot.texts.common import (
     INVALID_TICKET_ID_TEXT,
     SERVICE_UNAVAILABLE_TEXT,
@@ -153,6 +154,12 @@ async def handle_note_message(
         await message.answer(NOTE_CONTEXT_LOST_TEXT)
         return
     if message.text is None:
+        await message.answer(NOTE_MODE_COMMAND_BLOCK_TEXT)
+        return
+    if message.text in ALL_NAVIGATION_BUTTONS and message.text != CANCEL_BUTTON_TEXT:
+        await message.answer(NOTE_MODE_COMMAND_BLOCK_TEXT)
+        return
+    if message.text.startswith("/"):
         await message.answer(NOTE_MODE_COMMAND_BLOCK_TEXT)
         return
     if not await global_rate_limiter.allow():

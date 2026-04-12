@@ -7,9 +7,6 @@ from html import escape
 from application.services.stats import HelpdeskAnalyticsSnapshot, get_analytics_window_label
 from application.use_cases.analytics.exports import AnalyticsSection, get_analytics_section_label
 
-SVG_WIDTH = 420
-SVG_HEIGHT = 250
-
 
 def render_analytics_snapshot_html(
     snapshot: HelpdeskAnalyticsSnapshot,
@@ -149,10 +146,72 @@ def render_analytics_snapshot_html(
       font-size: 14px;
       margin-bottom: 12px;
     }}
-    .chart-svg {{
-      width: 100%;
-      height: auto;
-      display: block;
+    .chart-body {{
+      display: grid;
+      gap: 12px;
+    }}
+    .segment-track {{
+      display: flex;
+      min-height: 18px;
+      background: #ece4d9;
+      border-radius: 999px;
+      overflow: hidden;
+    }}
+    .segment-fill {{
+      min-width: 10px;
+    }}
+    .segment-legend {{
+      display: grid;
+      gap: 8px;
+    }}
+    .legend-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: start;
+      font-size: 14px;
+    }}
+    .legend-label {{
+      color: var(--text);
+      word-break: break-word;
+    }}
+    .legend-value {{
+      color: var(--muted);
+      white-space: nowrap;
+      text-align: right;
+    }}
+    .bar-chart {{
+      display: grid;
+      gap: 12px;
+    }}
+    .bar-row {{
+      display: grid;
+      gap: 6px;
+    }}
+    .bar-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: baseline;
+    }}
+    .bar-label {{
+      font-size: 14px;
+      word-break: break-word;
+    }}
+    .bar-value {{
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }}
+    .bar-track {{
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #ece4d9;
+    }}
+    .bar-fill {{
+      height: 100%;
+      border-radius: 999px;
     }}
     .section {{
       padding: 24px;
@@ -189,6 +248,18 @@ def render_analytics_snapshot_html(
       .hero {{ padding: 24px 22px; }}
       h1 {{ font-size: 30px; }}
       .section {{ padding: 20px; }}
+      .legend-row {{
+        grid-template-columns: 1fr;
+        gap: 2px;
+      }}
+      .legend-value {{
+        text-align: left;
+      }}
+      .bar-head {{
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }}
     }}
   </style>
 </head>
@@ -277,27 +348,31 @@ def _render_status_mix_chart(snapshot: HelpdeskAnalyticsSnapshot) -> str:
         ("Закрытые", snapshot.closed_tickets_count, "#6e8460"),
     )
     total = sum(value for _, value, _ in items) or 1
-    x = 0.0
-    bars: list[str] = []
-    labels: list[str] = []
-    for label, value, color in items:
-        width = round((value / total) * 100, 2)
-        bars.append(
-            f'<rect x="{x}" y="44" width="{width}" height="30" rx="15" fill="{color}"></rect>'
+    track = "".join(
+        (
+            f'<div class="segment-fill" style="width: {max(round((value / total) * 100, 2), 3)}%; '
+            f'background: {color};"></div>'
         )
-        labels.append(
-            f'<text x="{min(x + max(width / 2, 8), 92)}" y="115" '
-            'text-anchor="middle" font-size="11" fill="#6d727b">'
-            f"{escape(label)} · {value}</text>"
+        for _, value, color in items
+        if value > 0
+    )
+    legend = "".join(
+        (
+            '<div class="legend-row">'
+            f'<div class="legend-label">{escape(label)}</div>'
+            f'<div class="legend-value">'
+            f"{value} · {_format_percent(round((value / total) * 100))}"
+            "</div>"
+            "</div>"
         )
-        x += width
+        for label, value, _ in items
+    )
     chart = (
-        '<svg class="chart-svg" viewBox="0 0 100 130" role="img" aria-label="Статусный портрет">'
-        '<text x="0" y="20" font-size="12" fill="#6d727b">Статусный портрет</text>'
-        f'<text x="100" y="20" text-anchor="end" font-size="12" fill="#6d727b">Всего {total}</text>'
-        f"{''.join(bars)}"
-        f"{''.join(labels)}"
-        "</svg>"
+        '<div class="chart-body">'
+        f'<div class="legend-value">Всего {total}</div>'
+        f'<div class="segment-track" role="img" aria-label="Статусный портрет">{track}</div>'
+        f'<div class="segment-legend">{legend}</div>'
+        "</div>"
     )
     return _chart_card(
         title="Статусный портрет",
@@ -307,28 +382,11 @@ def _render_status_mix_chart(snapshot: HelpdeskAnalyticsSnapshot) -> str:
 
 
 def _render_volume_chart(snapshot: HelpdeskAnalyticsSnapshot) -> str:
-    max_value = max(
-        snapshot.period_created_tickets_count,
-        snapshot.period_closed_tickets_count,
-        1,
-    )
-    created_width = round((snapshot.period_created_tickets_count / max_value) * 240, 2)
-    closed_width = round((snapshot.period_closed_tickets_count / max_value) * 240, 2)
-    chart = (
-        f'<svg class="chart-svg" viewBox="0 0 {SVG_WIDTH} 170" '
-        'role="img" aria-label="Объём периода">'
-        '<text x="0" y="18" font-size="12" fill="#6d727b">Объём периода</text>'
-        '<rect x="0" y="46" width="240" height="16" rx="8" fill="#ece4d9"></rect>'
-        f'<rect x="0" y="46" width="{created_width}" height="16" rx="8" fill="#275764"></rect>'
-        '<text x="0" y="40" font-size="12" fill="#6d727b">Создано</text>'
-        f'<text x="{created_width + 10}" y="59" font-size="12" '
-        f'fill="#20242a">{snapshot.period_created_tickets_count}</text>'
-        '<rect x="0" y="106" width="240" height="16" rx="8" fill="#ece4d9"></rect>'
-        f'<rect x="0" y="106" width="{closed_width}" height="16" rx="8" fill="#6e8460"></rect>'
-        '<text x="0" y="100" font-size="12" fill="#6d727b">Закрыто</text>'
-        f'<text x="{closed_width + 10}" y="119" font-size="12" '
-        f'fill="#20242a">{snapshot.period_closed_tickets_count}</text>'
-        "</svg>"
+    chart = _render_dual_bar_chart(
+        items=(
+            ("Создано", snapshot.period_created_tickets_count, "#275764"),
+            ("Закрыто", snapshot.period_closed_tickets_count, "#6e8460"),
+        )
     )
     return _chart_card(
         title="Объём периода",
@@ -359,7 +417,7 @@ def _render_category_chart(
     return _chart_card(
         title=title,
         note=note,
-        chart=_bar_chart_svg(items, color=color),
+        chart=_bar_chart_html(items, color=color),
     )
 
 
@@ -386,7 +444,7 @@ def _render_quality_chart(
     return _chart_card(
         title=title,
         note=note,
-        chart=_bar_chart_svg(items[:5], color=color),
+        chart=_bar_chart_html(items[:5], color=color),
     )
 
 
@@ -421,7 +479,7 @@ def _render_operator_chart(
     return _chart_card(
         title=title,
         note=note,
-        chart=_bar_chart_svg(items, color=color),
+        chart=_bar_chart_html(items, color=color),
     )
 
 
@@ -435,7 +493,26 @@ def _chart_card(*, title: str, note: str, chart: str) -> str:
     )
 
 
-def _bar_chart_svg(
+def _render_dual_bar_chart(
+    items: Sequence[tuple[str, int, str]],
+) -> str:
+    max_value = max((value for _, value, _ in items), default=1) or 1
+    rows = []
+    for label, value, color in items:
+        width = round((value / max_value) * 100, 2)
+        rows.append(
+            '<div class="bar-row">'
+            f'<div class="bar-head"><div class="bar-label">{escape(label)}</div>'
+            f'<div class="bar-value">{value}</div></div>'
+            '<div class="bar-track">'
+            f'<div class="bar-fill" style="width: {max(width, 3)}%; background: {color};"></div>'
+            "</div>"
+            "</div>"
+        )
+    return f'<div class="bar-chart">{"".join(rows)}</div>'
+
+
+def _bar_chart_html(
     items: Sequence[tuple[str | None, int | float]],
     *,
     color: str,
@@ -446,32 +523,21 @@ def _bar_chart_svg(
         if _coerce_numeric(value) > 0
     ]
     if not normalized_items:
-        return (
-            f'<svg class="chart-svg" viewBox="0 0 {SVG_WIDTH} 110" '
-            'role="img" aria-label="Нет данных">'
-            '<text x="0" y="44" font-size="14" fill="#6d727b">Данных пока недостаточно.</text>'
-            "</svg>"
-        )
+        return '<div class="chart-note">Данных пока недостаточно.</div>'
     max_value = max(value for _, value in normalized_items) or 1
-    row_height = 38
-    height = 42 + len(normalized_items) * row_height
-    parts: list[str] = []
-    for index, (label, value) in enumerate(normalized_items):
-        y = 26 + index * row_height
-        width = max(10, round((value / max_value) * 230, 2))
-        parts.append(
-            f'<text x="0" y="{y + 12}" font-size="12" fill="#6d727b">'
-            f"{escape(_truncate(label, 18))}</text>"
-            f'<rect x="150" y="{y}" width="230" height="14" rx="7" fill="#ece4d9"></rect>'
-            f'<rect x="150" y="{y}" width="{width}" height="14" rx="7" fill="{color}"></rect>'
-            f'<text x="{150 + width + 8}" y="{y + 12}" font-size="12" '
-            f'fill="#20242a">{escape(_format_chart_value(value))}</text>'
+    rows: list[str] = []
+    for label, value in normalized_items:
+        width = round((value / max_value) * 100, 2)
+        rows.append(
+            '<div class="bar-row">'
+            f'<div class="bar-head"><div class="bar-label">{escape(_truncate(label, 44))}</div>'
+            f'<div class="bar-value">{escape(_format_chart_value(value))}</div></div>'
+            '<div class="bar-track">'
+            f'<div class="bar-fill" style="width: {max(width, 3)}%; background: {color};"></div>'
+            "</div>"
+            "</div>"
         )
-    return (
-        f'<svg class="chart-svg" viewBox="0 0 {SVG_WIDTH} {height}" role="img" aria-label="График">'
-        f"{''.join(parts)}"
-        "</svg>"
-    )
+    return f'<div class="bar-chart">{"".join(rows)}</div>'
 
 
 def _render_section_metrics(snapshot: HelpdeskAnalyticsSnapshot, section: AnalyticsSection) -> str:

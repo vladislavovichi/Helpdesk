@@ -7,7 +7,14 @@ from uuid import UUID
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
+from application.ai.summaries import (
+    AIPredictionConfidence,
+    TicketAssistSnapshot,
+    TicketCategoryPrediction,
+    TicketMacroSuggestion,
+)
 from application.contracts.actors import OperatorIdentity, RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
     ApplyMacroToTicketCommand,
     AssignNextQueuedTicketCommand,
@@ -237,6 +244,38 @@ def deserialize_apply_macro_command(
     )
 
 
+def serialize_predict_ticket_category_command(
+    command: PredictTicketCategoryCommand,
+) -> helpdesk_pb2.PredictTicketCategoryCommand:
+    message = helpdesk_pb2.PredictTicketCategoryCommand()
+    if command.text is not None:
+        message.text = command.text
+    if command.attachment_kind is not None:
+        message.attachment_kind = command.attachment_kind.value
+    if command.attachment_filename is not None:
+        message.attachment_filename = command.attachment_filename
+    if command.attachment_mime_type is not None:
+        message.attachment_mime_type = command.attachment_mime_type
+    return message
+
+
+def deserialize_predict_ticket_category_command(
+    command: helpdesk_pb2.PredictTicketCategoryCommand,
+) -> PredictTicketCategoryCommand:
+    return PredictTicketCategoryCommand(
+        text=command.text if _has(command, "text") else None,
+        attachment_kind=TicketAttachmentKind(command.attachment_kind)
+        if _has(command, "attachment_kind")
+        else None,
+        attachment_filename=(
+            command.attachment_filename if _has(command, "attachment_filename") else None
+        ),
+        attachment_mime_type=(
+            command.attachment_mime_type if _has(command, "attachment_mime_type") else None
+        ),
+    )
+
+
 def serialize_ticket_summary(ticket: TicketSummary) -> helpdesk_pb2.TicketSummary:
     message = helpdesk_pb2.TicketSummary(
         public_id=str(ticket.public_id),
@@ -351,6 +390,95 @@ def deserialize_archived_ticket(
         category_id=ticket.category_id if _has(ticket, "category_id") else None,
         category_code=ticket.category_code if _has(ticket, "category_code") else None,
         category_title=ticket.category_title if _has(ticket, "category_title") else None,
+    )
+
+
+def serialize_ticket_assist_snapshot(
+    snapshot: TicketAssistSnapshot,
+) -> helpdesk_pb2.TicketAssistSnapshot:
+    message = helpdesk_pb2.TicketAssistSnapshot(available=snapshot.available)
+    if snapshot.unavailable_reason is not None:
+        message.unavailable_reason = snapshot.unavailable_reason
+    if snapshot.model_id is not None:
+        message.model_id = snapshot.model_id
+    if snapshot.short_summary is not None:
+        message.short_summary = snapshot.short_summary
+    if snapshot.user_goal is not None:
+        message.user_goal = snapshot.user_goal
+    if snapshot.actions_taken is not None:
+        message.actions_taken = snapshot.actions_taken
+    if snapshot.current_status is not None:
+        message.current_status = snapshot.current_status
+    message.macro_suggestions.extend(
+        [
+            helpdesk_pb2.TicketAssistMacroSuggestion(
+                macro_id=item.macro_id,
+                title=item.title,
+                body=item.body,
+                reason=item.reason,
+            )
+            for item in snapshot.macro_suggestions
+        ]
+    )
+    return message
+
+
+def deserialize_ticket_assist_snapshot(
+    snapshot: helpdesk_pb2.TicketAssistSnapshot,
+) -> TicketAssistSnapshot:
+    return TicketAssistSnapshot(
+        available=snapshot.available,
+        unavailable_reason=(
+            snapshot.unavailable_reason if _has(snapshot, "unavailable_reason") else None
+        ),
+        model_id=snapshot.model_id if _has(snapshot, "model_id") else None,
+        short_summary=snapshot.short_summary if _has(snapshot, "short_summary") else None,
+        user_goal=snapshot.user_goal if _has(snapshot, "user_goal") else None,
+        actions_taken=snapshot.actions_taken if _has(snapshot, "actions_taken") else None,
+        current_status=snapshot.current_status if _has(snapshot, "current_status") else None,
+        macro_suggestions=tuple(
+            TicketMacroSuggestion(
+                macro_id=item.macro_id,
+                title=item.title,
+                body=item.body,
+                reason=item.reason,
+            )
+            for item in snapshot.macro_suggestions
+        ),
+    )
+
+
+def serialize_ticket_category_prediction(
+    prediction: TicketCategoryPrediction,
+) -> helpdesk_pb2.TicketCategoryPrediction:
+    message = helpdesk_pb2.TicketCategoryPrediction(
+        available=prediction.available,
+        confidence=prediction.confidence.value,
+    )
+    if prediction.category_id is not None:
+        message.category_id = prediction.category_id
+    if prediction.category_code is not None:
+        message.category_code = prediction.category_code
+    if prediction.category_title is not None:
+        message.category_title = prediction.category_title
+    if prediction.reason is not None:
+        message.reason = prediction.reason
+    if prediction.model_id is not None:
+        message.model_id = prediction.model_id
+    return message
+
+
+def deserialize_ticket_category_prediction(
+    prediction: helpdesk_pb2.TicketCategoryPrediction,
+) -> TicketCategoryPrediction:
+    return TicketCategoryPrediction(
+        available=prediction.available,
+        category_id=prediction.category_id if _has(prediction, "category_id") else None,
+        category_code=prediction.category_code if _has(prediction, "category_code") else None,
+        category_title=prediction.category_title if _has(prediction, "category_title") else None,
+        confidence=AIPredictionConfidence(prediction.confidence),
+        reason=prediction.reason if _has(prediction, "reason") else None,
+        model_id=prediction.model_id if _has(prediction, "model_id") else None,
     )
 
 

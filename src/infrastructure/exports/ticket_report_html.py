@@ -268,13 +268,25 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
       border-radius: var(--radius-md);
       overflow: hidden;
       min-height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }}
+    .asset-media {{
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      min-height: 220px;
+      background:
+        radial-gradient(circle at top left, rgba(45, 90, 99, 0.10), transparent 42%),
+        linear-gradient(180deg, rgba(244, 239, 232, 0.92), rgba(255, 253, 249, 0.98));
     }}
     .asset-image {{
       display: block;
       width: 100%;
-      max-height: 230px;
-      object-fit: cover;
+      max-height: 420px;
+      object-fit: contain;
       background: #efe7de;
+      border-radius: 16px;
     }}
     .asset-body {{
       padding: 16px;
@@ -327,6 +339,8 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
       border: 1px solid var(--line);
       overflow: hidden;
       background: rgba(250, 247, 242, 0.78);
+      display: grid;
+      gap: 12px;
     }}
     .message-attachment .asset-body {{
       padding: 14px;
@@ -348,6 +362,8 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
       .hero-grid {{ grid-template-columns: 1fr; }}
       h1 {{ font-size: 32px; }}
       .section {{ padding: 20px; }}
+      .asset-media {{ min-height: 180px; padding: 12px; }}
+      .asset-image {{ max-height: 320px; }}
     }}
   </style>
 </head>
@@ -574,8 +590,10 @@ def _render_attachment_gallery(messages: Iterable[TicketReportMessage]) -> str:
         )
         image_html = (
             (
+                '<div class="asset-media">'
                 f'<img class="asset-image" src="{embedded_photo}" '
                 f'alt="{escape(_attachment_label(attachment))}">'
+                "</div>"
             )
             if embedded_photo is not None
             else ""
@@ -623,8 +641,10 @@ def _render_message_attachment(attachment: TicketReportAttachment | None) -> str
     )
     image_html = (
         (
+            '<div class="asset-media">'
             f'<img class="asset-image" src="{embedded_photo}" '
             f'alt="{escape(_attachment_label(attachment))}">'
+            "</div>"
         )
         if embedded_photo is not None
         else ""

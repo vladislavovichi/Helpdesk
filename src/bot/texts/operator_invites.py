@@ -8,6 +8,7 @@ INVITE_ONBOARDING_NAME_INVALID_TEXT = (
 INVITE_ONBOARDING_OPENED_TEXT = "Приглашение распознано."
 INVITE_ONBOARDING_CONFIRMED_TEXT = "Роль оператора включена."
 INVITE_ONBOARDING_EDIT_TEXT = "Имя можно уточнить."
+INVITE_ONBOARDING_CANCELLED_TEXT = "Подключение оператора отменено."
 
 
 def build_invite_link_missing_text(code: str) -> str:

@@ -4,8 +4,10 @@ from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 
+from application.ai.contracts import AIProvider
 from application.services.audit import AuditTrail
 from application.services.authorization import Permission
+from application.services.helpdesk.ai_operations import HelpdeskAIOperations
 from application.services.helpdesk.catalog_operations import HelpdeskCatalogOperations
 from application.services.helpdesk.components import (
     HelpdeskComponents,
@@ -15,6 +17,7 @@ from application.services.helpdesk.operator_operations import HelpdeskOperatorOp
 from application.services.helpdesk.permissions import HelpdeskPermissionGuard
 from application.services.helpdesk.sla_operations import HelpdeskSLAOperations
 from application.services.helpdesk.ticket_operations import HelpdeskTicketOperations
+from application.use_cases.ai.assist import AIGenerationProfile
 from domain.contracts.repositories import (
     AuditLogRepository,
     MacroRepository,
@@ -41,6 +44,7 @@ class HelpdeskService(
     HelpdeskCatalogOperations,
     HelpdeskOperatorOperations,
     HelpdeskSLAOperations,
+    HelpdeskAIOperations,
 ):
     ticket_repository: TicketRepository
     ticket_feedback_repository: TicketFeedbackRepository
@@ -55,6 +59,8 @@ class HelpdeskService(
     tag_repository: TagRepository
     ticket_category_repository: TicketCategoryRepository
     ticket_tag_repository: TicketTagRepository
+    ai_provider: AIProvider
+    ai_generation_profile: AIGenerationProfile
     super_admin_telegram_user_ids: frozenset[int]
     include_internal_notes_in_ticket_reports: bool = True
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
@@ -78,6 +84,8 @@ class HelpdeskService(
             tag_repository=self.tag_repository,
             ticket_category_repository=self.ticket_category_repository,
             ticket_tag_repository=self.ticket_tag_repository,
+            ai_provider=self.ai_provider,
+            ai_generation_profile=self.ai_generation_profile,
             super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
             include_internal_notes_in_ticket_reports=self.include_internal_notes_in_ticket_reports,
         )

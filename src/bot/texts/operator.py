@@ -107,6 +107,10 @@ def build_notes_opened_text(public_number: str) -> str:
     return f"Заметки по заявке {public_number}."
 
 
+def build_assist_opened_text(public_number: str) -> str:
+    return f"Подсказки по заявке {public_number} открыты."
+
+
 def build_export_opened_text(public_number: str) -> str:
     return f"Экспорт по заявке {public_number} открыт."
 

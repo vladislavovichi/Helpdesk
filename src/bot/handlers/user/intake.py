@@ -8,6 +8,7 @@ from aiogram.filters import MagicData, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from application.ai.summaries import TicketCategoryPrediction
 from application.use_cases.tickets.summaries import TicketCategorySummary
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_client_ticket_message_command_from_values
@@ -28,11 +29,12 @@ from bot.keyboards.inline.categories import (
     build_client_intake_categories_markup,
     build_client_intake_message_markup,
 )
+from bot.texts.buttons import ALL_NAVIGATION_BUTTONS, CANCEL_BUTTON_TEXT
 from bot.texts.categories import (
     INTAKE_CANCELLED_TEXT,
-    INTAKE_CATEGORY_PROMPT_TEXT,
     INTAKE_CATEGORY_STALE_TEXT,
     build_intake_attachment_prompt_text,
+    build_intake_category_prompt_text,
     build_intake_category_selected_text,
     build_intake_message_prompt_text,
 )
@@ -61,7 +63,9 @@ async def start_client_intake(
     state: FSMContext,
     categories: Sequence[TicketCategorySummary],
     content: IncomingTicketContent,
+    prediction: TicketCategoryPrediction | None = None,
 ) -> None:
+    ordered_categories = _prioritize_categories(categories, prediction)
     await state.set_state(UserIntakeStates.choosing_category)
     await store_pending_client_intake_draft(
         state=state,
@@ -72,8 +76,15 @@ async def start_client_intake(
         ),
     )
     await message.answer(
-        INTAKE_CATEGORY_PROMPT_TEXT,
-        reply_markup=build_client_intake_categories_markup(categories),
+        build_intake_category_prompt_text(
+            suggested_category_title=(
+                prediction.category_title
+                if prediction is not None and prediction.available
+                else None
+            ),
+            reason=prediction.reason if prediction is not None and prediction.available else None,
+        ),
+        reply_markup=build_client_intake_categories_markup(ordered_categories),
     )
 
 
@@ -220,6 +231,25 @@ async def handle_client_intake_message(
         return
     if current_content is None:
         return
+    if (
+        current_content.text in ALL_NAVIGATION_BUTTONS
+        and current_content.text != CANCEL_BUTTON_TEXT
+    ):
+        category_title = state_data.get("category_title")
+        await message.answer(
+            build_intake_attachment_prompt_text(category_title)
+            if (
+                isinstance(category_title, str)
+                and draft is not None
+                and draft.attachment is not None
+            )
+            else (
+                build_intake_message_prompt_text(category_title)
+                if isinstance(category_title, str)
+                else INTAKE_CATEGORY_STALE_TEXT
+            )
+        )
+        return
 
     if draft is not None and draft.attachment is not None and current_content.text is None:
         category_title = state_data.get("category_title")
@@ -258,3 +288,20 @@ async def handle_client_intake_message(
 )
 async def handle_client_intake_unsupported_attachment(message: Message) -> None:
     await message.answer(ATTACHMENT_NOT_SUPPORTED_TEXT)
+
+
+def _prioritize_categories(
+    categories: Sequence[TicketCategorySummary],
+    prediction: TicketCategoryPrediction | None,
+) -> tuple[TicketCategorySummary, ...]:
+    if prediction is None or not prediction.available or prediction.category_id is None:
+        return tuple(categories)
+
+    preferred: list[TicketCategorySummary] = []
+    rest: list[TicketCategorySummary] = []
+    for category in categories:
+        if category.id == prediction.category_id:
+            preferred.append(category)
+        else:
+            rest.append(category)
+    return tuple(preferred + rest)

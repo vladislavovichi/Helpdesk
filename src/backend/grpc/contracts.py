@@ -5,7 +5,9 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 from uuid import UUID
 
+from application.ai.summaries import TicketAssistSnapshot, TicketCategoryPrediction
 from application.contracts.actors import RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
     ApplyMacroToTicketCommand,
     AssignNextQueuedTicketCommand,
@@ -119,6 +121,20 @@ class HelpdeskBackendClient(Protocol):
         command: ApplyMacroToTicketCommand,
         actor: RequestActor | None = None,
     ) -> MacroApplicationResult | None: ...
+
+    async def get_ticket_ai_assist_snapshot(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketAssistSnapshot | None: ...
+
+    async def predict_ticket_category(
+        self,
+        command: PredictTicketCategoryCommand,
+        *,
+        actor: RequestActor | None = None,
+    ) -> TicketCategoryPrediction: ...
 
     async def export_ticket_report(
         self,

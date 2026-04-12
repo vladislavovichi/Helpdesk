@@ -240,4 +240,67 @@ def test_render_analytics_snapshot_html_contains_svg_charts() -> None:
 
     assert "HTML отчёт с графиками" in html
     assert "Статусный портрет" in html
-    assert "<svg" in html
+    assert 'class="bar-chart"' in html
+    assert 'class="segment-track"' in html
+
+
+def test_render_ticket_report_html_uses_contained_photo_layout(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    photo_dir = tmp_path / "photo"
+    photo_dir.mkdir(parents=True, exist_ok=True)
+    photo_path = photo_dir / "wide-photo.png"
+    photo_path.write_bytes(
+        bytes.fromhex(
+            "89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C489"
+            "0000000D49444154789C6360000002000154A24F5D0000000049454E44AE426082"
+        )
+    )
+    monkeypatch.setattr(
+        "infrastructure.exports.ticket_report_html.get_settings",
+        lambda: SimpleNamespace(assets=SimpleNamespace(path=tmp_path)),
+    )
+
+    report = TicketReport(
+        public_id=uuid4(),
+        public_number="HD-ARCH0003",
+        client_chat_id=2002,
+        status=TicketStatus.CLOSED,
+        priority="normal",
+        subject="Проверка новой фотогалереи",
+        assigned_operator_id=7,
+        assigned_operator_name="Иван Петров",
+        assigned_operator_telegram_user_id=1001,
+        created_at=datetime(2026, 4, 7, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 7, 13, 0, tzinfo=UTC),
+        first_response_at=datetime(2026, 4, 7, 12, 10, tzinfo=UTC),
+        first_response_seconds=600,
+        closed_at=datetime(2026, 4, 7, 14, 0, tzinfo=UTC),
+        category_code="access",
+        category_title="Доступ и вход",
+        tags=(),
+        feedback=None,
+        messages=(
+            TicketReportMessage(
+                sender_type=TicketMessageSenderType.CLIENT,
+                sender_operator_name=None,
+                text="Прикладываю широкий скриншот.",
+                created_at=datetime(2026, 4, 7, 12, 1, tzinfo=UTC),
+                attachment=TicketReportAttachment(
+                    kind=TicketAttachmentKind.PHOTO,
+                    telegram_file_id="file-2",
+                    telegram_file_unique_id="wide-photo",
+                    filename="wide.png",
+                    mime_type="image/png",
+                    storage_path="photo/wide-photo.png",
+                ),
+            ),
+        ),
+        events=(),
+    )
+
+    html = render_ticket_report_html(report).decode("utf-8")
+
+    assert "object-fit: contain" in html
+    assert 'class="asset-media"' in html

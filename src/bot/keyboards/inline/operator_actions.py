@@ -107,6 +107,12 @@ def build_ticket_more_actions_markup(
     if status != TicketStatus.CLOSED:
         builder.row(
             _build_callback_button(
+                "Подсказки",
+                OperatorActionCallback(action="assist", ticket_public_id=callback_value).pack(),
+            )
+        )
+        builder.row(
+            _build_callback_button(
                 "Заметки",
                 OperatorActionCallback(action="notes", ticket_public_id=callback_value).pack(),
             )
@@ -156,6 +162,40 @@ def build_ticket_export_actions_markup(*, ticket_public_id: UUID) -> InlineKeybo
             "CSV выгрузка",
             OperatorActionCallback(action="export_csv", ticket_public_id=callback_value).pack(),
         ),
+    )
+    builder.row(
+        _build_callback_button(
+            BACK_BUTTON_TEXT,
+            OperatorActionCallback(action="more", ticket_public_id=callback_value).pack(),
+        )
+    )
+    return builder.as_markup()
+
+
+def build_ticket_assist_markup(
+    *,
+    ticket_public_id: UUID,
+    suggested_macro_ids: Sequence[tuple[int, str]],
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    callback_value = str(ticket_public_id)
+    for macro_id, title in suggested_macro_ids[:3]:
+        builder.row(
+            _build_callback_button(
+                title,
+                OperatorMacroCallback(
+                    action="preview",
+                    ticket_public_id=callback_value,
+                    macro_id=macro_id,
+                    page=1,
+                ).pack(),
+            )
+        )
+    builder.row(
+        _build_callback_button(
+            "Все макросы",
+            OperatorActionCallback(action="macros", ticket_public_id=callback_value).pack(),
+        )
     )
     builder.row(
         _build_callback_button(

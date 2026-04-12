@@ -17,6 +17,7 @@ class OperatorActionCallback(CallbackData, prefix="operator"):
         "macros",
         "tags",
         "more",
+        "assist",
         "card",
         "notes",
         "note_add",

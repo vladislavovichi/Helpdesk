@@ -115,6 +115,7 @@ def format_ticket_more_actions(
     lines.extend(["", "Изменить", " · ".join(change_actions)])
 
     lines.extend(["", "Внутреннее", "Заметки"])
+    lines.extend(["", "AI-помощь", "Подсказки"])
 
     lines.extend(["", "Отчёт", "Экспорт · CSV · HTML"])
 

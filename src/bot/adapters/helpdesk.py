@@ -5,6 +5,7 @@ from uuid import UUID
 from aiogram.types import Message, User
 
 from application.contracts.actors import OperatorIdentity, RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
     AddInternalNoteCommand,
     ApplyMacroToTicketCommand,
@@ -81,6 +82,19 @@ def build_client_ticket_message_command_from_values(
         text=text,
         attachment=attachment,
         category_id=category_id,
+    )
+
+
+def build_predict_ticket_category_command(
+    *,
+    content: IncomingTicketContent,
+) -> PredictTicketCategoryCommand:
+    attachment = content.attachment
+    return PredictTicketCategoryCommand(
+        text=content.text,
+        attachment_kind=attachment.kind if attachment is not None else None,
+        attachment_filename=attachment.filename if attachment is not None else None,
+        attachment_mime_type=attachment.mime_type if attachment is not None else None,
     )
 
 

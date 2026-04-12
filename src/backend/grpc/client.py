@@ -11,7 +11,9 @@ from uuid import UUID
 
 import grpc
 
+from application.ai.summaries import TicketAssistSnapshot, TicketCategoryPrediction
 from application.contracts.actors import RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
     ApplyMacroToTicketCommand,
     AssignNextQueuedTicketCommand,
@@ -51,12 +53,15 @@ from backend.grpc.translators import (
     deserialize_operator_reply_result,
     deserialize_operator_ticket,
     deserialize_queued_ticket,
+    deserialize_ticket_assist_snapshot,
+    deserialize_ticket_category_prediction,
     deserialize_ticket_details,
     deserialize_ticket_summary,
     serialize_apply_macro_command,
     serialize_assign_next_command,
     serialize_client_ticket_message_command,
     serialize_operator_reply_command,
+    serialize_predict_ticket_category_command,
     serialize_request_actor,
     serialize_ticket_assignment_command,
 )
@@ -349,6 +354,48 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             _raise_optional_rpc_error(exc)
             return None
         return deserialize_macro_application_result(result)
+
+    async def get_ticket_ai_assist_snapshot(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None = None,
+    ) -> TicketAssistSnapshot | None:
+        request = helpdesk_pb2.GetTicketAssistSnapshotRequest(
+            ticket_public_id=str(ticket_public_id)
+        )
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.GetTicketAssistSnapshot,
+                request,
+                actor=actor,
+                retryable=True,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_assist_snapshot(result)
+
+    async def predict_ticket_category(
+        self,
+        command: PredictTicketCategoryCommand,
+        *,
+        actor: RequestActor | None = None,
+    ) -> TicketCategoryPrediction:
+        request = helpdesk_pb2.PredictTicketCategoryRequest()
+        request.command.CopyFrom(serialize_predict_ticket_category_command(command))
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.PredictTicketCategory,
+                request,
+                actor=actor,
+                retryable=True,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_ticket_category_prediction(result)
 
     async def export_ticket_report(
         self,
