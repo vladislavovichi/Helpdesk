@@ -31,7 +31,9 @@
 
 ```bash
 cp .env.example .env
-make full
+make up
+make health
+make smoke
 ```
 
 Для более аккуратной конфигурации можно собрать `.env` из доменных шаблонов в [ops/env/README.md](ops/env/README.md).
@@ -66,11 +68,17 @@ AI__API_TOKEN=hf_xxx
 
 Полный стек в Docker Compose теперь поднимает `postgres`, `redis`, `ai-service`, `backend` и `bot`. Для локального старта пригодятся:
 
+- `make up`
+- `make health`
+- `make smoke`
 - `make run-ai`
 - `make run-backend`
 - `make run-bot`
+- `make backup-db`
 - `make health-ai`
 - `make logs-ai`
+
+Базовый Compose-файл теперь production-oriented и не опирается на bind-mount исходников. Для локальной разработки `make` по умолчанию добавляет `ops/docker/compose.dev.yml`, который монтирует репозиторий поверх контейнеров `bot`, `backend` и `ai-service`.
 
 ## Где читать дальше
 

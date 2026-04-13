@@ -26,6 +26,18 @@ async def build_runtime(settings: Settings) -> AIServiceRuntime:
         settings.ai.model_id,
     )
     provider = build_ai_provider(settings.ai)
+    if provider.is_enabled:
+        logger.info(
+            "AI provider is enabled provider=%s model=%s",
+            settings.ai.normalized_provider,
+            provider.model_id,
+        )
+    else:
+        logger.warning(
+            "AI provider is running in degraded mode provider=%s reason=%s",
+            settings.ai.normalized_provider,
+            getattr(provider, "disabled_reason", "provider is disabled"),
+        )
     service = _build_service(settings, provider)
     grpc_server = build_ai_service_grpc_server(
         service=service,

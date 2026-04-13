@@ -1,6 +1,6 @@
 POETRY ?= poetry
 COMPOSE ?= docker compose
-COMPOSE_FILE ?= ops/docker/compose.yml
+COMPOSE_FILES ?= -f ops/docker/compose.yml -f ops/docker/compose.dev.yml
 PYTHON ?= python3.12
 export PYTHONPATH ?= src
 ALEMBIC_CONFIG ?= migrations/alembic.ini
@@ -11,6 +11,10 @@ AI_SERVICE_MODULE ?= ai_service.main
 FULL_SCRIPT ?= ops/docker/full.sh
 FULL_SERVICES ?= postgres redis ai-service backend bot
 FULL_TIMEOUT ?= 180
+STACK_HEALTH_SCRIPT ?= ops/scripts/stack_health.sh
+SMOKE_SCRIPT ?= /app/ops/scripts/smoke_check.py
+BACKUP_DB_SCRIPT ?= ops/scripts/backup_db.sh
+RESTORE_DB_SCRIPT ?= ops/scripts/restore_db.sh
 BACKEND_PROTO_SRC ?= src/backend/proto/helpdesk.proto
 BACKEND_PROTO_INCLUDE ?= src/backend/proto
 BACKEND_PROTO_OUT ?= src/backend/grpc/generated
@@ -28,7 +32,9 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test proto proto-check check ci health health-backend health-ai run run-backend run-ai run-bot migrate migration-check make-migration docker-up docker-down full full-down logs logs-ai up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test proto proto-check check ci health health-bot health-backend health-ai smoke run run-backend run-ai run-bot migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-down logs logs-bot logs-backend logs-ai backup-db restore-db up down pre-commit-install pre-commit-run
+
+COMPOSE_CMD = $(COMPOSE) $(COMPOSE_FILES)
 
 help:
 	@printf "Available targets:\n"
@@ -41,23 +47,32 @@ help:
 	@printf "  proto-check        Verify that generated gRPC stubs are up to date\n"
 	@printf "  check              Run lint, typing, and tests\n"
 	@printf "  ci                 Run check, proto-check, and migration consistency\n"
-	@printf "  health             Run the bot-side health check\n"
+	@printf "  health             Show Docker Compose stack health\n"
+	@printf "  health-bot         Run the bot-side health check locally\n"
 	@printf "  health-backend     Run the backend-side health check\n"
 	@printf "  health-ai          Run the ai-service health check\n"
+	@printf "  smoke             Run the operational smoke-check against the running stack\n"
 	@printf "  run                Start the Telegram bot runtime locally\n"
 	@printf "  run-backend        Start the backend gRPC service locally\n"
 	@printf "  run-ai             Start the ai-service gRPC runtime locally\n"
 	@printf "  run-bot            Start the Telegram bot runtime locally\n"
 	@printf "  migrate            Apply Alembic migrations\n"
+	@printf "  migrate-stack      Apply Alembic migrations inside the backend container\n"
 	@printf "  migration-check    Verify that migrations match the SQLAlchemy metadata\n"
 	@printf "  make-migration     Create a new Alembic revision (use name=...)\n"
 	@printf "  docker-up          Start the Docker Compose stack in the background\n"
 	@printf "  docker-down        Stop the Docker Compose stack\n"
+	@printf "  restart            Restart the Docker Compose stack\n"
+	@printf "  ps                 Show Docker Compose service state\n"
 	@printf "  full               Build, start, and verify the full Docker Compose stack\n"
 	@printf "  full-down          Stop the full Docker Compose stack\n"
 	@printf "  logs               Tail application logs from Docker Compose\n"
+	@printf "  logs-bot           Tail bot logs from Docker Compose\n"
+	@printf "  logs-backend       Tail backend logs from Docker Compose\n"
 	@printf "  pre-commit-install Install pre-commit hooks\n"
 	@printf "  pre-commit-run     Run pre-commit on all files\n"
+	@printf "  backup-db          Create a PostgreSQL logical backup from the running stack\n"
+	@printf "  restore-db         Restore PostgreSQL from BACKUP_PATH=/path/to/file.dump\n"
 
 install:
 	$(call ensure_poetry_env)
@@ -90,9 +105,12 @@ proto:
 proto-check: proto
 	git diff --exit-code -- $(BACKEND_PROTO_OUT) $(AI_PROTO_OUT)
 
-health:
+health-bot:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m app.healthcheck
+
+health:
+	COMPOSE="$(COMPOSE_CMD)" sh $(STACK_HEALTH_SCRIPT)
 
 health-backend:
 	$(call ensure_poetry_env)
@@ -126,6 +144,9 @@ migrate:
 	$(call ensure_poetry_env)
 	$(ALEMBIC) upgrade head
 
+migrate-stack:
+	$(COMPOSE_CMD) run --rm backend alembic -c migrations/alembic.ini upgrade head
+
 make-migration:
 	@test -n "$(name)" || (echo "Usage: make make-migration name=descriptive_message" && exit 1)
 	$(call ensure_poetry_env)
@@ -136,21 +157,42 @@ check: lint typecheck test
 ci: check proto-check migration-check
 
 docker-up:
-	$(COMPOSE) -f $(COMPOSE_FILE) up --build -d
+	$(COMPOSE_CMD) up --build -d
 
 docker-down:
-	$(COMPOSE) -f $(COMPOSE_FILE) down
+	$(COMPOSE_CMD) down
+
+restart:
+	$(COMPOSE_CMD) restart
+
+ps:
+	$(COMPOSE_CMD) ps
 
 full:
-	COMPOSE="$(COMPOSE) -f $(COMPOSE_FILE)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh $(FULL_SCRIPT)
+	COMPOSE="$(COMPOSE_CMD)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh $(FULL_SCRIPT)
 
 full-down: docker-down
 
 logs:
-	$(COMPOSE) -f $(COMPOSE_FILE) logs -f ai-service backend bot
+	$(COMPOSE_CMD) logs -f ai-service backend bot
+
+logs-bot:
+	$(COMPOSE_CMD) logs -f bot
+
+logs-backend:
+	$(COMPOSE_CMD) logs -f backend
 
 logs-ai:
-	$(COMPOSE) -f $(COMPOSE_FILE) logs -f ai-service
+	$(COMPOSE_CMD) logs -f ai-service
+
+smoke:
+	$(COMPOSE_CMD) run --rm --no-deps backend python $(SMOKE_SCRIPT)
+
+backup-db:
+	COMPOSE="$(COMPOSE_CMD)" sh $(BACKUP_DB_SCRIPT)
+
+restore-db:
+	COMPOSE="$(COMPOSE_CMD)" BACKUP_PATH="$(BACKUP_PATH)" sh $(RESTORE_DB_SCRIPT)
 
 up: docker-up
 

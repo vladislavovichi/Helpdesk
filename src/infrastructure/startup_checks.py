@@ -103,11 +103,12 @@ async def _run_single_dependency_check(
             log_method = logger.error if is_final_attempt else logger.warning
             log_method(
                 "Startup dependency check failed component=%s dependency=%s target=%s "
-                "attempt=%s error_type=%s error=%s final=%s",
+                "attempt=%s failure_class=%s error_type=%s error=%s final=%s",
                 component,
                 check.name,
                 check.target,
                 attempt,
+                _classify_startup_failure(exc),
                 exc.__class__.__name__,
                 exc,
                 is_final_attempt,
@@ -132,3 +133,13 @@ def _validate_backend_auth(settings: Settings) -> None:
 def _validate_ai_service_auth(settings: Settings) -> None:
     if not settings.ai_service_auth.token.strip():
         raise RuntimeError("AI_SERVICE_AUTH__TOKEN не задан.")
+
+
+def _classify_startup_failure(exc: Exception) -> str:
+    if isinstance(exc, PermissionError):
+        return "auth_issue"
+    if isinstance(exc, ValueError):
+        return "config_issue"
+    if isinstance(exc, (TimeoutError, OSError, SQLAlchemyError, RedisError, grpc.RpcError)):
+        return "dependency_issue"
+    return "runtime_issue"

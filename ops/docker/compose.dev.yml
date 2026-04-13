@@ -1,0 +1,18 @@
+services:
+  ai-service:
+    environment:
+      APP__ENVIRONMENT: ${APP__ENVIRONMENT:-dev}
+    volumes:
+      - ../..:/app
+
+  backend:
+    environment:
+      APP__ENVIRONMENT: ${APP__ENVIRONMENT:-dev}
+    volumes:
+      - ../..:/app
+
+  bot:
+    environment:
+      APP__ENVIRONMENT: ${APP__ENVIRONMENT:-dev}
+    volumes:
+      - ../..:/app

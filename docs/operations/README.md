@@ -1,76 +1,62 @@
 # Эксплуатация
 
-## Runtime Контур
+## Контур
 
-- PostgreSQL — основное постоянное хранилище;
-- Redis — FSM, locks, presence, streams и SLA coordination;
-- ai-service — внутренний gRPC inference runtime;
-- backend — внутренний gRPC-сервис;
-- bot — Telegram runtime поверх backend client.
+- `postgres` хранит заявки, операторов, категории, заметки, feedback, аудит и AI summary cache;
+- `redis` держит FSM, locks, presence, streams и SLA coordination;
+- `ai-service` обслуживает внутренний gRPC-контур AI;
+- `backend` содержит продуктовые правила и gRPC API;
+- `bot` работает как Telegram presentation/runtime слой поверх `backend`.
 
 ## Основные Команды
 
 ```bash
-make docker-up
-make logs
-make docker-down
+make up
+make ps
 make health
-make health-backend
-make health-ai
-make migrate
+make smoke
+make logs
+make logs-backend
+make logs-ai
+make backup-db
+make down
 ```
 
-Полный локальный happy-path:
+`make health` показывает состояние контейнеров Docker Compose.  
+`make health-bot`, `make health-backend` и `make health-ai` запускают прикладные probes и печатают правдивую readiness-диагностику самих сервисов.
 
-```bash
-make full
-```
+## Что Считать Нормальным Стартом
 
-## Startup И Readiness
+1. `postgres` и `redis` становятся healthy.
+2. `ai-service` поднимает gRPC и начинает отвечать на внутренний status probe.
+3. `backend` выполняет миграции, проверяет БД, Redis и `ai-service`, а потом становится ready.
+4. `bot` проверяет БД, Redis и `backend`, а потом считается готовым.
 
-Оба процесса стартуют fail-fast:
+Если один из этих шагов не проходит, сервис должен завершиться явно, а не зависнуть в полуготовом состоянии.
 
-- сначала валидируется критичная конфигурация;
-- затем выполняются ограниченные readiness-checks;
-- при проблеме процесс завершается без долгого неопределённого запуска.
+## Readiness И Operational Truth
 
-Критичными считаются:
+- `postgres` healthy, когда `pg_isready` видит базу;
+- `redis` healthy, когда отвечает `PING`;
+- `ai-service` healthy, когда живой gRPC endpoint отвечает на auth-protected status call;
+- `backend` healthy, когда доступны БД, Redis, `ai-service` и сам backend gRPC отвечает на internal status call;
+- `bot` healthy, когда внутренняя диагностика подтверждает зависимости и runtime surfaces.
 
-- `AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS`;
-- `BACKEND_AUTH__TOKEN`;
-- `AI_SERVICE_AUTH__TOKEN`;
-- `BOT__TOKEN`, если `APP__DRY_RUN=false`;
-- доступность PostgreSQL и Redis;
-- для backend runtime — доступность ai-service gRPC;
-- для bot runtime — доступность backend gRPC.
+Для `ai-service` отдельно виден operational mode:
 
-## Health И Диагностика
+- `OK` — gRPC жив, auth настроен, provider включён;
+- `DEGRADED` — сервис жив, но provider отключён или не настроен; продукт продолжает работать с graceful degradation;
+- `FAIL` — сервис недоступен или auth/config сломан.
 
-`make health`, `make health-backend` и `make health-ai` показывают:
+## Runbook-и
 
-- `liveness`;
-- `readiness`;
-- детализацию по dependency checks.
+- [Деплой и обновление](runbooks/deploy.md)
+- [Диагностика и типовые сбои](runbooks/diagnostics.md)
+- [Backup и restore PostgreSQL](runbooks/backup-restore.md)
 
-Команда `/health` доступна операторским ролям и помогает быстро понять, что именно сейчас не готово: база, Redis, backend auth, ai-service, backend gRPC или сам Telegram runtime.
+## Что Ещё Важно
 
-## Экспорты И Архив
-
-Эксплуатационно важно помнить:
-
-- ticket exports могут включать внутренние заметки, если это разрешено конфигурацией;
-- HTML ticket export встраивает только безопасные локальные изображения;
-- analytics export предназначен для локального открытия и пересылки как статический HTML;
-- архивные выгрузки доступны прямо из карточки закрытого дела.
-
-## Audit Trail
-
-Backend пишет структурные записи по чувствительным действиям:
-
-- workflow mutations по заявке;
-- exports;
-- category и macro management;
-- operator role changes;
-- invite generation и redemption.
-
-Это упрощает разбор спорных кейсов и даёт базовую операционную трассировку без внешней панели.
+- `/health` в Telegram остаётся быстрым операторским срезом состояния runtime;
+- backend продолжает писать структурный audit trail по чувствительным действиям;
+- Redis не считается источником долговременной правды и не входит в backup-процедуру;
+- smoke-check не заменяет тесты, а подтверждает, что стек реально поднялся и основные цепочки доступны.

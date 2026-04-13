@@ -1,3 +1,5 @@
+name: reliora
+
 services:
   ai-service:
     build:
@@ -6,23 +8,27 @@ services:
     command: ["sh", "/app/ops/docker/entrypoint.sh"]
     environment:
       PYTHONPATH: /app/src
+      APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
       AI_SERVICE__HOST: ai-service
       AI_SERVICE__PORT: 50061
+      AI_SERVICE__LISTEN_HOST: 0.0.0.0
       RUN_MIGRATIONS: "false"
       SERVICE_MODULE: ai_service.main
     env_file:
       - ../../.env
+    init: true
     healthcheck:
       test: ["CMD", "python", "-m", "ai_service.healthcheck"]
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 25s
+    networks:
+      - helpdesk
     ports:
       - "${AI_SERVICE_EXPOSE_PORT:-50081}:50061"
     restart: unless-stopped
-    volumes:
-      - ../..:/app
+    stop_grace_period: 20s
 
   backend:
     build:
@@ -31,17 +37,21 @@ services:
     command: ["sh", "/app/ops/docker/entrypoint.sh"]
     environment:
       PYTHONPATH: /app/src
+      APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
       DATABASE__HOST: postgres
       DATABASE__PORT: 5432
       REDIS__HOST: redis
       REDIS__PORT: 6379
+      BACKEND_SERVICE__HOST: backend
       BACKEND_SERVICE__PORT: 50051
+      BACKEND_SERVICE__LISTEN_HOST: 0.0.0.0
       AI_SERVICE__HOST: ai-service
       AI_SERVICE__PORT: 50061
       RUN_MIGRATIONS: "true"
       SERVICE_MODULE: backend.main
     env_file:
       - ../../.env
+    init: true
     depends_on:
       ai-service:
         condition: service_healthy
@@ -54,12 +64,13 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 30s
+    networks:
+      - helpdesk
     ports:
       - "${BACKEND_EXPOSE_PORT:-50071}:50051"
     restart: unless-stopped
-    volumes:
-      - ../..:/app
+    stop_grace_period: 20s
 
   bot:
     build:
@@ -68,6 +79,7 @@ services:
     command: ["sh", "/app/ops/docker/entrypoint.sh"]
     environment:
       PYTHONPATH: /app/src
+      APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
       DATABASE__HOST: postgres
       DATABASE__PORT: 5432
       REDIS__HOST: redis
@@ -78,6 +90,7 @@ services:
       SERVICE_MODULE: app.main
     env_file:
       - ../../.env
+    init: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,10 +103,11 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 35s
+    networks:
+      - helpdesk
     restart: unless-stopped
-    volumes:
-      - ../..:/app
+    stop_grace_period: 25s
 
   postgres:
     image: postgres:16-alpine
@@ -101,6 +115,8 @@ services:
       POSTGRES_DB: ${DATABASE__DATABASE:-helpdesk}
       POSTGRES_USER: ${DATABASE__USER:-helpdesk}
       POSTGRES_PASSWORD: ${DATABASE__PASSWORD:-helpdesk}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    init: true
     ports:
       - "${POSTGRES_EXPOSE_PORT:-5434}:5432"
     healthcheck:
@@ -112,12 +128,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - helpdesk
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
+    init: true
     ports:
       - "${REDIS_EXPOSE_PORT:-6381}:6379"
     healthcheck:
@@ -125,8 +146,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
+    networks:
+      - helpdesk
+    restart: unless-stopped
     volumes:
       - redis_data:/data
+
+networks:
+  helpdesk:
+    name: reliora-network
 
 volumes:
   postgres_data:
