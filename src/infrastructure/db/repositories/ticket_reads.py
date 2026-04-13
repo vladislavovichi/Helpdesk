@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import cast
 from uuid import UUID
 
 from sqlalchemy import desc, select
@@ -458,8 +457,8 @@ def _build_attachment_details(
 
 
 def _as_ticket_entity(ticket: TicketModel | None) -> TicketEntity | None:
-    return cast(TicketEntity | None, ticket)
+    return ticket
 
 
 def _as_ticket_entities(tickets: Sequence[TicketModel]) -> tuple[TicketEntity, ...]:
-    return cast(tuple[TicketEntity, ...], tuple(tickets))
+    return tuple(tickets)

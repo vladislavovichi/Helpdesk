@@ -88,8 +88,8 @@ async def test_client_intake_uses_category_prediction_when_available() -> None:
 
     service.predict_ticket_category.assert_awaited_once()
     cast(AsyncMock, message.answer).assert_awaited_once_with(
-        "Похоже, это тема «Доступ и вход».\n"
-        "Текст явно про восстановление доступа.\n"
+        "Похоже, подойдёт тема «Доступ и вход».\n"
+        "Почему так: Текст явно про восстановление доступа.\n"
         "Подтвердите вариант или выберите другую тему.",
         reply_markup=ANY,
     )

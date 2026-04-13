@@ -5,9 +5,23 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
+import grpc
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
+
 from infrastructure.config.settings import Settings
 
 AsyncStartupCheck = Callable[[], Awaitable[bool]]
+EXPECTED_STARTUP_FAILURES = (
+    TimeoutError,
+    OSError,
+    RuntimeError,
+    PermissionError,
+    ValueError,
+    SQLAlchemyError,
+    RedisError,
+    grpc.RpcError,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -84,7 +98,7 @@ async def _run_single_dependency_check(
                 attempt,
             )
             return
-        except Exception as exc:
+        except EXPECTED_STARTUP_FAILURES as exc:
             is_final_attempt = attempt >= attempts
             log_method = logger.error if is_final_attempt else logger.warning
             log_method(

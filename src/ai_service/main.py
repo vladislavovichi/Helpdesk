@@ -29,9 +29,6 @@ async def run() -> None:
             runtime.grpc_server.bound_port,
         )
         await runtime.grpc_server.wait_for_termination()
-    except Exception:
-        logger.exception("AI-service runtime failed.")
-        raise
     finally:
         await runtime.grpc_server.stop()
         await close_runtime(runtime)
@@ -42,6 +39,9 @@ def main() -> None:
         asyncio.run(run())
     except KeyboardInterrupt:
         logging.getLogger(__name__).info("Shutdown requested, stopping ai-service.")
+    except Exception:
+        logging.getLogger(__name__).exception("AI-service runtime failed.")
+        raise
 
 
 if __name__ == "__main__":

@@ -890,13 +890,10 @@ def _load_embedded_photo(attachment: TicketReportAttachment) -> str | None:
 
 
 def _resolve_asset_path(storage_path: str) -> Path | None:
-    try:
-        storage = LocalTicketAssetStorage(get_settings().assets.path)
-    except Exception:
-        return None
+    storage = LocalTicketAssetStorage(get_settings().assets.path)
     try:
         return storage.resolve_path(storage_path)
-    except Exception:
+    except ValueError:
         return None
 
 

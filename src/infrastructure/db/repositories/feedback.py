@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
-
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +16,7 @@ class SqlAlchemyTicketFeedbackRepository:
         result = await self.session.execute(
             select(TicketFeedback).where(TicketFeedback.ticket_id == ticket_id)
         )
-        return cast(TicketFeedbackEntity | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()
 
     async def create(
         self,
@@ -41,7 +39,7 @@ class SqlAlchemyTicketFeedbackRepository:
             if existing_feedback is None:
                 raise
             return existing_feedback
-        return cast(TicketFeedbackEntity, feedback)
+        return feedback
 
     async def update_comment(
         self,

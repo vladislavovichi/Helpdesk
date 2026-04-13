@@ -29,19 +29,22 @@ _SUMMARY_INSTRUCTIONS = (
     "Ты помогаешь оператору русскоязычного helpdesk. "
     "Верни только JSON без пояснений и markdown. "
     "Тон деловой, спокойный, короткий. "
-    "Пиши как внутреннюю support-сводку. Не выдумывай факты."
+    "Пиши как внутреннюю support-сводку. Не выдумывай факты. "
+    "Если уверенности не хватает, опирайся только на подтверждённые детали из переписки."
 )
 _MACRO_INSTRUCTIONS = (
     "Ты подбираешь операторские макросы для helpdesk. "
     "Верни только JSON без пояснений и markdown. "
     "Выбирай только из переданного списка макросов. Не придумывай новые. "
-    "Если уверенность слабая, не предлагай макрос."
+    "Если уверенность слабая, не предлагай макрос. "
+    "Причина должна быть одной короткой фразой на русском."
 )
 _CATEGORY_INSTRUCTIONS = (
     "Ты помогаешь предсказать тему нового обращения в helpdesk. "
     "Верни только JSON без пояснений и markdown. "
     "Выбирай только из переданного списка тем. "
-    "Если уверенность низкая, верни отсутствие предсказания."
+    "Если уверенность низкая, верни отсутствие предсказания. "
+    "Значения medium и high используй только при явных признаках."
 )
 
 
@@ -66,6 +69,17 @@ class _CategoryPredictionPayload(BaseModel):
     category_id: int | None = None
     confidence: AIPredictionConfidence = AIPredictionConfidence.NONE
     reason: str | None = Field(default=None, max_length=220)
+
+
+_GENERIC_AI_REASON_TEXTS = {
+    "...",
+    "не знаю",
+    "не уверен",
+    "подходит",
+    "релевантно",
+    "по контексту",
+    "по теме",
+}
 
 
 @dataclass(slots=True)
@@ -94,14 +108,16 @@ class AIApplicationService:
                 unavailable_reason="Не удалось подготовить сводку.",
                 model_id=self.provider.model_id,
             )
+        summary = _build_generated_ticket_summary(payload)
+        if summary is None:
+            return GeneratedTicketSummaryResult(
+                available=False,
+                unavailable_reason="Не удалось подготовить достаточно надёжную сводку.",
+                model_id=self.provider.model_id,
+            )
         return GeneratedTicketSummaryResult(
             available=True,
-            summary=AIGeneratedTicketSummary(
-                short_summary=payload.short_summary,
-                user_goal=payload.user_goal,
-                actions_taken=payload.actions_taken,
-                current_status=payload.current_status,
-            ),
+            summary=summary,
             model_id=self.provider.model_id,
         )
 
@@ -128,16 +144,10 @@ class AIApplicationService:
                 unavailable_reason="Не удалось подобрать макросы.",
                 model_id=self.provider.model_id,
             )
+        suggestions = _build_suggested_macros(payload)
         return SuggestedMacrosResult(
             available=True,
-            suggestions=tuple(
-                AISuggestedMacro(
-                    macro_id=item.macro_id,
-                    reason=item.reason,
-                    confidence=item.confidence,
-                )
-                for item in payload.macro_ids
-            ),
+            suggestions=suggestions,
             model_id=self.provider.model_id,
         )
 
@@ -158,19 +168,18 @@ class AIApplicationService:
             max_output_tokens=self.config.category_max_output_tokens,
             temperature=self.config.category_temperature,
         )
-        if payload is None or payload.category_id is None:
+        prediction = _build_category_prediction(
+            payload,
+            command=command,
+            model_id=self.provider.model_id,
+        )
+        if prediction is None:
             return AIPredictedCategoryResult(
                 available=False,
                 confidence=AIPredictionConfidence.NONE,
                 model_id=self.provider.model_id,
             )
-        return AIPredictedCategoryResult(
-            available=True,
-            category_id=payload.category_id,
-            confidence=payload.confidence,
-            reason=payload.reason,
-            model_id=self.provider.model_id,
-        )
+        return prediction
 
 
 async def _complete_json[SchemaT: BaseModel](
@@ -219,6 +228,79 @@ def _extract_json_object(raw: str) -> dict[str, Any] | None:
         except json.JSONDecodeError:
             return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _build_generated_ticket_summary(
+    payload: _TicketSummaryPayload,
+) -> AIGeneratedTicketSummary | None:
+    short_summary = _normalize_ai_text(payload.short_summary, limit=280)
+    user_goal = _normalize_ai_text(payload.user_goal, limit=280)
+    actions_taken = _normalize_ai_text(payload.actions_taken, limit=280)
+    current_status = _normalize_ai_text(payload.current_status, limit=280)
+    if (
+        short_summary is None
+        or user_goal is None
+        or actions_taken is None
+        or current_status is None
+    ):
+        return None
+
+    unique_sections = {short_summary, user_goal, actions_taken, current_status}
+    if len(unique_sections) < 3:
+        return None
+
+    return AIGeneratedTicketSummary(
+        short_summary=short_summary,
+        user_goal=user_goal,
+        actions_taken=actions_taken,
+        current_status=current_status,
+    )
+
+
+def _build_suggested_macros(
+    payload: _MacroSuggestionPayload,
+) -> tuple[AISuggestedMacro, ...]:
+    suggestions: list[AISuggestedMacro] = []
+    seen_macro_ids: set[int] = set()
+    for item in payload.macro_ids:
+        if item.macro_id in seen_macro_ids:
+            continue
+        if item.confidence not in {AIPredictionConfidence.MEDIUM, AIPredictionConfidence.HIGH}:
+            continue
+        reason = _normalize_ai_reason(item.reason)
+        if reason is None:
+            continue
+        seen_macro_ids.add(item.macro_id)
+        suggestions.append(
+            AISuggestedMacro(
+                macro_id=item.macro_id,
+                reason=reason,
+                confidence=item.confidence,
+            )
+        )
+    return tuple(suggestions)
+
+
+def _build_category_prediction(
+    payload: _CategoryPredictionPayload | None,
+    *,
+    command: AIPredictTicketCategoryCommand,
+    model_id: str | None,
+) -> AIPredictedCategoryResult | None:
+    if payload is None or payload.category_id is None:
+        return None
+    if payload.confidence not in {AIPredictionConfidence.MEDIUM, AIPredictionConfidence.HIGH}:
+        return None
+    valid_category_ids = {category.id for category in command.categories}
+    if payload.category_id not in valid_category_ids:
+        return None
+    return AIPredictedCategoryResult(
+        available=True,
+        category_id=payload.category_id,
+        confidence=payload.confidence,
+        reason=_normalize_ai_reason(payload.reason),
+        model_id=model_id,
+    )
 
 
 def _build_ticket_summary_prompt(command: GenerateTicketSummaryCommand) -> str:
@@ -339,6 +421,27 @@ def _normalize_inline(value: str, limit: int) -> str:
     if len(normalized) <= limit:
         return normalized
     return f"{normalized[: limit - 1].rstrip()}…"
+
+
+def _normalize_ai_text(value: str, *, limit: int) -> str | None:
+    normalized = " ".join(value.split())
+    if len(normalized) < 4:
+        return None
+    if normalized.lower() in _GENERIC_AI_REASON_TEXTS:
+        return None
+    clipped = normalized[:limit].rstrip(" ,;:-")
+    if len(clipped) < 4:
+        return None
+    return clipped
+
+
+def _normalize_ai_reason(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = _normalize_ai_text(value, limit=120)
+    if normalized is None:
+        return None
+    return normalized
 
 
 def _has_signal(command: AIPredictTicketCategoryCommand) -> bool:

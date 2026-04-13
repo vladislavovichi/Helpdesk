@@ -11,7 +11,7 @@ def format_ticket_assist_snapshot(
     ticket: TicketDetailsSummary,
     snapshot: TicketAssistSnapshot,
 ) -> str:
-    lines = [f"Подсказки по заявке {ticket.public_number}", "", ticket.subject]
+    lines = [f"AI-подсказки · {ticket.public_number}", "", ticket.subject]
 
     if not snapshot.available:
         lines.extend(
@@ -31,16 +31,22 @@ def format_ticket_assist_snapshot(
     if snapshot.short_summary:
         lines.extend(["", "Краткая суть", snapshot.short_summary])
     if snapshot.user_goal:
-        lines.extend(["", "Что хотел пользователь", snapshot.user_goal])
+        lines.extend(["", "Запрос пользователя", snapshot.user_goal])
     if snapshot.actions_taken:
         lines.extend(["", "Что уже сделано", snapshot.actions_taken])
     if snapshot.current_status:
-        lines.extend(["", "Текущее состояние", snapshot.current_status])
+        lines.extend(["", "Текущий статус", snapshot.current_status])
 
-    lines.extend(["", "Рекомендуемые макросы"])
+    lines.extend(["", "Подходящие макросы"])
     if snapshot.macro_suggestions:
         for index, suggestion in enumerate(snapshot.macro_suggestions, start=1):
-            lines.extend([f"{index}. {suggestion.title}", f"   Почему: {suggestion.reason}", ""])
+            lines.extend(
+                [
+                    f"{index}. {suggestion.title}",
+                    f"   Основание: {suggestion.reason}",
+                    "",
+                ]
+            )
     else:
         lines.append(
             "Сейчас нет достаточно точных подсказок. "
@@ -59,10 +65,10 @@ def format_ticket_assist_snapshot(
 
 def _format_summary_status(snapshot: TicketAssistSnapshot) -> str:
     if snapshot.summary_status is TicketSummaryStatus.FRESH:
-        return "Сводка актуальна."
+        return "Сводка актуальна по сохранённой переписке."
     if snapshot.summary_status is TicketSummaryStatus.STALE:
-        return "Сводка требует обновления."
-    return "Сводка ещё не подготовлена."
+        return "Сводка устарела после новых изменений."
+    return "Сводка ещё не собрана."
 
 
 def _format_generated_at(value: datetime) -> str:

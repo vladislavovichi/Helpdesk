@@ -321,3 +321,116 @@ async def test_saved_ticket_summary_becomes_stale_after_history_changes() -> Non
     assert snapshot is not None
     assert snapshot.summary_status is TicketSummaryStatus.STALE
     assert snapshot.short_summary == "Старая сводка"
+    assert (
+        snapshot.status_note
+        == "После последней сводки появились 1 сообщение и 1 внутренняя заметка. "
+        "Обновите её по переписке."
+    )
+
+
+async def test_refresh_failure_keeps_previous_summary_and_marks_it_stale() -> None:
+    ticket = _build_ticket()
+    summary_repository = StubTicketAISummaryRepository()
+    await summary_repository.upsert(
+        ticket_id=ticket.id,
+        short_summary="Последняя сохранённая сводка",
+        user_goal="Восстановить доступ",
+        actions_taken="Оператор проверил профиль",
+        current_status="Ждём подтверждение от клиента",
+        generated_at=datetime(2026, 4, 12, 10, 7, tzinfo=UTC),
+        source_ticket_updated_at=datetime(2026, 4, 12, 10, 7, tzinfo=UTC),
+        source_message_count=1,
+        source_internal_note_count=0,
+        model_id="Qwen/Qwen3.5-4B",
+    )
+    use_case = BuildTicketAssistSnapshotUseCase(
+        ticket_repository=cast(TicketRepository, StubTicketRepository(ticket)),
+        ticket_ai_summary_repository=cast(TicketAISummaryRepository, summary_repository),
+        macro_repository=cast(MacroRepository, StubMacroRepository()),
+        ai_client_factory=build_ai_client_factory(
+            StubAIClient(
+                summary_result=GeneratedTicketSummaryResult(
+                    available=False,
+                    unavailable_reason="Не удалось подготовить сводку.",
+                    model_id="Qwen/Qwen3.5-4B",
+                ),
+                macros_result=SuggestedMacrosResult(
+                    available=True,
+                    suggestions=(),
+                    model_id="Qwen/Qwen3.5-4B",
+                ),
+            )
+        ),
+    )
+
+    snapshot = await use_case(ticket_public_id=ticket.public_id, refresh_summary=True)
+
+    assert snapshot is not None
+    assert snapshot.short_summary == "Последняя сохранённая сводка"
+    assert snapshot.summary_status is TicketSummaryStatus.STALE
+    assert (
+        snapshot.status_note
+        == "Не удалось обновить сводку. Показываю последнюю сохранённую версию. "
+        "После последней сводки появились 1 сообщение и 1 внутренняя заметка. "
+        "Обновите её по переписке."
+    )
+
+
+async def test_macro_suggestions_skip_low_value_reasons() -> None:
+    summary_repository = StubTicketAISummaryRepository()
+    use_case = BuildTicketAssistSnapshotUseCase(
+        ticket_repository=cast(TicketRepository, StubTicketRepository(_build_ticket())),
+        ticket_ai_summary_repository=cast(TicketAISummaryRepository, summary_repository),
+        macro_repository=cast(MacroRepository, StubMacroRepository()),
+        ai_client_factory=build_ai_client_factory(
+            StubAIClient(
+                macros_result=SuggestedMacrosResult(
+                    available=True,
+                    suggestions=(
+                        AISuggestedMacro(
+                            macro_id=1,
+                            reason="по теме",
+                            confidence=AIPredictionConfidence.HIGH,
+                        ),
+                        AISuggestedMacro(
+                            macro_id=2,
+                            reason="Подходит для аккуратного ответа про проверку платежа.",
+                            confidence=AIPredictionConfidence.HIGH,
+                        ),
+                    ),
+                    model_id="Qwen/Qwen3.5-4B",
+                )
+            )
+        ),
+    )
+
+    snapshot = await use_case(ticket_public_id=uuid4())
+
+    assert snapshot is not None
+    assert tuple(item.macro_id for item in snapshot.macro_suggestions) == (2,)
+
+
+async def test_predict_ticket_category_hides_low_confidence_prediction() -> None:
+    use_case = PredictTicketCategoryUseCase(
+        ticket_category_repository=cast(TicketCategoryRepository, StubCategoryRepository()),
+        ai_client_factory=build_ai_client_factory(
+            StubAIClient(
+                category_result=AIPredictedCategoryResult(
+                    available=True,
+                    category_id=1,
+                    confidence=AIPredictionConfidence.LOW,
+                    reason="Похоже на доступ.",
+                    model_id="Qwen/Qwen3.5-4B",
+                )
+            )
+        ),
+    )
+
+    prediction = await use_case(
+        PredictTicketCategoryCommand(
+            text="Не могу войти после смены пароля",
+        )
+    )
+
+    assert prediction.available is False
+    assert prediction.category_id is None

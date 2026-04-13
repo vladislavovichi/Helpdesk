@@ -40,10 +40,10 @@ def build_intake_category_prompt_text(
     if not suggested_category_title:
         return INTAKE_CATEGORY_PROMPT_TEXT
     lines = [
-        f"Похоже, это тема «{suggested_category_title}».",
+        f"Похоже, подойдёт тема «{suggested_category_title}».",
     ]
     if reason:
-        lines.append(reason)
+        lines.append(f"Почему так: {reason}")
     lines.append("Подтвердите вариант или выберите другую тему.")
     return "\n".join(lines)
 

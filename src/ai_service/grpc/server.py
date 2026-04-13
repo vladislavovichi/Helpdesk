@@ -45,7 +45,7 @@ class AIServiceGrpcService(ai_service_pb2_grpc.HelpdeskAIServiceServicer):
                 context,
                 auth_config=self.auth_config,
             )
-        except Exception as exc:
+        except (PermissionError, ValueError) as exc:
             await _abort_for_exception(context, exc, method=method)
             raise RuntimeError("unreachable") from exc
         correlation_token = bind_correlation_id(request_context.correlation_id)

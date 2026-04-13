@@ -184,9 +184,9 @@ def build_ticket_assist_markup(
     builder.row(
         _build_callback_button(
             (
-                "Обновить сводку"
+                "Обновить по переписке"
                 if summary_status in {TicketSummaryStatus.FRESH, TicketSummaryStatus.STALE}
-                else "Сформировать сводку"
+                else "Собрать сводку"
             ),
             OperatorActionCallback(
                 action="assist_refresh",

@@ -17,7 +17,9 @@ from domain.enums.tickets import (
 class Ticket(Protocol):
     """Ticket shape shared across the domain boundary."""
 
-    id: int | None
+    @property
+    def id(self) -> int | None: ...
+
     public_id: UUID
     client_chat_id: int
     status: TicketStatus

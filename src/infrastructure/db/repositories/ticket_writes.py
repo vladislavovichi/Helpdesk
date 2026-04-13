@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -33,7 +32,7 @@ class SqlAlchemyTicketWriteRepository:
         )
         self.session.add(ticket)
         await self.session.flush()
-        return cast(TicketEntity, ticket)
+        return ticket
 
     async def enqueue(self, *, ticket_public_id: UUID) -> TicketEntity | None:
         ticket = await self._get_ticket_for_update(ticket_public_id)
@@ -97,4 +96,4 @@ class SqlAlchemyTicketWriteRepository:
         result = await self.session.execute(
             select(TicketModel).where(TicketModel.public_id == ticket_public_id)
         )
-        return cast(TicketEntity | None, result.scalar_one_or_none())
+        return result.scalar_one_or_none()

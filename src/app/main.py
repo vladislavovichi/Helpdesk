@@ -40,9 +40,6 @@ async def run() -> None:
             runtime.bot,
             allowed_updates=runtime.dispatcher.resolve_used_update_types(),
         )
-    except Exception:
-        logger.exception("Application runtime failed.")
-        raise
     finally:
         await close_runtime(runtime)
 
@@ -52,6 +49,9 @@ def main() -> None:
         asyncio.run(run())
     except KeyboardInterrupt:
         logging.getLogger(__name__).info("Shutdown requested, stopping service.")
+    except Exception:
+        logging.getLogger(__name__).exception("Application runtime failed.")
+        raise
 
 
 if __name__ == "__main__":

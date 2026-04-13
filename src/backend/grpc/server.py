@@ -68,7 +68,7 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
                 auth_config=self.auth_config,
                 fallback_actor=fallback_actor,
             )
-        except Exception as exc:
+        except (PermissionError, ValueError) as exc:
             await _abort_for_exception(context, exc, method=method)
             raise RuntimeError("unreachable") from exc
         correlation_token = bind_correlation_id(request_context.correlation_id)

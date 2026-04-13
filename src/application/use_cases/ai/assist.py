@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -31,6 +32,15 @@ from domain.contracts.repositories import (
 )
 from domain.entities.ai import TicketAISummaryDetails
 from domain.entities.ticket import TicketAttachmentDetails, TicketDetails, TicketMessageDetails
+
+_MAX_MACRO_REASON_LENGTH = 120
+_MAX_CATEGORY_REASON_LENGTH = 120
+
+
+@dataclass(slots=True, frozen=True)
+class _SummaryFreshness:
+    status: TicketSummaryStatus
+    note: str | None = None
 
 
 class BuildTicketAssistSnapshotUseCase:
@@ -72,9 +82,9 @@ class BuildTicketAssistSnapshotUseCase:
                 )
                 if not summary_result.available or summary_result.summary is None:
                     status_note = (
-                        "Не удалось обновить сводку. Оставил последнюю сохранённую версию."
+                        "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
                         if stored_summary is not None
-                        else "Не удалось подготовить сводку сейчас."
+                        else "Сводку сейчас подготовить не удалось."
                     )
                 else:
                     generated_summary = summary_result.summary
@@ -90,7 +100,7 @@ class BuildTicketAssistSnapshotUseCase:
                         source_internal_note_count=len(ticket.internal_notes),
                         model_id=summary_result.model_id,
                     )
-                    status_note = "Сводка обновлена."
+                    status_note = "Сводка обновлена по сохранённой переписке."
 
             macros_result = await ai_client.suggest_macros(
                 _build_suggest_macros_command(ticket=ticket, macros=macros)
@@ -108,22 +118,19 @@ class BuildTicketAssistSnapshotUseCase:
                 model_id=_resolve_model_id(summary_result, macros_result, stored_summary),
             )
 
-        summary_status = _resolve_summary_status(ticket=ticket, stored_summary=stored_summary)
-        if (
-            stored_summary is not None
-            and summary_status is TicketSummaryStatus.STALE
-            and status_note is None
-        ):
-            status_note = "В переписке появились изменения. Сводку лучше обновить."
+        freshness = _resolve_summary_freshness(ticket=ticket, stored_summary=stored_summary)
+        if stored_summary is not None and freshness.note is not None:
+            if refresh_summary and status_note is not None:
+                status_note = f"{status_note} {freshness.note}"
+            elif status_note is None:
+                status_note = freshness.note
         if (
             stored_summary is None
             and macros_result is not None
             and macros_result.available
             and status_note is None
         ):
-            status_note = (
-                "Сводка ещё не подготовлена. При необходимости её можно сформировать вручную."
-            )
+            status_note = "Сводка ещё не собрана. При необходимости её можно подготовить вручную."
         if (
             macros_result is not None
             and macros_result.available
@@ -132,7 +139,7 @@ class BuildTicketAssistSnapshotUseCase:
         ):
             status_note = (
                 "Точных AI-подсказок по макросам сейчас нет. "
-                "Обычная библиотека макросов остаётся доступной."
+                "Библиотека макросов доступна как обычно."
             )
         if (
             stored_summary is not None
@@ -144,7 +151,7 @@ class BuildTicketAssistSnapshotUseCase:
 
         return TicketAssistSnapshot(
             available=True,
-            summary_status=summary_status,
+            summary_status=freshness.status,
             summary_generated_at=(
                 stored_summary.generated_at if stored_summary is not None else None
             ),
@@ -205,10 +212,14 @@ class PredictTicketCategoryUseCase:
                 )
             )
 
-        if result.category_id is None or result.confidence not in {
-            AIPredictionConfidence.MEDIUM,
-            AIPredictionConfidence.HIGH,
-        }:
+        if (
+            not result.available
+            or result.category_id is None
+            or result.confidence not in {
+                AIPredictionConfidence.MEDIUM,
+                AIPredictionConfidence.HIGH,
+            }
+        ):
             return TicketCategoryPrediction(
                 available=False,
                 model_id=result.model_id,
@@ -222,12 +233,12 @@ class PredictTicketCategoryUseCase:
             )
 
         return TicketCategoryPrediction(
-            available=result.available,
+            available=True,
             category_id=category.id,
             category_code=category.code,
             category_title=category.title,
             confidence=result.confidence,
-            reason=result.reason,
+            reason=_normalize_reason_text(result.reason, limit=_MAX_CATEGORY_REASON_LENGTH),
             model_id=result.model_id,
         )
 
@@ -339,33 +350,92 @@ def _resolve_macro_suggestions(
         confidence = getattr(suggestion, "confidence", AIPredictionConfidence.NONE)
         if confidence not in {AIPredictionConfidence.MEDIUM, AIPredictionConfidence.HIGH}:
             continue
+        reason = _normalize_reason_text(
+            getattr(suggestion, "reason", None),
+            limit=_MAX_MACRO_REASON_LENGTH,
+        )
+        if reason is None:
+            continue
         seen_macro_ids.add(macro_id)
         result.append(
             TicketMacroSuggestion(
                 macro_id=macro.id,
                 title=macro.title,
                 body=macro.body,
-                reason=str(getattr(suggestion, "reason", "")),
+                reason=reason,
                 confidence=confidence,
             )
         )
     return tuple(result)
 
 
-def _resolve_summary_status(
+def _resolve_summary_freshness(
     *,
     ticket: TicketDetails,
     stored_summary: TicketAISummaryDetails | None,
-) -> TicketSummaryStatus:
+) -> _SummaryFreshness:
     if stored_summary is None:
-        return TicketSummaryStatus.MISSING
-    if (
-        ticket.updated_at > stored_summary.source_ticket_updated_at
-        or len(ticket.message_history) != stored_summary.source_message_count
-        or len(ticket.internal_notes) != stored_summary.source_internal_note_count
-    ):
-        return TicketSummaryStatus.STALE
-    return TicketSummaryStatus.FRESH
+        return _SummaryFreshness(status=TicketSummaryStatus.MISSING)
+
+    new_message_count = max(len(ticket.message_history) - stored_summary.source_message_count, 0)
+    new_internal_note_count = max(
+        len(ticket.internal_notes) - stored_summary.source_internal_note_count,
+        0,
+    )
+    if new_message_count > 0 or new_internal_note_count > 0:
+        return _SummaryFreshness(
+            status=TicketSummaryStatus.STALE,
+            note=_build_stale_summary_note(
+                new_message_count=new_message_count,
+                new_internal_note_count=new_internal_note_count,
+            ),
+        )
+    if ticket.updated_at > stored_summary.source_ticket_updated_at:
+        return _SummaryFreshness(
+            status=TicketSummaryStatus.STALE,
+            note=(
+                "После сводки данные заявки изменились. "
+                "При необходимости обновите её по переписке."
+            ),
+        )
+    return _SummaryFreshness(status=TicketSummaryStatus.FRESH)
+
+
+def _build_stale_summary_note(
+    *,
+    new_message_count: int,
+    new_internal_note_count: int,
+) -> str:
+    changes: list[str] = []
+    if new_message_count > 0:
+        changes.append(
+            _format_change_count(new_message_count, "сообщение", "сообщения", "сообщений")
+        )
+    if new_internal_note_count > 0:
+        changes.append(
+            _format_change_count(
+                new_internal_note_count,
+                "внутренняя заметка",
+                "внутренние заметки",
+                "внутренних заметок",
+            )
+        )
+    verb = "появилось" if len(changes) == 1 else "появились"
+    return f"После последней сводки {verb} {' и '.join(changes)}. Обновите её по переписке."
+
+
+def _format_change_count(count: int, one: str, few: str, many: str) -> str:
+    absolute = abs(count) % 100
+    last_digit = absolute % 10
+    if 11 <= absolute <= 19:
+        word = many
+    elif last_digit == 1:
+        word = one
+    elif 2 <= last_digit <= 4:
+        word = few
+    else:
+        word = many
+    return f"{count} {word}"
 
 
 def _ai_unavailable(summary_result: object | None, macros_result: object | None) -> bool:
@@ -378,7 +448,7 @@ def _resolve_unavailable_reason(*results: object | None) -> str:
         reason = getattr(result, "unavailable_reason", None) if result is not None else None
         if isinstance(reason, str) and reason.strip():
             return reason
-    return "AI-сервис сейчас недоступен."
+    return "AI-подсказки сейчас недоступны."
 
 
 def _resolve_model_id(
@@ -393,6 +463,26 @@ def _resolve_model_id(
         if isinstance(model_id, str) and model_id.strip():
             return model_id
     return None
+
+
+def _normalize_reason_text(value: object, *, limit: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split())
+    if not normalized:
+        return None
+    if normalized.lower() in {
+        "...",
+        "не знаю",
+        "не уверен",
+        "подходит",
+        "релевантно",
+        "по контексту",
+        "по теме",
+    }:
+        return None
+    clipped = normalized[:limit].rstrip(" ,;:-")
+    return clipped if clipped else None
 
 
 def _has_signal(command: PredictTicketCategoryCommand) -> bool:

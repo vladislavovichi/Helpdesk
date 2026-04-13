@@ -7,7 +7,9 @@ from typing import Protocol
 class TicketFeedback(Protocol):
     """Ticket feedback shape shared across the domain boundary."""
 
-    id: int | None
+    @property
+    def id(self) -> int | None: ...
+
     ticket_id: int
     client_chat_id: int
     rating: int

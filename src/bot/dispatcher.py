@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.storage.base import BaseStorage
 from aiogram.types import ErrorEvent
 
@@ -75,7 +76,7 @@ async def on_error(event: ErrorEvent, **_: Any) -> bool:
     if callback_query is not None:
         try:
             await callback_query.answer(SERVICE_UNAVAILABLE_TEXT, show_alert=True)
-        except Exception:
+        except TelegramAPIError:
             logger.exception(
                 "Failed to send callback error response update_id=%s",
                 event.update.update_id,
@@ -86,7 +87,7 @@ async def on_error(event: ErrorEvent, **_: Any) -> bool:
     if message is not None:
         try:
             await message.answer(SERVICE_UNAVAILABLE_TEXT)
-        except Exception:
+        except TelegramAPIError:
             logger.exception(
                 "Failed to send message error response update_id=%s",
                 event.update.update_id,
