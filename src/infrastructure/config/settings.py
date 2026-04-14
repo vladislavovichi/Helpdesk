@@ -256,6 +256,13 @@ class AssetsConfig(BaseModel):
         return Path("assets")
 
 
+class MiniAppConfig(BaseModel):
+    listen_host: str = "0.0.0.0"
+    port: int = 8080
+    public_url: str = ""
+    init_data_ttl_seconds: int = 3600
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -287,6 +294,7 @@ class Settings(BaseSettings):
     attachments: AttachmentLimitsConfig = Field(default_factory=AttachmentLimitsConfig)
     exports: ExportConfig = Field(default_factory=ExportConfig)
     assets: AssetsConfig = Field(default_factory=AssetsConfig)
+    mini_app: MiniAppConfig = Field(default_factory=MiniAppConfig)
 
     @model_validator(mode="after")
     def apply_runtime_service_targets(self) -> Settings:

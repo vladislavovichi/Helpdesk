@@ -82,6 +82,7 @@ async def test_handle_start_with_invite_code_opens_onboarding_prompt() -> None:
         command=CommandObject(prefix="/", command="start", mention=None, args="opr_test"),
         state=state,
         helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        settings=SimpleNamespace(mini_app=SimpleNamespace(public_url="")),
         event_user_role=UserRole.USER,
     )
 
@@ -116,6 +117,7 @@ async def test_handle_operator_invite_confirm_redeems_invite_and_opens_operator_
         callback=callback,
         state=state,
         helpdesk_service_factory=_build_helpdesk_service_factory(service),
+        settings=SimpleNamespace(mini_app=SimpleNamespace(public_url="")),
     )
 
     callback_answer = cast(AsyncMock, callback.answer)

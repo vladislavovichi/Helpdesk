@@ -14,6 +14,18 @@ message OperatorIdentity {
   optional string username = 3;
 }
 
+message AccessContextSummary {
+  int64 telegram_user_id = 1;
+  string role = 2;
+}
+
+message OperatorSummary {
+  int64 telegram_user_id = 1;
+  string display_name = 2;
+  optional string username = 3;
+  bool is_active = 4;
+}
+
 message TicketAttachment {
   string kind = 1;
   string telegram_file_id = 2;
@@ -53,6 +65,12 @@ message ApplyMacroToTicketCommand {
   string ticket_public_id = 1;
   int32 macro_id = 2;
   OperatorIdentity operator = 3;
+}
+
+message AddInternalNoteCommand {
+  string ticket_public_id = 1;
+  OperatorIdentity author = 2;
+  string text = 3;
 }
 
 message TicketSummary {
@@ -154,6 +172,12 @@ message MacroSummary {
   int32 id = 1;
   string title = 2;
   string body = 3;
+}
+
+message OperatorInviteCodeSummary {
+  string code = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  int32 max_uses = 3;
 }
 
 message OperatorReplyResult {
@@ -289,6 +313,10 @@ message HelpdeskAnalyticsSnapshot {
 
 message Empty {}
 
+message GetAccessContextRequest {
+  RequestActor actor = 1;
+}
+
 message GetClientActiveTicketRequest {
   int64 client_chat_id = 1;
 }
@@ -319,6 +347,11 @@ message ListArchivedTicketsRequest {
   RequestActor actor = 1;
 }
 
+message EscalateTicketAsOperatorRequest {
+  string ticket_public_id = 1;
+  RequestActor actor = 2;
+}
+
 message AssignNextQueuedTicketRequest {
   AssignNextQueuedTicketCommand command = 1;
   RequestActor actor = 2;
@@ -341,6 +374,19 @@ message CloseTicketAsOperatorRequest {
 message ReplyToTicketAsOperatorRequest {
   OperatorTicketReplyCommand command = 1;
   RequestActor actor = 2;
+}
+
+message AddInternalNoteToTicketRequest {
+  AddInternalNoteCommand command = 1;
+  RequestActor actor = 2;
+}
+
+message ListOperatorsRequest {
+  RequestActor actor = 1;
+}
+
+message CreateOperatorInviteRequest {
+  RequestActor actor = 1;
 }
 
 message ListMacrosRequest {
@@ -383,6 +429,7 @@ message ExportAnalyticsSnapshotRequest {
 
 service HelpdeskBackendService {
   rpc GetBackendStatus(Empty) returns (BackendStatus);
+  rpc GetAccessContext(GetAccessContextRequest) returns (AccessContextSummary);
   rpc GetClientActiveTicket(GetClientActiveTicketRequest) returns (TicketSummary);
   rpc ListClientTicketCategories(Empty) returns (stream TicketCategorySummary);
   rpc CreateTicketFromClientMessage(CreateTicketFromClientMessageRequest) returns (TicketSummary);
@@ -395,7 +442,11 @@ service HelpdeskBackendService {
   rpc AssignTicketToOperator(AssignTicketToOperatorRequest) returns (TicketSummary);
   rpc CloseTicket(CloseTicketRequest) returns (TicketSummary);
   rpc CloseTicketAsOperator(CloseTicketAsOperatorRequest) returns (TicketSummary);
+  rpc EscalateTicketAsOperator(EscalateTicketAsOperatorRequest) returns (TicketSummary);
   rpc ReplyToTicketAsOperator(ReplyToTicketAsOperatorRequest) returns (OperatorReplyResult);
+  rpc AddInternalNoteToTicket(AddInternalNoteToTicketRequest) returns (TicketSummary);
+  rpc ListOperators(ListOperatorsRequest) returns (stream OperatorSummary);
+  rpc CreateOperatorInvite(CreateOperatorInviteRequest) returns (OperatorInviteCodeSummary);
   rpc ListMacros(ListMacrosRequest) returns (stream MacroSummary);
   rpc ApplyMacroToTicket(ApplyMacroToTicketRequest) returns (MacroApplicationResult);
   rpc GetTicketAssistSnapshot(GetTicketAssistSnapshotRequest) returns (TicketAssistSnapshot);

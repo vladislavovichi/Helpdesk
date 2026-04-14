@@ -16,6 +16,7 @@ from bot.texts.buttons import (
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
     TAKE_NEXT_BUTTON_TEXT,
+    WORKSPACE_BUTTON_TEXT,
 )
 from domain.enums.roles import UserRole
 
@@ -99,6 +100,20 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
         (HELP_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
     )
     assert keyboard.input_field_placeholder == "Главное меню"
+
+
+def test_build_main_menu_adds_mini_app_button_when_public_url_is_configured() -> None:
+    keyboard = build_main_menu(
+        UserRole.OPERATOR,
+        mini_app_url="https://mini-app.example.com",
+    )
+
+    rows = keyboard.keyboard
+    assert rows is not None
+    workspace_button = rows[3][0]
+    assert workspace_button.text == WORKSPACE_BUTTON_TEXT
+    assert workspace_button.web_app is not None
+    assert workspace_button.web_app.url == "https://mini-app.example.com"
 
 
 def test_format_diagnostics_report_uses_compact_russian_output() -> None:

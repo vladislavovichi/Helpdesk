@@ -15,6 +15,7 @@ from application.ai.summaries import TicketAssistSnapshot, TicketCategoryPredict
 from application.contracts.actors import RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
+    AddInternalNoteCommand,
     ApplyMacroToTicketCommand,
     AssignNextQueuedTicketCommand,
     ClientTicketMessageCommand,
@@ -28,11 +29,14 @@ from application.use_cases.analytics.exports import (
     AnalyticsSnapshotExport,
 )
 from application.use_cases.tickets.exports import TicketReportExport, TicketReportFormat
+from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
 from application.use_cases.tickets.summaries import (
+    AccessContextSummary,
     HistoricalTicketSummary,
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
+    OperatorSummary,
     OperatorTicketSummary,
     QueuedTicketSummary,
     TicketCategorySummary,
@@ -43,6 +47,7 @@ from backend.grpc.auth import build_call_metadata
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from backend.grpc.generated import helpdesk_pb2, helpdesk_pb2_grpc
 from backend.grpc.translators import (
+    deserialize_access_context,
     deserialize_analytics_export,
     deserialize_analytics_snapshot,
     deserialize_archived_ticket,
@@ -50,13 +55,16 @@ from backend.grpc.translators import (
     deserialize_export,
     deserialize_macro,
     deserialize_macro_application_result,
+    deserialize_operator_invite_summary,
     deserialize_operator_reply_result,
+    deserialize_operator_summary,
     deserialize_operator_ticket,
     deserialize_queued_ticket,
     deserialize_ticket_assist_snapshot,
     deserialize_ticket_category_prediction,
     deserialize_ticket_details,
     deserialize_ticket_summary,
+    serialize_add_internal_note_command,
     serialize_apply_macro_command,
     serialize_assign_next_command,
     serialize_client_ticket_message_command,
@@ -94,6 +102,24 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
         except grpc.aio.AioRpcError as exc:
             raise _translate_rpc_error(exc) from exc
         return response.service, response.status
+
+    async def get_access_context(
+        self,
+        *,
+        actor: RequestActor,
+    ) -> AccessContextSummary:
+        request = helpdesk_pb2.GetAccessContextRequest()
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.GetAccessContext,
+                request,
+                actor=actor,
+                retryable=True,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_access_context(result)
 
     async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None:
         try:
@@ -299,6 +325,27 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             return None
         return deserialize_ticket_summary(result)
 
+    async def escalate_ticket_as_operator(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None,
+    ) -> TicketSummary | None:
+        request = helpdesk_pb2.EscalateTicketAsOperatorRequest(
+            ticket_public_id=str(ticket_public_id)
+        )
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.EscalateTicketAsOperator,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
+
     async def reply_to_ticket_as_operator(
         self,
         command: OperatorTicketReplyCommand,
@@ -317,6 +364,60 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
             _raise_optional_rpc_error(exc)
             return None
         return deserialize_operator_reply_result(result)
+
+    async def add_internal_note_to_ticket(
+        self,
+        command: AddInternalNoteCommand,
+        actor: RequestActor | None = None,
+    ) -> TicketSummary | None:
+        request = helpdesk_pb2.AddInternalNoteToTicketRequest()
+        request.command.CopyFrom(serialize_add_internal_note_command(command))
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.AddInternalNoteToTicket,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize_ticket_summary(result)
+
+    async def list_operators(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> tuple[OperatorSummary, ...]:
+        request = helpdesk_pb2.ListOperatorsRequest()
+        _apply_actor(request, actor)
+        response = await self._collect_stream(
+            lambda metadata: self.stub.ListOperators(
+                request,
+                timeout=self.request_timeout_seconds,
+                metadata=metadata,
+            ),
+            actor=actor,
+            retryable=True,
+        )
+        return tuple(deserialize_operator_summary(item) for item in response)
+
+    async def create_operator_invite(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> OperatorInviteCodeSummary:
+        request = helpdesk_pb2.CreateOperatorInviteRequest()
+        _apply_actor(request, actor)
+        try:
+            result = await self._invoke_unary(
+                self.stub.CreateOperatorInvite,
+                request,
+                actor=actor,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+        return deserialize_operator_invite_summary(result)
 
     async def list_macros(
         self,

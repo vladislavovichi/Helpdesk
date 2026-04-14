@@ -105,9 +105,7 @@ def downgrade() -> None:
     ticket_signal_confidence.drop(bind, checkfirst=True)
     ticket_sentiment.drop(bind, checkfirst=True)
 
-    op.execute(
-        "ALTER TYPE ticket_event_type RENAME TO ticket_event_type_with_support_signals"
-    )
+    op.execute("ALTER TYPE ticket_event_type RENAME TO ticket_event_type_with_support_signals")
     op.execute(
         "CREATE TYPE ticket_event_type AS ENUM ("
         "'created',"

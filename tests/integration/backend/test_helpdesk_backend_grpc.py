@@ -17,9 +17,9 @@ from application.ai.summaries import (
     TicketMacroSuggestion,
     TicketSummaryStatus,
 )
-from application.contracts.actors import RequestActor
+from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
-from application.contracts.tickets import ClientTicketMessageCommand
+from application.contracts.tickets import AddInternalNoteCommand, ClientTicketMessageCommand
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.services.stats import (
     AnalyticsCategorySnapshot,
@@ -29,10 +29,12 @@ from application.services.stats import (
     HelpdeskAnalyticsSnapshot,
     OperatorTicketLoad,
 )
+from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
 from application.use_cases.tickets.summaries import HistoricalTicketSummary, TicketSummary
 from backend.grpc.client import build_helpdesk_backend_client_factory
 from backend.grpc.server import build_helpdesk_backend_server
 from domain.entities.ticket import TicketAttachmentDetails
+from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketAttachmentKind, TicketStatus
 from infrastructure.config.settings import BackendAuthConfig, BackendServiceConfig, ResilienceConfig
 
@@ -46,11 +48,16 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     ticket_public_id = uuid4()
     command_log: list[ClientTicketMessageCommand] = []
     service = SimpleNamespace(
+        get_access_context=_build_access_context_call(),
         create_ticket_from_client_intake=_capture_create_call(command_log, ticket_public_id),
         get_ticket_ai_assist_snapshot=_build_ticket_assist_call(),
         predict_ticket_category=_build_category_prediction_call(),
         get_analytics_snapshot=_build_analytics_call(),
         list_archived_tickets=_build_archived_tickets_call(ticket_public_id),
+        list_operators=_build_operators_call(),
+        create_operator_invite=_build_operator_invite_call(),
+        escalate_ticket_as_operator=_build_escalate_call(ticket_public_id),
+        add_internal_note_to_ticket=_build_add_note_call(ticket_public_id),
     )
     helpdesk_service_factory = cast(
         HelpdeskServiceFactory,
@@ -73,6 +80,9 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     try:
         async with client_factory() as client:
             service_name, status = await client.get_backend_status()
+            access_context = await client.get_access_context(
+                actor=RequestActor(telegram_user_id=42)
+            )
             ticket = await client.create_ticket_from_client_intake(
                 ClientTicketMessageCommand(
                     client_chat_id=2002,
@@ -105,11 +115,30 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
             archived_tickets = await client.list_archived_tickets(
                 actor=RequestActor(telegram_user_id=1001),
             )
+            operators = await client.list_operators(actor=RequestActor(telegram_user_id=42))
+            invite = await client.create_operator_invite(actor=RequestActor(telegram_user_id=42))
+            escalated_ticket = await client.escalate_ticket_as_operator(
+                ticket_public_id=ticket_public_id,
+                actor=RequestActor(telegram_user_id=1001),
+            )
+            noted_ticket = await client.add_internal_note_to_ticket(
+                AddInternalNoteCommand(
+                    ticket_public_id=ticket_public_id,
+                    author=OperatorIdentity(
+                        telegram_user_id=1001,
+                        display_name="Operator One",
+                        username="operator.one",
+                    ),
+                    text="Проверили историю и подготовили следующее действие.",
+                ),
+                actor=RequestActor(telegram_user_id=1001),
+            )
     finally:
         await server.stop()
 
     assert service_name == "helpdesk-backend"
     assert status == "ready"
+    assert access_context.role is UserRole.SUPER_ADMIN
     assert ticket.public_id == ticket_public_id
     assert ticket.status == TicketStatus.QUEUED
     assert command_log[0].attachment is not None
@@ -125,6 +154,12 @@ async def test_helpdesk_grpc_client_roundtrips_ticket_commands_and_analytics() -
     assert category_prediction.confidence == AIPredictionConfidence.HIGH
     assert archived_tickets[0].public_id == ticket_public_id
     assert archived_tickets[0].mini_title == "Не могу войти в кабинет после обновления пароля"
+    assert operators[0].display_name == "Operator One"
+    assert invite.code.startswith("opr_")
+    assert escalated_ticket is not None
+    assert escalated_ticket.status is TicketStatus.ESCALATED
+    assert noted_ticket is not None
+    assert noted_ticket.public_id == ticket_public_id
 
 
 async def test_helpdesk_grpc_rejects_invalid_internal_token() -> None:
@@ -169,6 +204,17 @@ def _capture_create_call(
             public_number="HD-AAAA1111",
             status=TicketStatus.QUEUED,
             created=True,
+        )
+
+    return call
+
+
+def _build_access_context_call() -> Any:
+    async def call(*, actor: RequestActor | None) -> Any:
+        assert actor == RequestActor(telegram_user_id=42)
+        return SimpleNamespace(
+            telegram_user_id=42,
+            role=UserRole.SUPER_ADMIN,
         )
 
     return call
@@ -309,6 +355,72 @@ def _build_archived_tickets_call(ticket_public_id: Any) -> Any:
                 category_code="access",
                 category_title="Доступ и вход",
             ),
+        )
+
+    return call
+
+
+def _build_operators_call() -> Any:
+    async def call(
+        *,
+        actor: RequestActor | None = None,
+    ) -> tuple[SimpleNamespace, ...]:
+        assert actor == RequestActor(telegram_user_id=42)
+        return (
+            SimpleNamespace(
+                telegram_user_id=1001,
+                display_name="Operator One",
+                username="operator.one",
+                is_active=True,
+            ),
+        )
+
+    return call
+
+
+def _build_operator_invite_call() -> Any:
+    async def call(
+        *,
+        actor: RequestActor | None = None,
+    ) -> OperatorInviteCodeSummary:
+        assert actor == RequestActor(telegram_user_id=42)
+        return OperatorInviteCodeSummary(
+            code="opr_test_invite",
+            expires_at=datetime(2026, 4, 17, 12, 0, tzinfo=UTC),
+            max_uses=1,
+        )
+
+    return call
+
+
+def _build_escalate_call(ticket_public_id: Any) -> Any:
+    async def call(
+        *,
+        ticket_public_id: Any,
+        actor: RequestActor | None = None,
+    ) -> TicketSummary:
+        assert actor == RequestActor(telegram_user_id=1001)
+        return TicketSummary(
+            public_id=ticket_public_id,
+            public_number="HD-AAAA1111",
+            status=TicketStatus.ESCALATED,
+        )
+
+    return call
+
+
+def _build_add_note_call(ticket_public_id: Any) -> Any:
+    async def call(
+        command: AddInternalNoteCommand,
+        *,
+        actor: RequestActor | None = None,
+    ) -> TicketSummary:
+        assert actor == RequestActor(telegram_user_id=1001)
+        assert command.text == "Проверили историю и подготовили следующее действие."
+        return TicketSummary(
+            public_id=ticket_public_id,
+            public_number="HD-AAAA1111",
+            status=TicketStatus.ASSIGNED,
         )
 
     return call

@@ -9,6 +9,7 @@ from application.ai.summaries import TicketAssistSnapshot, TicketCategoryPredict
 from application.contracts.actors import RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
+    AddInternalNoteCommand,
     ApplyMacroToTicketCommand,
     AssignNextQueuedTicketCommand,
     ClientTicketMessageCommand,
@@ -22,11 +23,14 @@ from application.use_cases.analytics.exports import (
     AnalyticsSnapshotExport,
 )
 from application.use_cases.tickets.exports import TicketReportExport, TicketReportFormat
+from application.use_cases.tickets.operator_invites import OperatorInviteCodeSummary
 from application.use_cases.tickets.summaries import (
+    AccessContextSummary,
     HistoricalTicketSummary,
     MacroApplicationResult,
     MacroSummary,
     OperatorReplyResult,
+    OperatorSummary,
     OperatorTicketSummary,
     QueuedTicketSummary,
     TicketCategorySummary,
@@ -37,6 +41,12 @@ from application.use_cases.tickets.summaries import (
 
 class HelpdeskBackendClient(Protocol):
     async def get_backend_status(self) -> tuple[str, str]: ...
+
+    async def get_access_context(
+        self,
+        *,
+        actor: RequestActor,
+    ) -> AccessContextSummary: ...
 
     async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None: ...
 
@@ -104,11 +114,36 @@ class HelpdeskBackendClient(Protocol):
         actor: RequestActor | None,
     ) -> TicketSummary | None: ...
 
+    async def escalate_ticket_as_operator(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None,
+    ) -> TicketSummary | None: ...
+
     async def reply_to_ticket_as_operator(
         self,
         command: OperatorTicketReplyCommand,
         actor: RequestActor | None = None,
     ) -> OperatorReplyResult | None: ...
+
+    async def add_internal_note_to_ticket(
+        self,
+        command: AddInternalNoteCommand,
+        actor: RequestActor | None = None,
+    ) -> TicketSummary | None: ...
+
+    async def list_operators(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> Sequence[OperatorSummary]: ...
+
+    async def create_operator_invite(
+        self,
+        *,
+        actor: RequestActor | None = None,
+    ) -> OperatorInviteCodeSummary: ...
 
     async def list_macros(
         self,

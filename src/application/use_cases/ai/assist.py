@@ -215,7 +215,8 @@ class PredictTicketCategoryUseCase:
         if (
             not result.available
             or result.category_id is None
-            or result.confidence not in {
+            or result.confidence
+            not in {
                 AIPredictionConfidence.MEDIUM,
                 AIPredictionConfidence.HIGH,
             }
@@ -394,8 +395,7 @@ def _resolve_summary_freshness(
         return _SummaryFreshness(
             status=TicketSummaryStatus.STALE,
             note=(
-                "После сводки данные заявки изменились. "
-                "При необходимости обновите её по переписке."
+                "После сводки данные заявки изменились. При необходимости обновите её по переписке."
             ),
         )
     return _SummaryFreshness(status=TicketSummaryStatus.FRESH)

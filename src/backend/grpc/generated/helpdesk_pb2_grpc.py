@@ -39,6 +39,11 @@ class HelpdeskBackendServiceStub(object):
                 request_serializer=helpdesk__pb2.Empty.SerializeToString,
                 response_deserializer=helpdesk__pb2.BackendStatus.FromString,
                 _registered_method=True)
+        self.GetAccessContext = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/GetAccessContext',
+                request_serializer=helpdesk__pb2.GetAccessContextRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.AccessContextSummary.FromString,
+                _registered_method=True)
         self.GetClientActiveTicket = channel.unary_unary(
                 '/helpdesk.backend.v1.HelpdeskBackendService/GetClientActiveTicket',
                 request_serializer=helpdesk__pb2.GetClientActiveTicketRequest.SerializeToString,
@@ -99,10 +104,30 @@ class HelpdeskBackendServiceStub(object):
                 request_serializer=helpdesk__pb2.CloseTicketAsOperatorRequest.SerializeToString,
                 response_deserializer=helpdesk__pb2.TicketSummary.FromString,
                 _registered_method=True)
+        self.EscalateTicketAsOperator = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/EscalateTicketAsOperator',
+                request_serializer=helpdesk__pb2.EscalateTicketAsOperatorRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketSummary.FromString,
+                _registered_method=True)
         self.ReplyToTicketAsOperator = channel.unary_unary(
                 '/helpdesk.backend.v1.HelpdeskBackendService/ReplyToTicketAsOperator',
                 request_serializer=helpdesk__pb2.ReplyToTicketAsOperatorRequest.SerializeToString,
                 response_deserializer=helpdesk__pb2.OperatorReplyResult.FromString,
+                _registered_method=True)
+        self.AddInternalNoteToTicket = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/AddInternalNoteToTicket',
+                request_serializer=helpdesk__pb2.AddInternalNoteToTicketRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.TicketSummary.FromString,
+                _registered_method=True)
+        self.ListOperators = channel.unary_stream(
+                '/helpdesk.backend.v1.HelpdeskBackendService/ListOperators',
+                request_serializer=helpdesk__pb2.ListOperatorsRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.OperatorSummary.FromString,
+                _registered_method=True)
+        self.CreateOperatorInvite = channel.unary_unary(
+                '/helpdesk.backend.v1.HelpdeskBackendService/CreateOperatorInvite',
+                request_serializer=helpdesk__pb2.CreateOperatorInviteRequest.SerializeToString,
+                response_deserializer=helpdesk__pb2.OperatorInviteCodeSummary.FromString,
                 _registered_method=True)
         self.ListMacros = channel.unary_stream(
                 '/helpdesk.backend.v1.HelpdeskBackendService/ListMacros',
@@ -145,6 +170,12 @@ class HelpdeskBackendServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetBackendStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAccessContext(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -222,7 +253,31 @@ class HelpdeskBackendServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def EscalateTicketAsOperator(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ReplyToTicketAsOperator(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddInternalNoteToTicket(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListOperators(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateOperatorInvite(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -277,6 +332,11 @@ def add_HelpdeskBackendServiceServicer_to_server(servicer, server):
                     servicer.GetBackendStatus,
                     request_deserializer=helpdesk__pb2.Empty.FromString,
                     response_serializer=helpdesk__pb2.BackendStatus.SerializeToString,
+            ),
+            'GetAccessContext': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAccessContext,
+                    request_deserializer=helpdesk__pb2.GetAccessContextRequest.FromString,
+                    response_serializer=helpdesk__pb2.AccessContextSummary.SerializeToString,
             ),
             'GetClientActiveTicket': grpc.unary_unary_rpc_method_handler(
                     servicer.GetClientActiveTicket,
@@ -338,10 +398,30 @@ def add_HelpdeskBackendServiceServicer_to_server(servicer, server):
                     request_deserializer=helpdesk__pb2.CloseTicketAsOperatorRequest.FromString,
                     response_serializer=helpdesk__pb2.TicketSummary.SerializeToString,
             ),
+            'EscalateTicketAsOperator': grpc.unary_unary_rpc_method_handler(
+                    servicer.EscalateTicketAsOperator,
+                    request_deserializer=helpdesk__pb2.EscalateTicketAsOperatorRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketSummary.SerializeToString,
+            ),
             'ReplyToTicketAsOperator': grpc.unary_unary_rpc_method_handler(
                     servicer.ReplyToTicketAsOperator,
                     request_deserializer=helpdesk__pb2.ReplyToTicketAsOperatorRequest.FromString,
                     response_serializer=helpdesk__pb2.OperatorReplyResult.SerializeToString,
+            ),
+            'AddInternalNoteToTicket': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddInternalNoteToTicket,
+                    request_deserializer=helpdesk__pb2.AddInternalNoteToTicketRequest.FromString,
+                    response_serializer=helpdesk__pb2.TicketSummary.SerializeToString,
+            ),
+            'ListOperators': grpc.unary_stream_rpc_method_handler(
+                    servicer.ListOperators,
+                    request_deserializer=helpdesk__pb2.ListOperatorsRequest.FromString,
+                    response_serializer=helpdesk__pb2.OperatorSummary.SerializeToString,
+            ),
+            'CreateOperatorInvite': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateOperatorInvite,
+                    request_deserializer=helpdesk__pb2.CreateOperatorInviteRequest.FromString,
+                    response_serializer=helpdesk__pb2.OperatorInviteCodeSummary.SerializeToString,
             ),
             'ListMacros': grpc.unary_stream_rpc_method_handler(
                     servicer.ListMacros,
@@ -406,6 +486,33 @@ class HelpdeskBackendService(object):
             '/helpdesk.backend.v1.HelpdeskBackendService/GetBackendStatus',
             helpdesk__pb2.Empty.SerializeToString,
             helpdesk__pb2.BackendStatus.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAccessContext(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/GetAccessContext',
+            helpdesk__pb2.GetAccessContextRequest.SerializeToString,
+            helpdesk__pb2.AccessContextSummary.FromString,
             options,
             channel_credentials,
             insecure,
@@ -741,6 +848,33 @@ class HelpdeskBackendService(object):
             _registered_method=True)
 
     @staticmethod
+    def EscalateTicketAsOperator(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/EscalateTicketAsOperator',
+            helpdesk__pb2.EscalateTicketAsOperatorRequest.SerializeToString,
+            helpdesk__pb2.TicketSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ReplyToTicketAsOperator(request,
             target,
             options=(),
@@ -757,6 +891,87 @@ class HelpdeskBackendService(object):
             '/helpdesk.backend.v1.HelpdeskBackendService/ReplyToTicketAsOperator',
             helpdesk__pb2.ReplyToTicketAsOperatorRequest.SerializeToString,
             helpdesk__pb2.OperatorReplyResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddInternalNoteToTicket(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/AddInternalNoteToTicket',
+            helpdesk__pb2.AddInternalNoteToTicketRequest.SerializeToString,
+            helpdesk__pb2.TicketSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListOperators(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/ListOperators',
+            helpdesk__pb2.ListOperatorsRequest.SerializeToString,
+            helpdesk__pb2.OperatorSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateOperatorInvite(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.backend.v1.HelpdeskBackendService/CreateOperatorInvite',
+            helpdesk__pb2.CreateOperatorInviteRequest.SerializeToString,
+            helpdesk__pb2.OperatorInviteCodeSummary.FromString,
             options,
             channel_credentials,
             insecure,

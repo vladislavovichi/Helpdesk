@@ -5,6 +5,7 @@ from uuid import UUID
 
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
+    AddInternalNoteCommand,
     ApplyMacroToTicketCommand,
     AssignNextQueuedTicketCommand,
     ClientTicketMessageCommand,
@@ -135,6 +136,25 @@ def deserialize_apply_macro_command(
         ticket_public_id=UUID(command.ticket_public_id),
         macro_id=command.macro_id,
         operator=deserialize_operator_identity(command.operator),
+    )
+
+
+def serialize_add_internal_note_command(
+    command: AddInternalNoteCommand,
+) -> helpdesk_pb2.AddInternalNoteCommand:
+    message = helpdesk_pb2.AddInternalNoteCommand(ticket_public_id=str(command.ticket_public_id))
+    message.author.CopyFrom(serialize_operator_identity(command.author))
+    message.text = command.text
+    return message
+
+
+def deserialize_add_internal_note_command(
+    command: helpdesk_pb2.AddInternalNoteCommand,
+) -> AddInternalNoteCommand:
+    return AddInternalNoteCommand(
+        ticket_public_id=UUID(command.ticket_public_id),
+        author=deserialize_operator_identity(command.author),
+        text=command.text,
     )
 
 

@@ -109,6 +109,39 @@ services:
     restart: unless-stopped
     stop_grace_period: 25s
 
+  mini-app:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    command: ["sh", "/app/ops/docker/entrypoint.sh"]
+    environment:
+      PYTHONPATH: /app/src
+      APP__ENVIRONMENT: ${APP__ENVIRONMENT:-prod}
+      BACKEND_SERVICE__HOST: backend
+      BACKEND_SERVICE__PORT: 50051
+      MINI_APP__LISTEN_HOST: 0.0.0.0
+      MINI_APP__PORT: 8080
+      RUN_MIGRATIONS: "false"
+      SERVICE_MODULE: mini_app.main
+    env_file:
+      - ../../.env
+    init: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "mini_app.healthcheck"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - helpdesk
+    ports:
+      - "${MINI_APP_EXPOSE_PORT:-8088}:8080"
+    restart: unless-stopped
+    stop_grace_period: 10s
+
   postgres:
     image: postgres:16-alpine
     environment:

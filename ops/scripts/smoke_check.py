@@ -104,8 +104,7 @@ async def _run_backend_functional_smoke(settings: Settings) -> list[ProbeCheck]:
                     category="functional",
                     status=ProbeStatus.WARN,
                     detail=(
-                        "проверка backend -> ai-service пропущена: "
-                        "активные категории не заведены"
+                        "проверка backend -> ai-service пропущена: активные категории не заведены"
                     ),
                     affects_readiness=False,
                 )

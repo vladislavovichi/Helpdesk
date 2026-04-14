@@ -166,9 +166,7 @@ def _build_attachment_signature(
     if attachment is None:
         return None
     fingerprint = (
-        attachment.telegram_file_unique_id
-        or attachment.storage_path
-        or attachment.telegram_file_id
+        attachment.telegram_file_unique_id or attachment.storage_path or attachment.telegram_file_id
     )
     if not fingerprint:
         return None

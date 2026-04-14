@@ -14,6 +14,7 @@ from bot.keyboards.reply.main_menu import build_main_menu
 from bot.texts.buttons import HELP_BUTTON_TEXT
 from bot.texts.system import PING_RESPONSE_TEXT
 from domain.enums.roles import UserRole
+from infrastructure.config.settings import Settings
 
 router = Router(name="system")
 
@@ -24,6 +25,7 @@ async def handle_start(
     command: CommandObject | None,
     state: FSMContext,
     helpdesk_service_factory: HelpdeskServiceFactory,
+    settings: Settings,
     event_user_role: UserRole = UserRole.USER,
 ) -> None:
     if (
@@ -42,7 +44,10 @@ async def handle_start(
             return
     await message.answer(
         build_start_text(event_user_role),
-        reply_markup=build_main_menu(event_user_role),
+        reply_markup=build_main_menu(
+            event_user_role,
+            mini_app_url=settings.mini_app.public_url,
+        ),
     )
 
 
@@ -50,11 +55,15 @@ async def handle_start(
 @router.message(F.text == HELP_BUTTON_TEXT)
 async def handle_help(
     message: Message,
+    settings: Settings,
     event_user_role: UserRole = UserRole.USER,
 ) -> None:
     await message.answer(
         build_help_text(event_user_role),
-        reply_markup=build_main_menu(event_user_role),
+        reply_markup=build_main_menu(
+            event_user_role,
+            mini_app_url=settings.mini_app.public_url,
+        ),
     )
 
 
@@ -67,10 +76,14 @@ async def handle_ping(message: Message) -> None:
 async def handle_health(
     message: Message,
     diagnostics_service: DiagnosticsService,
+    settings: Settings,
     event_user_role: UserRole = UserRole.USER,
 ) -> None:
     report = await diagnostics_service.collect_report()
     await message.answer(
         format_diagnostics_report(report),
-        reply_markup=build_main_menu(event_user_role),
+        reply_markup=build_main_menu(
+            event_user_role,
+            mini_app_url=settings.mini_app.public_url,
+        ),
     )

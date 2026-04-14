@@ -27,6 +27,7 @@ from bot.texts.operator_invites import (
     build_invite_welcome_text,
 )
 from domain.enums.roles import UserRole
+from infrastructure.config.settings import Settings
 
 router = Router(name="user_operator_invites")
 
@@ -118,6 +119,7 @@ async def handle_operator_invite_confirm(
     callback: CallbackQuery,
     state: FSMContext,
     helpdesk_service_factory: HelpdeskServiceFactory,
+    settings: Settings,
 ) -> None:
     if callback.from_user is None:
         return
@@ -152,7 +154,10 @@ async def handle_operator_invite_confirm(
         await callback.message.edit_text(welcome_text, reply_markup=None)
         await callback.message.answer(
             "Рабочее место оператора готово.",
-            reply_markup=build_main_menu(UserRole.OPERATOR),
+            reply_markup=build_main_menu(
+                UserRole.OPERATOR,
+                mini_app_url=settings.mini_app.public_url,
+            ),
         )
         return
 

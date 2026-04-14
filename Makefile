@@ -8,8 +8,9 @@ ALEMBIC ?= $(POETRY) run alembic -c $(ALEMBIC_CONFIG)
 APP_MODULE ?= app.main
 BACKEND_MODULE ?= backend.main
 AI_SERVICE_MODULE ?= ai_service.main
+MINI_APP_MODULE ?= mini_app.main
 FULL_SCRIPT ?= ops/docker/full.sh
-FULL_SERVICES ?= postgres redis ai-service backend bot
+FULL_SERVICES ?= postgres redis ai-service backend bot mini-app
 FULL_TIMEOUT ?= 180
 STACK_HEALTH_SCRIPT ?= ops/scripts/stack_health.sh
 SMOKE_SCRIPT ?= /app/ops/scripts/smoke_check.py
@@ -32,7 +33,7 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test proto proto-check check ci health health-bot health-backend health-ai smoke run run-backend run-ai run-bot migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-down logs logs-bot logs-backend logs-ai backup-db restore-db up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke run run-backend run-ai run-bot run-mini-app migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
 
 COMPOSE_CMD = $(COMPOSE) $(COMPOSE_FILES)
 
@@ -56,6 +57,7 @@ help:
 	@printf "  run-backend        Start the backend gRPC service locally\n"
 	@printf "  run-ai             Start the ai-service gRPC runtime locally\n"
 	@printf "  run-bot            Start the Telegram bot runtime locally\n"
+	@printf "  run-mini-app       Start the Telegram Mini App gateway locally\n"
 	@printf "  migrate            Apply Alembic migrations\n"
 	@printf "  migrate-stack      Apply Alembic migrations inside the backend container\n"
 	@printf "  migration-check    Verify that migrations match the SQLAlchemy metadata\n"
@@ -69,6 +71,7 @@ help:
 	@printf "  logs               Tail application logs from Docker Compose\n"
 	@printf "  logs-bot           Tail bot logs from Docker Compose\n"
 	@printf "  logs-backend       Tail backend logs from Docker Compose\n"
+	@printf "  logs-mini-app      Tail Mini App logs from Docker Compose\n"
 	@printf "  pre-commit-install Install pre-commit hooks\n"
 	@printf "  pre-commit-run     Run pre-commit on all files\n"
 	@printf "  backup-db          Create a PostgreSQL logical backup from the running stack\n"
@@ -120,6 +123,10 @@ health-ai:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m ai_service.healthcheck
 
+health-mini-app:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m mini_app.healthcheck
+
 migration-check:
 	$(call ensure_poetry_env)
 	$(ALEMBIC) upgrade head
@@ -139,6 +146,10 @@ run-ai:
 run-bot:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m $(APP_MODULE)
+
+run-mini-app:
+	$(call ensure_poetry_env)
+	$(POETRY) run python -m $(MINI_APP_MODULE)
 
 migrate:
 	$(call ensure_poetry_env)
@@ -174,7 +185,7 @@ full:
 full-down: docker-down
 
 logs:
-	$(COMPOSE_CMD) logs -f ai-service backend bot
+	$(COMPOSE_CMD) logs -f ai-service backend bot mini-app
 
 logs-bot:
 	$(COMPOSE_CMD) logs -f bot
@@ -184,6 +195,9 @@ logs-backend:
 
 logs-ai:
 	$(COMPOSE_CMD) logs -f ai-service
+
+logs-mini-app:
+	$(COMPOSE_CMD) logs -f mini-app
 
 smoke:
 	$(COMPOSE_CMD) run --rm --no-deps backend python $(SMOKE_SCRIPT)

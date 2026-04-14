@@ -4,10 +4,11 @@
 
 ## Что внутри
 
-Контур состоит из пяти служб:
+Контур состоит из шести служб:
 
 - `bot` — Telegram-слой: тексты, клавиатуры, маршрутизация, доставка сообщений;
 - `backend` — внутренний gRPC-сервис с продуктовой логикой;
+- `mini-app` — операторский Telegram Mini App поверх backend API;
 - `ai-service` — отдельная служба для AI-задач;
 - `postgres` — основное хранилище;
 - `redis` — состояние диалогов, блокировки, presence, потоки и координация SLA.
@@ -16,6 +17,7 @@
 
 ```text
 bot -> gRPC -> backend -> gRPC -> ai-service
+mini-app -> HTTP -> gRPC -> backend -> gRPC -> ai-service
 ```
 
 ## Что уже есть
@@ -31,6 +33,7 @@ bot -> gRPC -> backend -> gRPC -> ai-service
 - вложения, внутренние заметки, теги, макросы, обратная связь;
 - Redis-backed FSM и отдельный gRPC `backend`;
 - AI-помощь через `ai-service`: сводка по делу, подсказки по макросам и рекомендация темы.
+- Telegram Mini App для операторов и суперадминистраторов: обзор, очередь, архив, аналитика, экспорт и ticket workspace.
 
 ## Быстрый старт
 
@@ -67,6 +70,7 @@ AI__API_TOKEN=hf_xxx
 - `make health` — посмотреть состояние контейнеров;
 - `make smoke` — прогнать прикладную smoke проверку;
 - `make logs` — смотреть логи `ai-service`, `backend` и `bot`;
+- `make run-mini-app` — поднять Mini App gateway локально;
 - `make backup-db` — сделать логическую резервную копию PostgreSQL.
 
 ## Документация

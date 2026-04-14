@@ -548,9 +548,7 @@ def _analyze_ticket_sentiment(
     uppercase_signal = 1 if _has_excessive_uppercase(command.text) else 0
     unanswered_streak = _recent_unanswered_client_streak(command.recent_messages)
     follow_up_signal = (
-        1
-        if unanswered_streak >= 2 and (frustration_hits > 0 or punctuation_signal)
-        else 0
+        1 if unanswered_streak >= 2 and (frustration_hits > 0 or punctuation_signal) else 0
     )
 
     weighted_score = (

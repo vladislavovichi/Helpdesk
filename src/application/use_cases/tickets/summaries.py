@@ -15,6 +15,7 @@ from domain.entities.ticket import (
     TicketMessageDetails,
 )
 from domain.entities.ticket import TicketDetails as DomainTicketDetails
+from domain.enums.roles import UserRole
 from domain.enums.tickets import (
     TicketAttachmentKind,
     TicketEventType,
@@ -318,6 +319,12 @@ def build_operator_summary(operator: OperatorRecord) -> OperatorSummary:
 class OperatorRoleMutationResult:
     operator: OperatorSummary
     changed: bool
+
+
+@dataclass(slots=True)
+class AccessContextSummary:
+    telegram_user_id: int
+    role: UserRole
 
 
 @dataclass(slots=True)

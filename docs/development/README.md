@@ -13,6 +13,7 @@ make migrate
 make run-ai
 make run-backend
 make run-bot
+make run-mini-app
 ```
 
 Если Telegram polling сейчас не нужен:
@@ -55,6 +56,7 @@ make smoke
 ## Что важно не ломать
 
 - разделение `bot -> backend -> ai-service`;
+- отдельный Mini App поверх backend API, а не рядом с базой или Redis;
 - роли и внутреннюю авторизацию;
 - живой диалог клиента и оператора;
 - очередь и активный контекст по заявке;

@@ -19,6 +19,7 @@ from application.use_cases.tickets.exports import TicketReportFormat
 from backend.grpc.auth import BackendRequestContext, resolve_backend_request_context
 from backend.grpc.generated import helpdesk_pb2, helpdesk_pb2_grpc
 from backend.grpc.translators import (
+    deserialize_add_internal_note_command,
     deserialize_apply_macro_command,
     deserialize_assign_next_command,
     deserialize_client_ticket_message_command,
@@ -26,6 +27,7 @@ from backend.grpc.translators import (
     deserialize_predict_ticket_category_command,
     deserialize_request_actor,
     deserialize_ticket_assignment_command,
+    serialize_access_context,
     serialize_analytics_export,
     serialize_analytics_snapshot,
     serialize_archived_ticket,
@@ -33,7 +35,9 @@ from backend.grpc.translators import (
     serialize_export,
     serialize_macro,
     serialize_macro_application_result,
+    serialize_operator_invite_summary,
     serialize_operator_reply_result,
+    serialize_operator_summary,
     serialize_operator_ticket,
     serialize_queued_ticket,
     serialize_ticket_assist_snapshot,
@@ -113,6 +117,26 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
         del request
         async with self._rpc_scope(context, method="GetBackendStatus"):
             return helpdesk_pb2.BackendStatus(service="helpdesk-backend", status="ready")
+
+    async def GetAccessContext(
+        self,
+        request: helpdesk_pb2.GetAccessContextRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> helpdesk_pb2.AccessContextSummary:
+        async with self._rpc_scope(
+            context,
+            method="GetAccessContext",
+            fallback_actor=_request_actor(request),
+        ) as request_context:
+            access_context = await self._invoke_helpdesk(
+                context,
+                method="GetAccessContext",
+                call=lambda helpdesk_service: helpdesk_service.get_access_context(
+                    actor=request_context.actor
+                ),
+            )
+
+            return serialize_access_context(access_context)
 
     async def GetClientActiveTicket(
         self,
@@ -365,6 +389,30 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
             assert ticket is not None
             return serialize_ticket_summary(ticket)
 
+    async def EscalateTicketAsOperator(
+        self,
+        request: helpdesk_pb2.EscalateTicketAsOperatorRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> helpdesk_pb2.TicketSummary:
+        async with self._rpc_scope(
+            context,
+            method="EscalateTicketAsOperator",
+            fallback_actor=_request_actor(request),
+        ) as request_context:
+            ticket = await self._invoke_helpdesk(
+                context,
+                method="EscalateTicketAsOperator",
+                call=lambda helpdesk_service: helpdesk_service.escalate_ticket_as_operator(
+                    ticket_public_id=UUID(request.ticket_public_id),
+                    actor=request_context.actor,
+                ),
+            )
+
+            if ticket is None:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
+            assert ticket is not None
+            return serialize_ticket_summary(ticket)
+
     async def ReplyToTicketAsOperator(
         self,
         request: helpdesk_pb2.ReplyToTicketAsOperatorRequest,
@@ -388,6 +436,71 @@ class HelpdeskBackendGrpcService(helpdesk_pb2_grpc.HelpdeskBackendServiceService
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
             assert result is not None
             return serialize_operator_reply_result(result)
+
+    async def AddInternalNoteToTicket(
+        self,
+        request: helpdesk_pb2.AddInternalNoteToTicketRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> helpdesk_pb2.TicketSummary:
+        async with self._rpc_scope(
+            context,
+            method="AddInternalNoteToTicket",
+            fallback_actor=_request_actor(request),
+        ) as request_context:
+            ticket = await self._invoke_helpdesk(
+                context,
+                method="AddInternalNoteToTicket",
+                call=lambda helpdesk_service: helpdesk_service.add_internal_note_to_ticket(
+                    deserialize_add_internal_note_command(request.command),
+                    actor=request_context.actor,
+                ),
+            )
+
+            if ticket is None:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "Заявка не найдена.")
+            assert ticket is not None
+            return serialize_ticket_summary(ticket)
+
+    async def ListOperators(
+        self,
+        request: helpdesk_pb2.ListOperatorsRequest,
+        context: grpc.aio.ServicerContext,
+    ):
+        async with self._rpc_scope(
+            context,
+            method="ListOperators",
+            fallback_actor=_request_actor(request),
+        ) as request_context:
+            operators = await self._invoke_helpdesk(
+                context,
+                method="ListOperators",
+                call=lambda helpdesk_service: helpdesk_service.list_operators(
+                    actor=request_context.actor
+                ),
+            )
+
+            for operator in operators:
+                yield serialize_operator_summary(operator)
+
+    async def CreateOperatorInvite(
+        self,
+        request: helpdesk_pb2.CreateOperatorInviteRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> helpdesk_pb2.OperatorInviteCodeSummary:
+        async with self._rpc_scope(
+            context,
+            method="CreateOperatorInvite",
+            fallback_actor=_request_actor(request),
+        ) as request_context:
+            invite = await self._invoke_helpdesk(
+                context,
+                method="CreateOperatorInvite",
+                call=lambda helpdesk_service: helpdesk_service.create_operator_invite(
+                    actor=request_context.actor
+                ),
+            )
+
+            return serialize_operator_invite_summary(invite)
 
     async def ListMacros(
         self,

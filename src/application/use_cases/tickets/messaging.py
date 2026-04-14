@@ -151,11 +151,10 @@ class AddMessageToTicketUseCase:
                     current_priority=ticket.priority,
                     sentiment=message_sentiment,
                 )
-                if (
-                    bumped_priority is not None
-                    and message_sentiment_confidence
-                    in {TicketSignalConfidence.MEDIUM, TicketSignalConfidence.HIGH}
-                ):
+                if bumped_priority is not None and message_sentiment_confidence in {
+                    TicketSignalConfidence.MEDIUM,
+                    TicketSignalConfidence.HIGH,
+                }:
                     previous_priority = ticket.priority
                     ticket.priority = bumped_priority
                     extra_payload["priority_bumped_from"] = previous_priority.value

@@ -911,10 +911,8 @@ def _render_message_meta(message: TicketReportMessage) -> str:
         parts.append(f"Тон клиента: {_sentiment_label(message.sentiment.value)}")
     if message.duplicate_count > 0:
         parts.append(
-
-                f"Повторено ещё {message.duplicate_count} раз"
-                f" · {_format_timestamp(message.last_duplicate_at)}"
-
+            f"Повторено ещё {message.duplicate_count} раз"
+            f" · {_format_timestamp(message.last_duplicate_at)}"
         )
     if not parts:
         return ""

@@ -1,4 +1,5 @@
 HELP_BUTTON_TEXT = "Справка"
+WORKSPACE_BUTTON_TEXT = "Рабочее место"
 QUEUE_BUTTON_TEXT = "Очередь"
 TAKE_NEXT_BUTTON_TEXT = "Взять следующую"
 MY_TICKETS_BUTTON_TEXT = "Мои заявки"
@@ -19,6 +20,7 @@ SKIP_BUTTON_TEXT = "Пропустить"
 USER_NAVIGATION_BUTTONS = frozenset({HELP_BUTTON_TEXT})
 OPERATOR_NAVIGATION_BUTTONS = frozenset(
     {
+        WORKSPACE_BUTTON_TEXT,
         QUEUE_BUTTON_TEXT,
         TAKE_NEXT_BUTTON_TEXT,
         MY_TICKETS_BUTTON_TEXT,
