@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,8 +10,14 @@ from domain.entities.ticket import (
     TicketAttachmentDetails,
     TicketEventDetails,
     TicketInternalNoteDetails,
+    TicketMessageDetails,
 )
-from domain.enums.tickets import TicketEventType, TicketMessageSenderType
+from domain.enums.tickets import (
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketSentiment,
+    TicketSignalConfidence,
+)
 from infrastructure.db.models.ticket import TicketEvent, TicketInternalNote, TicketMessage
 from infrastructure.db.repositories.ticket_metrics import SqlAlchemyTicketMetricsRepository
 from infrastructure.db.repositories.ticket_reads import SqlAlchemyTicketReadRepository
@@ -39,6 +46,9 @@ class SqlAlchemyTicketMessageRepository:
         text: str | None,
         attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
+        sentiment: TicketSentiment | None = None,
+        sentiment_confidence: TicketSignalConfidence | None = None,
+        sentiment_reason: str | None = None,
     ) -> None:
         ticket_message = TicketMessage(
             ticket_id=ticket_id,
@@ -54,8 +64,115 @@ class SqlAlchemyTicketMessageRepository:
             attachment_filename=attachment.filename if attachment is not None else None,
             attachment_mime_type=attachment.mime_type if attachment is not None else None,
             attachment_storage_path=attachment.storage_path if attachment is not None else None,
+            sentiment=sentiment,
+            sentiment_confidence=sentiment_confidence,
+            sentiment_reason=sentiment_reason,
         )
         self.session.add(ticket_message)
+        await self.session.flush()
+
+    async def list_recent_for_ticket(
+        self,
+        *,
+        ticket_id: int,
+        limit: int = 6,
+    ) -> tuple[TicketMessageDetails, ...]:
+        from sqlalchemy import desc
+
+        from infrastructure.db.models.operator import Operator
+
+        statement = (
+            select(
+                TicketMessage.telegram_message_id,
+                TicketMessage.sender_type,
+                TicketMessage.sender_operator_id,
+                Operator.display_name,
+                TicketMessage.text,
+                TicketMessage.attachment_kind,
+                TicketMessage.attachment_file_id,
+                TicketMessage.attachment_file_unique_id,
+                TicketMessage.attachment_filename,
+                TicketMessage.attachment_mime_type,
+                TicketMessage.attachment_storage_path,
+                TicketMessage.sentiment,
+                TicketMessage.sentiment_confidence,
+                TicketMessage.sentiment_reason,
+                TicketMessage.duplicate_count,
+                TicketMessage.last_duplicate_at,
+                TicketMessage.created_at,
+            )
+            .join(Operator, TicketMessage.sender_operator_id == Operator.id, isouter=True)
+            .where(TicketMessage.ticket_id == ticket_id)
+            .order_by(desc(TicketMessage.created_at), desc(TicketMessage.id))
+            .limit(limit)
+        )
+        result = await self.session.execute(statement)
+        rows = list(reversed(result.all()))
+        return tuple(
+            TicketMessageDetails(
+                telegram_message_id=telegram_message_id,
+                sender_type=sender_type,
+                sender_operator_id=sender_operator_id,
+                sender_operator_name=sender_operator_name,
+                text=text,
+                attachment=(
+                    TicketAttachmentDetails(
+                        kind=attachment_kind,
+                        telegram_file_id=attachment_file_id,
+                        telegram_file_unique_id=attachment_file_unique_id,
+                        filename=attachment_filename,
+                        mime_type=attachment_mime_type,
+                        storage_path=attachment_storage_path,
+                    )
+                    if attachment_kind is not None and attachment_file_id is not None
+                    else None
+                ),
+                sentiment=sentiment,
+                sentiment_confidence=sentiment_confidence,
+                sentiment_reason=sentiment_reason,
+                duplicate_count=duplicate_count,
+                last_duplicate_at=last_duplicate_at,
+                created_at=created_at,
+            )
+            for (
+                telegram_message_id,
+                sender_type,
+                sender_operator_id,
+                sender_operator_name,
+                text,
+                attachment_kind,
+                attachment_file_id,
+                attachment_file_unique_id,
+                attachment_filename,
+                attachment_mime_type,
+                attachment_storage_path,
+                sentiment,
+                sentiment_confidence,
+                sentiment_reason,
+                duplicate_count,
+                last_duplicate_at,
+                created_at,
+            ) in rows
+        )
+
+    async def mark_duplicate(
+        self,
+        *,
+        ticket_id: int,
+        telegram_message_id: int,
+        occurred_at: datetime,
+    ) -> None:
+        statement = select(TicketMessage).where(
+            TicketMessage.ticket_id == ticket_id,
+            TicketMessage.telegram_message_id == telegram_message_id,
+            TicketMessage.sender_type == TicketMessageSenderType.CLIENT,
+        )
+        result = await self.session.execute(statement)
+        ticket_message = result.scalar_one_or_none()
+        if ticket_message is None:
+            raise RuntimeError("Не найдено каноническое сообщение для объединения дублей.")
+        ticket_message.duplicate_count += 1
+        ticket_message.last_duplicate_at = occurred_at
         await self.session.flush()
 
     async def allocate_internal_telegram_message_id(

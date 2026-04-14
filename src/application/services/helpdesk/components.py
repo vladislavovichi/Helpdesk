@@ -217,6 +217,7 @@ def build_helpdesk_components(
                 ticket_repository=ticket_repository,
                 ticket_message_repository=ticket_message_repository,
                 ticket_event_repository=ticket_event_repository,
+                ai_client_factory=ai_client_factory,
             ),
             get_active_client_ticket=GetActiveClientTicketUseCase(
                 ticket_repository=ticket_repository
@@ -237,6 +238,7 @@ def build_helpdesk_components(
                 ticket_repository=ticket_repository,
                 ticket_message_repository=ticket_message_repository,
                 ticket_event_repository=ticket_event_repository,
+                ai_client_factory=ai_client_factory,
             ),
             add_internal_note=AddInternalNoteToTicketUseCase(
                 ticket_repository=ticket_repository,

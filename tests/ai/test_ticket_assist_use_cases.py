@@ -14,6 +14,7 @@ from application.contracts.ai import (
     AIServiceClient,
     AIServiceClientFactory,
     AISuggestedMacro,
+    AnalyzedTicketSentimentResult,
     GeneratedTicketSummaryResult,
     PredictTicketCategoryCommand,
     SuggestedMacrosResult,
@@ -72,6 +73,10 @@ class StubAIClient(AIServiceClient):
     async def predict_ticket_category(self, command: object) -> AIPredictedCategoryResult:
         del command
         return self.category_result
+
+    async def analyze_ticket_sentiment(self, command: object) -> AnalyzedTicketSentimentResult:
+        del command
+        return AnalyzedTicketSentimentResult(available=False)
 
 
 def build_ai_client_factory(client: StubAIClient) -> AIServiceClientFactory:

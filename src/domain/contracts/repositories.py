@@ -14,11 +14,14 @@ from domain.entities.ticket import (
     TicketEventDetails,
     TicketHistoryEntry,
     TicketInternalNoteDetails,
+    TicketMessageDetails,
 )
 from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
+    TicketSentiment,
+    TicketSignalConfidence,
     TicketStatus,
 )
 
@@ -197,8 +200,28 @@ class TicketMessageRepository(Protocol):
         text: str | None,
         attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
+        sentiment: TicketSentiment | None = None,
+        sentiment_confidence: TicketSignalConfidence | None = None,
+        sentiment_reason: str | None = None,
     ) -> None:
         """Persist a ticket message."""
+
+    async def list_recent_for_ticket(
+        self,
+        *,
+        ticket_id: int,
+        limit: int = 6,
+    ) -> Sequence[TicketMessageDetails]:
+        """Return recent ticket messages ordered from oldest to newest."""
+
+    async def mark_duplicate(
+        self,
+        *,
+        ticket_id: int,
+        telegram_message_id: int,
+        occurred_at: datetime,
+    ) -> None:
+        """Increase duplicate counters for a canonical message."""
 
     async def allocate_internal_telegram_message_id(
         self,

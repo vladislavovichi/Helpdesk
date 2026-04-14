@@ -22,6 +22,8 @@ from domain.enums.tickets import (
     TicketAttachmentKind,
     TicketEventType,
     TicketMessageSenderType,
+    TicketSentiment,
+    TicketSignalConfidence,
     TicketStatus,
 )
 
@@ -55,6 +57,11 @@ class TicketReportMessage:
     text: str | None
     created_at: datetime
     attachment: TicketReportAttachment | None = None
+    sentiment: TicketSentiment | None = None
+    sentiment_confidence: TicketSignalConfidence | None = None
+    sentiment_reason: str | None = None
+    duplicate_count: int = 0
+    last_duplicate_at: datetime | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -90,6 +97,10 @@ class TicketReport:
     closed_at: datetime | None
     category_code: str | None
     category_title: str | None
+    sentiment: TicketSentiment | None
+    sentiment_confidence: TicketSignalConfidence | None
+    sentiment_reason: str | None
+    sentiment_detected_at: datetime | None
     tags: tuple[str, ...]
     feedback: TicketReportFeedback | None
     messages: tuple[TicketReportMessage, ...]
@@ -196,6 +207,10 @@ def build_ticket_report(
         closed_at=ticket.closed_at,
         category_code=ticket.category_code,
         category_title=ticket.category_title,
+        sentiment=ticket.sentiment,
+        sentiment_confidence=ticket.sentiment_confidence,
+        sentiment_reason=ticket.sentiment_reason,
+        sentiment_detected_at=ticket.sentiment_detected_at,
         tags=ticket.tags,
         feedback=(
             TicketReportFeedback(
@@ -216,6 +231,11 @@ def build_ticket_report(
                     if message.attachment is not None
                     else None
                 ),
+                sentiment=message.sentiment,
+                sentiment_confidence=message.sentiment_confidence,
+                sentiment_reason=message.sentiment_reason,
+                duplicate_count=message.duplicate_count,
+                last_duplicate_at=message.last_duplicate_at,
                 created_at=message.created_at,
             )
             for message in ticket.message_history
@@ -268,6 +288,8 @@ def _is_relevant_event(event_type: TicketEventType) -> bool:
         TicketEventType.ASSIGNED,
         TicketEventType.REASSIGNED,
         TicketEventType.AUTO_REASSIGNED,
+        TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
+        TicketEventType.CLIENT_SENTIMENT_FLAGGED,
         TicketEventType.ESCALATED,
         TicketEventType.AUTO_ESCALATED,
         TicketEventType.SLA_BREACHED_FIRST_RESPONSE,

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from application.contracts.ai import AIServiceClientFactory
 from application.contracts.tickets import ClientTicketMessageCommand
 from application.use_cases.tickets.common import (
-    build_message_payload,
     build_status_payload,
     build_ticket_subject,
     build_ticket_summary,
@@ -23,6 +23,7 @@ class CreateTicketFromClientMessageUseCase:
         ticket_repository: TicketRepository,
         ticket_message_repository: TicketMessageRepository,
         ticket_event_repository: TicketEventRepository,
+        ai_client_factory: AIServiceClientFactory | None = None,
     ) -> None:
         self.ticket_repository = ticket_repository
         self.ticket_message_repository = ticket_message_repository
@@ -31,6 +32,7 @@ class CreateTicketFromClientMessageUseCase:
             ticket_repository=ticket_repository,
             ticket_message_repository=ticket_message_repository,
             ticket_event_repository=ticket_event_repository,
+            ai_client_factory=ai_client_factory,
         )
 
     async def __call__(
@@ -85,23 +87,15 @@ class CreateTicketFromClientMessageUseCase:
             ),
         )
 
-        await self.ticket_message_repository.add(
-            ticket_id=ticket.id,
+        added_message = await self._add_message_to_ticket(
+            ticket_public_id=ticket.public_id,
             telegram_message_id=command.telegram_message_id,
             sender_type=TicketMessageSenderType.CLIENT,
             text=command.text,
             attachment=command.attachment,
         )
-        await self.ticket_event_repository.add(
-            ticket_id=ticket.id,
-            event_type=TicketEventType.CLIENT_MESSAGE_ADDED,
-            payload_json=build_message_payload(
-                telegram_message_id=command.telegram_message_id,
-                sender_type=TicketMessageSenderType.CLIENT,
-                sender_operator_id=None,
-                attachment=command.attachment,
-            ),
-        )
+        if added_message is None:
+            raise RuntimeError("Не удалось сохранить первое сообщение заявки.")
 
         return build_ticket_summary(
             queued_ticket,

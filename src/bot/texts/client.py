@@ -16,6 +16,10 @@ def build_ticket_message_added_text(public_number: str, *, operator_connected: b
     )
 
 
+def build_ticket_message_recorded_text(public_number: str) -> str:
+    return f"Сообщение по заявке {public_number} учтено."
+
+
 def build_operator_reply_text(public_number: str, body: str) -> str:
     return f"Ответ по заявке {public_number}\n\n{body}"
 

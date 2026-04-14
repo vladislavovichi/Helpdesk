@@ -13,9 +13,11 @@ import grpc
 from ai_service.grpc.auth import AIServiceRequestContext, resolve_ai_service_request_context
 from ai_service.grpc.generated import ai_service_pb2, ai_service_pb2_grpc
 from ai_service.grpc.translators import (
+    deserialize_analyze_ticket_sentiment_command,
     deserialize_generate_ticket_summary_command,
     deserialize_predict_category_command,
     deserialize_suggest_macros_command,
+    serialize_analyzed_ticket_sentiment_result,
     serialize_generated_ticket_summary_result,
     serialize_predicted_category_result,
     serialize_suggested_macros_result,
@@ -140,6 +142,21 @@ class AIServiceGrpcService(ai_service_pb2_grpc.HelpdeskAIServiceServicer):
                 ),
             )
             return serialize_predicted_category_result(result)
+
+    async def AnalyzeTicketSentiment(
+        self,
+        request: ai_service_pb2.AnalyzeTicketSentimentCommand,
+        context: grpc.aio.ServicerContext,
+    ) -> ai_service_pb2.AnalyzeTicketSentimentResponse:
+        async with self._rpc_scope(context, method="AnalyzeTicketSentiment"):
+            result = await self._invoke(
+                context,
+                method="AnalyzeTicketSentiment",
+                call=lambda: self.service.analyze_ticket_sentiment(
+                    deserialize_analyze_ticket_sentiment_command(request)
+                ),
+            )
+            return serialize_analyzed_ticket_sentiment_result(result)
 
 
 @dataclass(slots=True)

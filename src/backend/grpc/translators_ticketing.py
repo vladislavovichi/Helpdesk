@@ -37,7 +37,12 @@ from backend.grpc.translators_shared import (
     _serialize_timestamp,
     serialize_attachment,
 )
-from domain.enums.tickets import TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import (
+    TicketMessageSenderType,
+    TicketSentiment,
+    TicketSignalConfidence,
+    TicketStatus,
+)
 
 
 def serialize_ticket_summary(ticket: TicketSummary) -> helpdesk_pb2.TicketSummary:
@@ -306,6 +311,15 @@ def serialize_ticket_message(
         result.text = message.text
     if message.attachment is not None:
         result.attachment.CopyFrom(serialize_attachment(message.attachment))
+    if message.sentiment is not None:
+        result.sentiment = message.sentiment.value
+    if message.sentiment_confidence is not None:
+        result.sentiment_confidence = message.sentiment_confidence.value
+    if message.sentiment_reason is not None:
+        result.sentiment_reason = message.sentiment_reason
+    result.duplicate_count = message.duplicate_count
+    if message.last_duplicate_at is not None:
+        result.last_duplicate_at.CopyFrom(_serialize_timestamp(message.last_duplicate_at))
     return result
 
 
@@ -325,6 +339,19 @@ def deserialize_ticket_message(
         attachment=(
             _deserialize_attachment_summary(message.attachment)
             if message.HasField("attachment")
+            else None
+        ),
+        sentiment=TicketSentiment(message.sentiment) if _has(message, "sentiment") else None,
+        sentiment_confidence=(
+            TicketSignalConfidence(message.sentiment_confidence)
+            if _has(message, "sentiment_confidence")
+            else None
+        ),
+        sentiment_reason=message.sentiment_reason if _has(message, "sentiment_reason") else None,
+        duplicate_count=message.duplicate_count,
+        last_duplicate_at=(
+            _deserialize_timestamp(message.last_duplicate_at)
+            if message.HasField("last_duplicate_at")
             else None
         ),
     )
@@ -393,6 +420,14 @@ def serialize_ticket_details(
         message.last_message_attachment.CopyFrom(
             serialize_attachment(ticket.last_message_attachment)
         )
+    if ticket.sentiment is not None:
+        message.sentiment = ticket.sentiment.value
+    if ticket.sentiment_confidence is not None:
+        message.sentiment_confidence = ticket.sentiment_confidence.value
+    if ticket.sentiment_reason is not None:
+        message.sentiment_reason = ticket.sentiment_reason
+    if ticket.sentiment_detected_at is not None:
+        message.sentiment_detected_at.CopyFrom(_serialize_timestamp(ticket.sentiment_detected_at))
     message.message_history.extend(
         serialize_ticket_message(item) for item in ticket.message_history
     )
@@ -428,6 +463,18 @@ def deserialize_ticket_details(
         category_id=ticket.category_id if _has(ticket, "category_id") else None,
         category_code=ticket.category_code if _has(ticket, "category_code") else None,
         category_title=ticket.category_title if _has(ticket, "category_title") else None,
+        sentiment=TicketSentiment(ticket.sentiment) if _has(ticket, "sentiment") else None,
+        sentiment_confidence=(
+            TicketSignalConfidence(ticket.sentiment_confidence)
+            if _has(ticket, "sentiment_confidence")
+            else None
+        ),
+        sentiment_reason=ticket.sentiment_reason if _has(ticket, "sentiment_reason") else None,
+        sentiment_detected_at=(
+            _deserialize_timestamp(ticket.sentiment_detected_at)
+            if ticket.HasField("sentiment_detected_at")
+            else None
+        ),
         tags=tuple(ticket.tags),
         last_message_text=ticket.last_message_text if _has(ticket, "last_message_text") else None,
         last_message_sender_type=(
@@ -518,6 +565,10 @@ def deserialize_export(export: helpdesk_pb2.TicketReportExport) -> TicketReportE
         closed_at=None,
         category_code=None,
         category_title=None,
+        sentiment=None,
+        sentiment_confidence=None,
+        sentiment_reason=None,
+        sentiment_detected_at=None,
         tags=(),
         feedback=None,
         messages=(),

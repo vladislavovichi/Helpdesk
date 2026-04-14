@@ -100,6 +100,20 @@ message PredictCategoryResponse {
   optional string model_id = 6;
 }
 
+message AnalyzeTicketSentimentCommand {
+  optional string text = 1;
+  repeated AIContextMessage recent_messages = 2;
+  AIContextAttachment attachment = 3;
+}
+
+message AnalyzeTicketSentimentResponse {
+  bool available = 1;
+  string sentiment = 2;
+  string confidence = 3;
+  optional string reason = 4;
+  optional string model_id = 5;
+}
+
 message AIServiceStatus {
   string service = 1;
   string status = 2;
@@ -112,4 +126,5 @@ service HelpdeskAIService {
   rpc GenerateTicketSummary(GenerateTicketSummaryCommand) returns (GenerateTicketSummaryResponse);
   rpc SuggestMacros(SuggestMacrosCommand) returns (SuggestMacrosResponse);
   rpc PredictCategory(PredictCategoryCommand) returns (PredictCategoryResponse);
+  rpc AnalyzeTicketSentiment(AnalyzeTicketSentimentCommand) returns (AnalyzeTicketSentimentResponse);
 }

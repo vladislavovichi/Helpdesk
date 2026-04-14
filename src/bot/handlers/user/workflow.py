@@ -20,8 +20,13 @@ from bot.keyboards.inline.operator_actions import (
     build_ticket_actions_markup,
     build_ticket_switch_markup,
 )
-from bot.texts.client import build_ticket_created_text, build_ticket_message_added_text
+from bot.texts.client import (
+    build_ticket_created_text,
+    build_ticket_message_added_text,
+    build_ticket_message_recorded_text,
+)
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
+from domain.enums.tickets import TicketEventType
 from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import (
     OperatorActiveTicketStore,
@@ -132,7 +137,10 @@ async def process_client_ticket_command(
 
     operator_chat_id = ticket_details.assigned_operator_telegram_user_id
     operator_connected = operator_chat_id is not None
-    if operator_chat_id is not None:
+    if (
+        operator_chat_id is not None
+        and ticket.event_type != TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED
+    ):
         active_ticket_public_id = await operator_active_ticket_store.get_active_ticket(
             operator_id=operator_chat_id
         )
@@ -166,9 +174,13 @@ async def process_client_ticket_command(
             )
 
     await response_message.answer(
-        build_ticket_message_added_text(
-            ticket.public_number,
-            operator_connected=operator_connected,
+        (
+            build_ticket_message_recorded_text(ticket.public_number)
+            if ticket.event_type == TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED
+            else build_ticket_message_added_text(
+                ticket.public_number,
+                operator_connected=operator_connected,
+            )
         ),
         reply_markup=build_client_ticket_markup(ticket_public_id=ticket.public_id),
     )

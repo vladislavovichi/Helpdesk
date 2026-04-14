@@ -1,14 +1,27 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from uuid import UUID
 
+from application.contracts.ai import (
+    AIContextAttachment,
+    AIServiceClientFactory,
+    AnalyzedTicketSentimentResult,
+    AnalyzeTicketSentimentCommand,
+)
 from application.contracts.tickets import AddInternalNoteCommand, OperatorTicketReplyCommand
 from application.use_cases.tickets.common import (
     build_event_type_for_message,
     build_message_payload,
     build_ticket_summary,
     utcnow,
+)
+from application.use_cases.tickets.inbound_signals import (
+    build_recent_ai_message_context,
+    detect_duplicate_client_message,
+    next_priority_for_sentiment,
+    sentiment_severity,
 )
 from application.use_cases.tickets.summaries import OperatorReplyResult, TicketSummary
 from domain.contracts.repositories import (
@@ -18,8 +31,13 @@ from domain.contracts.repositories import (
     TicketMessageRepository,
     TicketRepository,
 )
-from domain.entities.ticket import TicketAttachmentDetails
-from domain.enums.tickets import TicketMessageSenderType
+from domain.entities.ticket import TicketAttachmentDetails, TicketMessageDetails
+from domain.enums.tickets import (
+    TicketEventType,
+    TicketMessageSenderType,
+    TicketSentiment,
+    TicketSignalConfidence,
+)
 from domain.tickets import InvalidTicketTransitionError, ensure_operator_replyable
 
 
@@ -29,10 +47,12 @@ class AddMessageToTicketUseCase:
         ticket_repository: TicketRepository,
         ticket_message_repository: TicketMessageRepository,
         ticket_event_repository: TicketEventRepository,
+        ai_client_factory: AIServiceClientFactory | None = None,
     ) -> None:
         self.ticket_repository = ticket_repository
         self.ticket_message_repository = ticket_message_repository
         self.ticket_event_repository = ticket_event_repository
+        self.ai_client_factory = ai_client_factory
 
     async def __call__(
         self,
@@ -60,6 +80,87 @@ class AddMessageToTicketUseCase:
             ticket.first_response_at = current_time
         ticket.updated_at = current_time
 
+        message_sentiment: TicketSentiment | None = None
+        message_sentiment_confidence: TicketSignalConfidence | None = None
+        message_sentiment_reason: str | None = None
+        extra_payload: dict[str, object] = dict(extra_event_payload or {})
+
+        if sender_type == TicketMessageSenderType.CLIENT:
+            recent_messages = tuple(
+                await self.ticket_message_repository.list_recent_for_ticket(
+                    ticket_id=ticket.id,
+                    limit=6,
+                )
+            )
+            duplicate_decision = detect_duplicate_client_message(
+                recent_messages=recent_messages,
+                incoming_text=text,
+                incoming_attachment=attachment,
+                current_time=current_time,
+            )
+            if duplicate_decision is not None:
+                new_duplicate_count = duplicate_decision.canonical_message.duplicate_count + 1
+                await self.ticket_message_repository.mark_duplicate(
+                    ticket_id=ticket.id,
+                    telegram_message_id=duplicate_decision.canonical_message.telegram_message_id,
+                    occurred_at=current_time,
+                )
+                await self.ticket_event_repository.add(
+                    ticket_id=ticket.id,
+                    event_type=TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
+                    payload_json={
+                        "sender_type": TicketMessageSenderType.CLIENT.value,
+                        "canonical_telegram_message_id": (
+                            duplicate_decision.canonical_message.telegram_message_id
+                        ),
+                        "duplicate_telegram_message_id": telegram_message_id,
+                        "duplicate_count": new_duplicate_count,
+                        "reason_code": duplicate_decision.reason_code,
+                    },
+                )
+                return build_ticket_summary(
+                    ticket,
+                    event_type=TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
+                )
+
+            sentiment_result = await self._analyze_client_sentiment(
+                text=text,
+                attachment=attachment,
+                recent_messages=recent_messages,
+            )
+            if sentiment_result is not None and sentiment_result.available:
+                message_sentiment = sentiment_result.sentiment
+                message_sentiment_confidence = sentiment_result.confidence
+                message_sentiment_reason = sentiment_result.reason
+                extra_payload.update(
+                    {
+                        "sentiment": message_sentiment.value,
+                        "sentiment_confidence": message_sentiment_confidence.value,
+                    }
+                )
+                if message_sentiment_reason is not None:
+                    extra_payload["sentiment_reason"] = message_sentiment_reason
+                self._apply_ticket_sentiment(
+                    ticket=ticket,
+                    sentiment=message_sentiment,
+                    confidence=message_sentiment_confidence,
+                    reason=message_sentiment_reason,
+                    detected_at=current_time,
+                )
+                bumped_priority = next_priority_for_sentiment(
+                    current_priority=ticket.priority,
+                    sentiment=message_sentiment,
+                )
+                if (
+                    bumped_priority is not None
+                    and message_sentiment_confidence
+                    in {TicketSignalConfidence.MEDIUM, TicketSignalConfidence.HIGH}
+                ):
+                    previous_priority = ticket.priority
+                    ticket.priority = bumped_priority
+                    extra_payload["priority_bumped_from"] = previous_priority.value
+                    extra_payload["priority_bumped_to"] = bumped_priority.value
+
         await self.ticket_message_repository.add(
             ticket_id=ticket.id,
             telegram_message_id=telegram_message_id,
@@ -67,6 +168,9 @@ class AddMessageToTicketUseCase:
             text=text,
             attachment=attachment,
             sender_operator_id=sender_operator_id,
+            sentiment=message_sentiment,
+            sentiment_confidence=message_sentiment_confidence,
+            sentiment_reason=message_sentiment_reason,
         )
 
         event_type = build_event_type_for_message(sender_type)
@@ -79,11 +183,80 @@ class AddMessageToTicketUseCase:
                     sender_type=sender_type,
                     sender_operator_id=sender_operator_id,
                     attachment=attachment,
-                    extra_payload=extra_event_payload,
+                    extra_payload=extra_payload,
                 ),
+            )
+        if (
+            sender_type == TicketMessageSenderType.CLIENT
+            and message_sentiment == TicketSentiment.ESCALATION_RISK
+            and message_sentiment_confidence
+            in {TicketSignalConfidence.MEDIUM, TicketSignalConfidence.HIGH}
+        ):
+            payload = {
+                "sentiment": message_sentiment.value,
+                "sentiment_confidence": message_sentiment_confidence.value,
+                "telegram_message_id": telegram_message_id,
+            }
+            if message_sentiment_reason is not None:
+                payload["sentiment_reason"] = message_sentiment_reason
+            if "priority_bumped_to" in extra_payload:
+                payload["priority_bumped_to"] = extra_payload["priority_bumped_to"]
+                payload["priority_bumped_from"] = extra_payload["priority_bumped_from"]
+            await self.ticket_event_repository.add(
+                ticket_id=ticket.id,
+                event_type=TicketEventType.CLIENT_SENTIMENT_FLAGGED,
+                payload_json=payload,
             )
 
         return build_ticket_summary(ticket, event_type=event_type)
+
+    async def _analyze_client_sentiment(
+        self,
+        *,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None,
+        recent_messages: tuple[TicketMessageDetails, ...],
+    ) -> AnalyzedTicketSentimentResult | None:
+        if self.ai_client_factory is None:
+            return None
+        try:
+            async with self.ai_client_factory() as ai_client:
+                return await ai_client.analyze_ticket_sentiment(
+                    AnalyzeTicketSentimentCommand(
+                        text=text,
+                        recent_messages=build_recent_ai_message_context(
+                            recent_messages=recent_messages
+                        ),
+                        attachment=(
+                            None
+                            if attachment is None
+                            else AIContextAttachment(
+                                kind=attachment.kind,
+                                filename=attachment.filename,
+                                mime_type=attachment.mime_type,
+                            )
+                        ),
+                    )
+                )
+        except Exception:
+            return None
+
+    def _apply_ticket_sentiment(
+        self,
+        *,
+        ticket: object,
+        sentiment: TicketSentiment,
+        confidence: TicketSignalConfidence,
+        reason: str | None,
+        detected_at: datetime,
+    ) -> None:
+        current_sentiment = getattr(ticket, "sentiment", None)
+        if sentiment_severity(sentiment) < sentiment_severity(current_sentiment):
+            return
+        ticket.sentiment = sentiment
+        ticket.sentiment_confidence = confidence
+        ticket.sentiment_reason = reason
+        ticket.sentiment_detected_at = detected_at
 
 
 class ReplyToTicketAsOperatorUseCase:
@@ -100,6 +273,7 @@ class ReplyToTicketAsOperatorUseCase:
             ticket_repository=ticket_repository,
             ticket_message_repository=ticket_message_repository,
             ticket_event_repository=ticket_event_repository,
+            ai_client_factory=None,
         )
 
     async def __call__(

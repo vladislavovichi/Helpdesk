@@ -67,6 +67,10 @@ def test_render_ticket_report_html_embeds_local_photo(
         closed_at=datetime(2026, 4, 7, 14, 0, tzinfo=UTC),
         category_code="access",
         category_title="Доступ и вход",
+        sentiment=None,
+        sentiment_confidence=None,
+        sentiment_reason=None,
+        sentiment_detected_at=None,
         tags=("vip",),
         feedback=None,
         messages=(
@@ -114,6 +118,10 @@ def test_render_ticket_report_csv_sanitizes_formula_like_cells() -> None:
         closed_at=datetime(2026, 4, 7, 14, 0, tzinfo=UTC),
         category_code="access",
         category_title="Доступ и вход",
+        sentiment=None,
+        sentiment_confidence=None,
+        sentiment_reason=None,
+        sentiment_detected_at=None,
         tags=("+urgent",),
         feedback=None,
         messages=(
@@ -279,6 +287,10 @@ def test_render_ticket_report_html_uses_contained_photo_layout(
         closed_at=datetime(2026, 4, 7, 14, 0, tzinfo=UTC),
         category_code="access",
         category_title="Доступ и вход",
+        sentiment=None,
+        sentiment_confidence=None,
+        sentiment_reason=None,
+        sentiment_detected_at=None,
         tags=(),
         feedback=None,
         messages=(

@@ -19,6 +19,7 @@ from domain.enums.tickets import (
     TicketAttachmentKind,
     TicketEventType,
     TicketMessageSenderType,
+    TicketSentiment,
     TicketStatus,
 )
 from infrastructure.assets.storage import LocalTicketAssetStorage
@@ -31,6 +32,7 @@ SAFE_EMBEDDED_IMAGE_MIME_TYPES = frozenset({"image/gif", "image/jpeg", "image/pn
 def render_ticket_report_html(report: TicketReport) -> bytes:
     generated_at = _format_timestamp(datetime.now(UTC))
     attachment_count = sum(1 for message in report.messages if message.attachment is not None)
+    duplicate_count = sum(message.duplicate_count for message in report.messages)
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -376,6 +378,13 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
       {_stat_card("Вложения", str(attachment_count), "Фото и файлы, сохранённые в материалах")}
       {
         _stat_card(
+            "Повторы",
+            str(duplicate_count),
+            "Сколько повторов клиента было аккуратно объединено",
+        )
+    }
+      {
+        _stat_card(
             "Заметки",
             str(len(report.internal_notes)),
             "Внутренний handoff и рабочий контекст",
@@ -419,6 +428,7 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
             {_list_item("Код категории", report.category_code or "Не указан")}
             {_list_item_html("Ответственный", _operator_identity_html(report))}
             {_list_item("Теги", ", ".join(report.tags) if report.tags else "Нет")}
+            {_list_item("Сигнал клиента", _ticket_sentiment_text(report))}
           </div>
         </div>
         <div class="panel">
@@ -487,6 +497,7 @@ def _render_hero(report: TicketReport, generated_at: str) -> str:
         '<div class="hero-aside-list">'
         f"{_hero_meta_item('Категория', report.category_title or 'Не указана')}"
         f"{_hero_meta_item('Ответственный', _plain_operator_identity(report))}"
+        f"{_hero_meta_item('Сигнал клиента', _ticket_sentiment_text(report))}"
         f"{_hero_meta_item('Первый ответ', _format_duration(report.first_response_seconds))}"
         f"{_hero_meta_item('Закрыта', _format_timestamp(report.closed_at))}"
         "</div>"
@@ -619,6 +630,7 @@ def _render_transcript(messages: tuple[TicketReportMessage, ...]) -> str:
     for message in messages:
         attachment_html = _render_message_attachment(message.attachment)
         body = escape(message.text) if message.text else '<span class="muted">Без текста</span>'
+        meta_html = _render_message_meta(message)
         items.append(
             f'<article class="message {_message_css(message.sender_type)}">'
             '<div class="message-head">'
@@ -626,6 +638,7 @@ def _render_transcript(messages: tuple[TicketReportMessage, ...]) -> str:
             f'<div class="message-time">{escape(_format_timestamp(message.created_at))}</div>'
             "</div>"
             f'<div class="message-body">{body}</div>'
+            f"{meta_html}"
             f"{attachment_html}"
             "</article>"
         )
@@ -724,7 +737,10 @@ def _message_summary(message: TicketReportMessage | None) -> str:
     if message is None:
         return "Переписка ещё не велась."
     if message.text:
-        return " ".join(message.text.split())
+        summary = " ".join(message.text.split())
+        if message.duplicate_count > 0:
+            summary = f"{summary} · ещё {message.duplicate_count} повт."
+        return summary
     if message.attachment is not None:
         return _attachment_label(message.attachment)
     return "Сообщение без текста."
@@ -766,6 +782,8 @@ def _event_title(event_type: TicketEventType) -> str:
         TicketEventType.ASSIGNED: "Назначена оператору",
         TicketEventType.REASSIGNED: "Передана другому оператору",
         TicketEventType.AUTO_REASSIGNED: "Автоматически передана",
+        TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED: "Повтор клиента объединён",
+        TicketEventType.CLIENT_SENTIMENT_FLAGGED: "Усилен сигнал по тону клиента",
         TicketEventType.ESCALATED: "Переведена на эскалацию",
         TicketEventType.AUTO_ESCALATED: "Автоматически эскалирована",
         TicketEventType.SLA_BREACHED_FIRST_RESPONSE: "Нарушен SLA первого ответа",
@@ -783,6 +801,19 @@ def _event_detail(event: TicketReportEvent) -> str | None:
         tag = payload.get("tag")
         if isinstance(tag, str) and tag:
             return tag
+        return None
+    if event.event_type == TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED:
+        duplicate_count = payload.get("duplicate_count")
+        if isinstance(duplicate_count, int) and duplicate_count > 0:
+            return f"Сообщение клиента повторено ещё {duplicate_count} раз."
+        return "Повтор клиента объединён в каноническое сообщение."
+    if event.event_type == TicketEventType.CLIENT_SENTIMENT_FLAGGED:
+        sentiment = payload.get("sentiment")
+        reason = payload.get("sentiment_reason")
+        if isinstance(sentiment, str) and isinstance(reason, str) and reason:
+            return f"{_sentiment_label(sentiment)} · {reason}"
+        if isinstance(sentiment, str):
+            return _sentiment_label(sentiment)
         return None
     if event.event_type in {
         TicketEventType.ASSIGNED,
@@ -834,6 +865,15 @@ def _priority_label(priority: str) -> str:
     }.get(priority, priority)
 
 
+def _ticket_sentiment_text(report: TicketReport) -> str:
+    if report.sentiment is None or report.sentiment == TicketSentiment.CALM:
+        return "Спокойный"
+    label = _sentiment_label(report.sentiment.value).capitalize()
+    if report.sentiment_reason:
+        return f"{label} · {report.sentiment_reason}"
+    return label
+
+
 def _format_timestamp(value: datetime | None) -> str:
     if value is None:
         return "Нет"
@@ -859,6 +899,34 @@ def _closure_summary(report: TicketReport) -> str:
         f"Закрыто {_format_timestamp(report.closed_at)}. "
         f"Первый ответ: {_format_duration(report.first_response_seconds)}."
     )
+
+
+def _render_message_meta(message: TicketReportMessage) -> str:
+    parts: list[str] = []
+    if (
+        message.sender_type == TicketMessageSenderType.CLIENT
+        and message.sentiment is not None
+        and message.sentiment != TicketSentiment.CALM
+    ):
+        parts.append(f"Тон клиента: {_sentiment_label(message.sentiment.value)}")
+    if message.duplicate_count > 0:
+        parts.append(
+
+                f"Повторено ещё {message.duplicate_count} раз"
+                f" · {_format_timestamp(message.last_duplicate_at)}"
+
+        )
+    if not parts:
+        return ""
+    return f'<div class="asset-meta">{" · ".join(escape(part) for part in parts)}</div>'
+
+
+def _sentiment_label(value: str) -> str:
+    return {
+        TicketSentiment.CALM.value: "спокойный",
+        TicketSentiment.FRUSTRATED.value: "напряжённый",
+        TicketSentiment.ESCALATION_RISK.value: "риск эскалации",
+    }.get(value, value)
 
 
 def _first_client_message(messages: tuple[TicketReportMessage, ...]) -> str | None:

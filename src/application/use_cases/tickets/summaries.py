@@ -19,6 +19,8 @@ from domain.enums.tickets import (
     TicketAttachmentKind,
     TicketEventType,
     TicketMessageSenderType,
+    TicketSentiment,
+    TicketSignalConfidence,
     TicketStatus,
 )
 
@@ -174,6 +176,11 @@ class TicketMessageSummary:
     text: str | None
     created_at: datetime
     attachment: TicketAttachmentSummary | None = None
+    sentiment: TicketSentiment | None = None
+    sentiment_confidence: TicketSignalConfidence | None = None
+    sentiment_reason: str | None = None
+    duplicate_count: int = 0
+    last_duplicate_at: datetime | None = None
 
 
 def build_ticket_message_summary(message: TicketMessageDetails) -> TicketMessageSummary:
@@ -188,6 +195,11 @@ def build_ticket_message_summary(message: TicketMessageDetails) -> TicketMessage
             else None
         ),
         created_at=message.created_at,
+        sentiment=message.sentiment,
+        sentiment_confidence=message.sentiment_confidence,
+        sentiment_reason=message.sentiment_reason,
+        duplicate_count=message.duplicate_count,
+        last_duplicate_at=message.last_duplicate_at,
     )
 
 
@@ -229,6 +241,10 @@ class TicketDetailsSummary:
     category_id: int | None = None
     category_code: str | None = None
     category_title: str | None = None
+    sentiment: TicketSentiment | None = None
+    sentiment_confidence: TicketSignalConfidence | None = None
+    sentiment_reason: str | None = None
+    sentiment_detected_at: datetime | None = None
     tags: tuple[str, ...] = ()
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None
@@ -254,6 +270,10 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         category_id=ticket.category_id,
         category_code=ticket.category_code,
         category_title=ticket.category_title,
+        sentiment=ticket.sentiment,
+        sentiment_confidence=ticket.sentiment_confidence,
+        sentiment_reason=ticket.sentiment_reason,
+        sentiment_detected_at=ticket.sentiment_detected_at,
         tags=ticket.tags,
         last_message_text=ticket.last_message_text,
         last_message_sender_type=ticket.last_message_sender_type,

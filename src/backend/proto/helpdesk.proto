@@ -108,6 +108,11 @@ message TicketMessageSummary {
   optional string text = 4;
   google.protobuf.Timestamp created_at = 5;
   TicketAttachment attachment = 6;
+  optional string sentiment = 7;
+  optional string sentiment_confidence = 8;
+  optional string sentiment_reason = 9;
+  int32 duplicate_count = 10;
+  optional google.protobuf.Timestamp last_duplicate_at = 11;
 }
 
 message TicketInternalNoteSummary {
@@ -139,6 +144,10 @@ message TicketDetailsSummary {
   repeated TicketMessageSummary message_history = 18;
   repeated TicketInternalNoteSummary internal_notes = 19;
   google.protobuf.Timestamp closed_at = 20;
+  optional string sentiment = 21;
+  optional string sentiment_confidence = 22;
+  optional string sentiment_reason = 23;
+  optional google.protobuf.Timestamp sentiment_detected_at = 24;
 }
 
 message MacroSummary {

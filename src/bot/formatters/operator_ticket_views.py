@@ -13,13 +13,14 @@ from bot.formatters.operator_primitives import (
     format_history_sender,
     format_last_message,
     format_priority,
+    format_sentiment,
     format_status,
     format_tags,
     format_timestamp,
     shorten_text,
 )
 from bot.formatters.ticket_messages import format_history_body
-from domain.enums.tickets import TicketStatus
+from domain.enums.tickets import TicketSentiment, TicketStatus
 
 HISTORY_CHUNK_LIMIT = 3500
 NOTES_CHUNK_LIMIT = 3500
@@ -79,12 +80,9 @@ def format_ticket_details(
     _append_section(
         lines,
         "Последнее сообщение",
-        format_last_message(
-            ticket.last_message_text,
-            ticket.last_message_attachment,
-            ticket.last_message_sender_type,
-        ),
+        _format_last_message(ticket),
     )
+    _append_section(lines, "Сигнал клиента", _format_ticket_sentiment(ticket))
     return "\n".join(lines)
 
 
@@ -203,7 +201,11 @@ def _format_ticket_history_entry_parts(
     continuation_prefix = f"{sender} · {timestamp} · продолжение\n"
     text_limit = max(500, HISTORY_CHUNK_LIMIT - len(prefix) - 32)
 
-    parts = _split_message_text(format_history_body(message), text_limit)
+    body = format_history_body(message)
+    duplicate_note = _format_duplicate_note(message.duplicate_count)
+    if duplicate_note is not None:
+        body = f"{body}\n{duplicate_note}"
+    parts = _split_message_text(body, text_limit)
     if len(parts) == 1:
         return (f"{prefix}{parts[0]}",)
 
@@ -288,6 +290,11 @@ def _build_ticket_context_meta(ticket: TicketDetailsSummary) -> tuple[str, ...]:
     items: list[str] = [f"Оператор · {_format_assigned_operator(ticket)}"]
     if ticket.tags:
         items.append(f"Теги · {format_tags(ticket.tags)}")
+    if (sentiment_line := _format_ticket_sentiment(ticket)) is not None:
+        items.append(f"Сигнал клиента · {sentiment_line}")
+    duplicate_total = sum(message.duplicate_count for message in ticket.message_history)
+    if duplicate_total > 0:
+        items.append(f"Повторы клиента · объединено {duplicate_total}")
     if ticket.category_title:
         items.insert(0, f"Категория · {ticket.category_title}")
     return tuple(items)
@@ -319,6 +326,41 @@ def _format_ticket_index_page(
 
 def _format_ticket_list_meta(priority: str, status: TicketStatus) -> str:
     return f"{format_status(status).capitalize()} • {format_priority(priority)} приоритет"
+
+
+def _format_last_message(ticket: TicketDetailsSummary) -> str:
+    last_message = ticket.message_history[-1] if ticket.message_history else None
+    if last_message is not None:
+        return format_last_message(
+            last_message.text,
+            last_message.attachment,
+            last_message.sender_type,
+            duplicate_count=last_message.duplicate_count,
+        )
+    return format_last_message(
+        ticket.last_message_text,
+        ticket.last_message_attachment,
+        ticket.last_message_sender_type,
+    )
+
+
+def _format_ticket_sentiment(ticket: TicketDetailsSummary) -> str | None:
+    if ticket.sentiment is None or ticket.sentiment == TicketSentiment.CALM:
+        return None
+    label = format_sentiment(ticket.sentiment)
+    if ticket.sentiment_reason:
+        return f"{label} · {ticket.sentiment_reason}"
+    return label
+
+
+def _format_duplicate_note(duplicate_count: int) -> str | None:
+    if duplicate_count <= 0:
+        return None
+    if duplicate_count == 1:
+        return "Повторено ещё 1 раз"
+    if duplicate_count < 5:
+        return f"Повторено ещё {duplicate_count} раза"
+    return f"Повторено ещё {duplicate_count} раз"
 
 
 def _format_ticket_note_entry(note: TicketInternalNoteSummary) -> str:

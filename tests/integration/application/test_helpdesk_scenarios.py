@@ -15,6 +15,7 @@ from application.contracts.ai import (
     AIPredictedCategoryResult,
     AIServiceClient,
     AIServiceClientFactory,
+    AnalyzedTicketSentimentResult,
     GeneratedTicketSummaryResult,
     SuggestedMacrosResult,
 )
@@ -49,6 +50,8 @@ from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
+    TicketSentiment,
+    TicketSignalConfidence,
     TicketStatus,
 )
 from infrastructure.exports.analytics_snapshot_csv import render_analytics_snapshot_csv
@@ -72,6 +75,10 @@ class DisabledTestAIClient(AIServiceClient):
     async def predict_ticket_category(self, command: object) -> AIPredictedCategoryResult:
         del command
         return AIPredictedCategoryResult(available=False)
+
+    async def analyze_ticket_sentiment(self, command: object) -> AnalyzedTicketSentimentResult:
+        del command
+        return AnalyzedTicketSentimentResult(available=False)
 
 
 def build_ai_client_factory(client: AIServiceClient | None = None) -> AIServiceClientFactory:
@@ -107,6 +114,10 @@ class InMemoryTicketRecord:
     closed_at: datetime | None = None
     assigned_operator_name: str | None = None
     assigned_operator_telegram_user_id: int | None = None
+    sentiment: TicketSentiment | None = None
+    sentiment_confidence: TicketSignalConfidence | None = None
+    sentiment_reason: str | None = None
+    sentiment_detected_at: datetime | None = None
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None
     message_history: tuple[TicketMessageDetails, ...] = ()
@@ -258,6 +269,10 @@ class InMemoryTicketRepository:
             category_id=ticket.category_id,
             category_code=ticket.category_code,
             category_title=ticket.category_title,
+            sentiment=ticket.sentiment,
+            sentiment_confidence=ticket.sentiment_confidence,
+            sentiment_reason=ticket.sentiment_reason,
+            sentiment_detected_at=ticket.sentiment_detected_at,
             tags=ticket.tags,
             last_message_text=ticket.last_message_text,
             last_message_sender_type=ticket.last_message_sender_type,
@@ -414,6 +429,9 @@ class InMemoryTicketRepository:
         sender_operator_id: int | None = None,
         sender_operator_name: str | None = None,
         created_at: datetime | None = None,
+        sentiment: object | None = None,
+        sentiment_confidence: object | None = None,
+        sentiment_reason: str | None = None,
     ) -> None:
         for ticket in self.tickets.values():
             if ticket.id == ticket_id:
@@ -427,6 +445,9 @@ class InMemoryTicketRepository:
                         sender_operator_id=sender_operator_id,
                         sender_operator_name=sender_operator_name,
                         text=text,
+                        sentiment=sentiment,
+                        sentiment_confidence=sentiment_confidence,
+                        sentiment_reason=sentiment_reason,
                         created_at=created_at or datetime.now(UTC),
                     ),
                 )
@@ -437,6 +458,7 @@ class InMemoryTicketRepository:
 class InMemoryMessageRepository:
     ticket_repository: InMemoryTicketRepository
     added_messages: list[dict[str, object]] = field(default_factory=list)
+    duplicate_marks: list[dict[str, object]] = field(default_factory=list)
 
     async def add(
         self,
@@ -447,6 +469,9 @@ class InMemoryMessageRepository:
         text: str | None,
         attachment: object | None = None,
         sender_operator_id: int | None = None,
+        sentiment: object | None = None,
+        sentiment_confidence: object | None = None,
+        sentiment_reason: str | None = None,
     ) -> None:
         self.added_messages.append(
             {
@@ -456,6 +481,9 @@ class InMemoryMessageRepository:
                 "text": text,
                 "attachment": attachment,
                 "sender_operator_id": sender_operator_id,
+                "sentiment": sentiment,
+                "sentiment_confidence": sentiment_confidence,
+                "sentiment_reason": sentiment_reason,
             }
         )
         self.ticket_repository.set_last_message(
@@ -470,7 +498,63 @@ class InMemoryMessageRepository:
             if sender_operator_id is not None
             else None,
             created_at=datetime.now(UTC),
+            sentiment=sentiment,
+            sentiment_confidence=sentiment_confidence,
+            sentiment_reason=sentiment_reason,
         )
+
+    async def list_recent_for_ticket(
+        self,
+        *,
+        ticket_id: int,
+        limit: int = 6,
+    ) -> tuple[TicketMessageDetails, ...]:
+        del limit
+        for ticket in self.ticket_repository.tickets.values():
+            if ticket.id == ticket_id:
+                return tuple(ticket.message_history)
+        return ()
+
+    async def mark_duplicate(
+        self,
+        *,
+        ticket_id: int,
+        telegram_message_id: int,
+        occurred_at: datetime,
+    ) -> None:
+        self.duplicate_marks.append(
+            {
+                "ticket_id": ticket_id,
+                "telegram_message_id": telegram_message_id,
+                "occurred_at": occurred_at,
+            }
+        )
+        for ticket in self.ticket_repository.tickets.values():
+            if ticket.id != ticket_id:
+                continue
+            updated_history: list[TicketMessageDetails] = []
+            for message in ticket.message_history:
+                if message.telegram_message_id == telegram_message_id:
+                    updated_history.append(
+                        TicketMessageDetails(
+                            telegram_message_id=message.telegram_message_id,
+                            sender_type=message.sender_type,
+                            sender_operator_id=message.sender_operator_id,
+                            sender_operator_name=message.sender_operator_name,
+                            text=message.text,
+                            created_at=message.created_at,
+                            attachment=message.attachment,
+                            sentiment=message.sentiment,
+                            sentiment_confidence=message.sentiment_confidence,
+                            sentiment_reason=message.sentiment_reason,
+                            duplicate_count=message.duplicate_count + 1,
+                            last_duplicate_at=occurred_at,
+                        )
+                    )
+                else:
+                    updated_history.append(message)
+            ticket.message_history = tuple(updated_history)
+            break
 
     async def allocate_internal_telegram_message_id(
         self,

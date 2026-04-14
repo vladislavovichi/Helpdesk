@@ -8,11 +8,12 @@ from application.ai.summaries import AIPredictionConfidence
 from application.contracts.ai import (
     AICategoryOption,
     AIPredictTicketCategoryCommand,
+    AnalyzeTicketSentimentCommand,
     GenerateTicketSummaryCommand,
     MacroCandidate,
     SuggestMacrosCommand,
 )
-from domain.enums.tickets import TicketStatus
+from domain.enums.tickets import TicketSentiment, TicketSignalConfidence, TicketStatus
 from infrastructure.config.settings import AIConfig
 
 
@@ -124,3 +125,23 @@ async def test_predict_ticket_category_requires_medium_or_high_confidence() -> N
 
     assert result.available is False
     assert result.confidence is AIPredictionConfidence.NONE
+
+
+async def test_analyze_ticket_sentiment_detects_escalation_risk_without_provider() -> None:
+    service = AIApplicationService(
+        provider=StubProvider("{}", enabled=False, model_id=None),
+        config=AIConfig(),
+    )
+
+    result = await service.analyze_ticket_sentiment(
+        AnalyzeTicketSentimentCommand(
+            text="Это уже безобразие, сколько можно, верните деньги немедленно!!!"
+        )
+    )
+
+    assert result.available is True
+    assert result.sentiment is TicketSentiment.ESCALATION_RISK
+    assert result.confidence in {
+        TicketSignalConfidence.MEDIUM,
+        TicketSignalConfidence.HIGH,
+    }

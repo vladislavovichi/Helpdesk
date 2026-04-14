@@ -10,6 +10,8 @@ from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
+    TicketSentiment,
+    TicketSignalConfidence,
     TicketStatus,
 )
 
@@ -31,6 +33,10 @@ class Ticket(Protocol):
     updated_at: datetime
     first_response_at: datetime | None
     closed_at: datetime | None
+    sentiment: TicketSentiment | None
+    sentiment_confidence: TicketSignalConfidence | None
+    sentiment_reason: str | None
+    sentiment_detected_at: datetime | None
 
 
 @dataclass(slots=True)
@@ -52,6 +58,11 @@ class TicketMessageDetails:
     text: str | None
     created_at: datetime
     attachment: TicketAttachmentDetails | None = None
+    sentiment: TicketSentiment | None = None
+    sentiment_confidence: TicketSignalConfidence | None = None
+    sentiment_reason: str | None = None
+    duplicate_count: int = 0
+    last_duplicate_at: datetime | None = None
 
 
 @dataclass(slots=True)
@@ -102,6 +113,10 @@ class TicketDetails:
     category_id: int | None = None
     category_code: str | None = None
     category_title: str | None = None
+    sentiment: TicketSentiment | None = None
+    sentiment_confidence: TicketSignalConfidence | None = None
+    sentiment_reason: str | None = None
+    sentiment_detected_at: datetime | None = None
     tags: tuple[str, ...] = ()
     last_message_text: str | None = None
     last_message_sender_type: TicketMessageSenderType | None = None

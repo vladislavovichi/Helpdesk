@@ -22,6 +22,18 @@ class TicketMessageSenderType(StrEnum):
     SYSTEM = "system"
 
 
+class TicketSentiment(StrEnum):
+    CALM = "calm"
+    FRUSTRATED = "frustrated"
+    ESCALATION_RISK = "escalation_risk"
+
+
+class TicketSignalConfidence(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class TicketAttachmentKind(StrEnum):
     PHOTO = "photo"
     DOCUMENT = "document"
@@ -39,6 +51,8 @@ class TicketEventType(StrEnum):
     MESSAGE_ADDED = "message_added"
     CLIENT_MESSAGE_ADDED = "client_message_added"
     OPERATOR_MESSAGE_ADDED = "operator_message_added"
+    CLIENT_MESSAGE_DUPLICATE_COLLAPSED = "client_message_duplicate_collapsed"
+    CLIENT_SENTIMENT_FLAGGED = "client_sentiment_flagged"
     TAG_ADDED = "tag_added"
     TAG_REMOVED = "tag_removed"
     ESCALATED = "escalated"

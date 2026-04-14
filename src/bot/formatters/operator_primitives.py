@@ -10,7 +10,7 @@ from application.use_cases.tickets.summaries import (
     TicketAttachmentSummary,
 )
 from bot.formatters.ticket_messages import build_message_preview
-from domain.enums.tickets import TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import TicketMessageSenderType, TicketSentiment, TicketStatus
 from domain.tickets import format_status_for_humans
 
 
@@ -24,11 +24,14 @@ def format_last_message(
     message_text: str | None,
     attachment: TicketAttachmentSummary | None,
     sender_type: TicketMessageSenderType | None,
+    duplicate_count: int = 0,
 ) -> str:
     preview = build_message_preview(text=message_text, attachment=attachment)
     if not preview:
         return "Сообщений пока нет."
 
+    if duplicate_count > 0:
+        preview = f"{preview} · ещё {duplicate_count} повт."
     preview = shorten_text(preview, 160)
     if sender_type is None:
         return preview
@@ -105,6 +108,15 @@ def format_sender_type(sender_type: TicketMessageSenderType) -> str:
         TicketMessageSenderType.SYSTEM: "система",
     }
     return sender_labels.get(sender_type, sender_type.value)
+
+
+def format_sentiment(sentiment: TicketSentiment) -> str:
+    sentiment_labels = {
+        TicketSentiment.CALM: "спокойный",
+        TicketSentiment.FRUSTRATED: "напряжённый",
+        TicketSentiment.ESCALATION_RISK: "риск эскалации",
+    }
+    return sentiment_labels.get(sentiment, sentiment.value)
 
 
 def format_timestamp(value: datetime) -> str:

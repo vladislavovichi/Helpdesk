@@ -8,7 +8,13 @@ from typing import Protocol
 from uuid import UUID
 
 from application.ai.summaries import AIPredictionConfidence
-from domain.enums.tickets import TicketAttachmentKind, TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import (
+    TicketAttachmentKind,
+    TicketMessageSenderType,
+    TicketSentiment,
+    TicketSignalConfidence,
+    TicketStatus,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -126,6 +132,22 @@ class AIPredictedCategoryResult:
     model_id: str | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class AnalyzeTicketSentimentCommand:
+    text: str | None
+    recent_messages: tuple[AIContextMessage, ...] = ()
+    attachment: AIContextAttachment | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class AnalyzedTicketSentimentResult:
+    available: bool
+    sentiment: TicketSentiment = TicketSentiment.CALM
+    confidence: TicketSignalConfidence = TicketSignalConfidence.LOW
+    reason: str | None = None
+    model_id: str | None = None
+
+
 class AIServiceClient(Protocol):
     async def get_service_status(self) -> tuple[str, str]: ...
 
@@ -143,6 +165,11 @@ class AIServiceClient(Protocol):
         self,
         command: AIPredictTicketCategoryCommand,
     ) -> AIPredictedCategoryResult: ...
+
+    async def analyze_ticket_sentiment(
+        self,
+        command: AnalyzeTicketSentimentCommand,
+    ) -> AnalyzedTicketSentimentResult: ...
 
 
 AIServiceClientFactory = Callable[

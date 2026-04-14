@@ -14,6 +14,10 @@ FIELDNAMES = (
     "ticket_subject",
     "ticket_category_code",
     "ticket_category_title",
+    "ticket_sentiment",
+    "ticket_sentiment_confidence",
+    "ticket_sentiment_reason",
+    "ticket_sentiment_detected_at",
     "ticket_created_at",
     "ticket_updated_at",
     "ticket_first_response_at",
@@ -41,6 +45,11 @@ FIELDNAMES = (
     "transcript_attachment_filename",
     "transcript_attachment_mime_type",
     "transcript_attachment_storage_path",
+    "transcript_sentiment",
+    "transcript_sentiment_confidence",
+    "transcript_sentiment_reason",
+    "transcript_duplicate_count",
+    "transcript_last_duplicate_at",
     "internal_note_index",
     "internal_note_timestamp",
     "internal_note_author_id",
@@ -74,6 +83,12 @@ def _build_base_row(report: TicketReport) -> dict[str, str | int]:
         "ticket_subject": _sanitize_csv_value(report.subject),
         "ticket_category_code": _sanitize_csv_value(report.category_code or ""),
         "ticket_category_title": _sanitize_csv_value(report.category_title or ""),
+        "ticket_sentiment": _sanitize_csv_value(report.sentiment.value if report.sentiment else ""),
+        "ticket_sentiment_confidence": _sanitize_csv_value(
+            report.sentiment_confidence.value if report.sentiment_confidence else ""
+        ),
+        "ticket_sentiment_reason": _sanitize_csv_value(report.sentiment_reason or ""),
+        "ticket_sentiment_detected_at": _format_timestamp(report.sentiment_detected_at),
         "ticket_created_at": _format_timestamp(report.created_at),
         "ticket_updated_at": _format_timestamp(report.updated_at),
         "ticket_first_response_at": _format_timestamp(report.first_response_at),
@@ -109,6 +124,11 @@ def _build_base_row(report: TicketReport) -> dict[str, str | int]:
         "transcript_attachment_filename": "",
         "transcript_attachment_mime_type": "",
         "transcript_attachment_storage_path": "",
+        "transcript_sentiment": "",
+        "transcript_sentiment_confidence": "",
+        "transcript_sentiment_reason": "",
+        "transcript_duplicate_count": "",
+        "transcript_last_duplicate_at": "",
         "internal_note_index": "",
         "internal_note_timestamp": "",
         "internal_note_author_id": "",
@@ -203,6 +223,19 @@ def _build_message_row(*, index: int, message: object) -> dict[str, str]:
             if message.attachment is not None and message.attachment.storage_path is not None
             else ""
         ),
+        "transcript_sentiment": (
+            _sanitize_csv_value(message.sentiment.value) if message.sentiment is not None else ""
+        ),
+        "transcript_sentiment_confidence": (
+            _sanitize_csv_value(message.sentiment_confidence.value)
+            if message.sentiment_confidence is not None
+            else ""
+        ),
+        "transcript_sentiment_reason": _sanitize_csv_value(message.sentiment_reason or ""),
+        "transcript_duplicate_count": (
+            str(message.duplicate_count) if message.duplicate_count else ""
+        ),
+        "transcript_last_duplicate_at": _format_timestamp(message.last_duplicate_at),
         "internal_note_index": "",
         "internal_note_timestamp": "",
         "internal_note_author_id": "",
@@ -227,6 +260,11 @@ def _build_internal_note_row(*, index: int, note: object) -> dict[str, str]:
         "transcript_attachment_filename": "",
         "transcript_attachment_mime_type": "",
         "transcript_attachment_storage_path": "",
+        "transcript_sentiment": "",
+        "transcript_sentiment_confidence": "",
+        "transcript_sentiment_reason": "",
+        "transcript_duplicate_count": "",
+        "transcript_last_duplicate_at": "",
         "internal_note_index": str(index),
         "internal_note_timestamp": _format_timestamp(note.created_at),
         "internal_note_author_id": str(note.author_operator_id),

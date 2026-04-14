@@ -24,6 +24,8 @@ from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
+    TicketSentiment,
+    TicketSignalConfidence,
     TicketStatus,
 )
 from infrastructure.db.base import Base
@@ -82,6 +84,27 @@ class Ticket(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sentiment: Mapped[TicketSentiment | None] = mapped_column(
+        Enum(
+            TicketSentiment,
+            name="ticket_sentiment",
+            values_callable=enum_values,
+        ),
+        nullable=True,
+        index=True,
+    )
+    sentiment_confidence: Mapped[TicketSignalConfidence | None] = mapped_column(
+        Enum(
+            TicketSignalConfidence,
+            name="ticket_signal_confidence",
+            values_callable=enum_values,
+        ),
+        nullable=True,
+    )
+    sentiment_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sentiment_detected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     assigned_operator: Mapped[Operator | None] = relationship(
         back_populates="assigned_tickets",
@@ -163,6 +186,28 @@ class TicketMessage(CreatedAtMixin, Base):
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_storage_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    sentiment: Mapped[TicketSentiment | None] = mapped_column(
+        Enum(
+            TicketSentiment,
+            name="ticket_sentiment",
+            values_callable=enum_values,
+        ),
+        nullable=True,
+        index=True,
+    )
+    sentiment_confidence: Mapped[TicketSignalConfidence | None] = mapped_column(
+        Enum(
+            TicketSignalConfidence,
+            name="ticket_signal_confidence",
+            values_callable=enum_values,
+        ),
+        nullable=True,
+    )
+    sentiment_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    duplicate_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    last_duplicate_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     ticket: Mapped[Ticket] = relationship(back_populates="messages")
     sender_operator: Mapped[Operator | None] = relationship(back_populates="sent_messages")

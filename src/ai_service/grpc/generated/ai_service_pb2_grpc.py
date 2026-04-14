@@ -54,6 +54,11 @@ class HelpdeskAIServiceStub(object):
                 request_serializer=ai__service__pb2.PredictCategoryCommand.SerializeToString,
                 response_deserializer=ai__service__pb2.PredictCategoryResponse.FromString,
                 _registered_method=True)
+        self.AnalyzeTicketSentiment = channel.unary_unary(
+                '/helpdesk.ai.v1.HelpdeskAIService/AnalyzeTicketSentiment',
+                request_serializer=ai__service__pb2.AnalyzeTicketSentimentCommand.SerializeToString,
+                response_deserializer=ai__service__pb2.AnalyzeTicketSentimentResponse.FromString,
+                _registered_method=True)
 
 
 class HelpdeskAIServiceServicer(object):
@@ -83,6 +88,12 @@ class HelpdeskAIServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def AnalyzeTicketSentiment(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_HelpdeskAIServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -105,6 +116,11 @@ def add_HelpdeskAIServiceServicer_to_server(servicer, server):
                     servicer.PredictCategory,
                     request_deserializer=ai__service__pb2.PredictCategoryCommand.FromString,
                     response_serializer=ai__service__pb2.PredictCategoryResponse.SerializeToString,
+            ),
+            'AnalyzeTicketSentiment': grpc.unary_unary_rpc_method_handler(
+                    servicer.AnalyzeTicketSentiment,
+                    request_deserializer=ai__service__pb2.AnalyzeTicketSentimentCommand.FromString,
+                    response_serializer=ai__service__pb2.AnalyzeTicketSentimentResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -215,6 +231,33 @@ class HelpdeskAIService(object):
             '/helpdesk.ai.v1.HelpdeskAIService/PredictCategory',
             ai__service__pb2.PredictCategoryCommand.SerializeToString,
             ai__service__pb2.PredictCategoryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AnalyzeTicketSentiment(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/helpdesk.ai.v1.HelpdeskAIService/AnalyzeTicketSentiment',
+            ai__service__pb2.AnalyzeTicketSentimentCommand.SerializeToString,
+            ai__service__pb2.AnalyzeTicketSentimentResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -14,6 +14,8 @@ from application.contracts.ai import (
     AIPredictedCategoryResult,
     AIServiceClient,
     AIServiceClientFactory,
+    AnalyzedTicketSentimentResult,
+    AnalyzeTicketSentimentCommand,
     GeneratedTicketSummaryResult,
     SuggestedMacrosResult,
 )
@@ -42,6 +44,8 @@ from domain.enums.tickets import (
     TicketEventType,
     TicketMessageSenderType,
     TicketPriority,
+    TicketSentiment,
+    TicketSignalConfidence,
     TicketStatus,
 )
 from domain.tickets import InvalidTicketTransitionError
@@ -66,6 +70,23 @@ class DisabledTestAIClient(AIServiceClient):
     async def predict_ticket_category(self, command: object) -> AIPredictedCategoryResult:
         del command
         return AIPredictedCategoryResult(available=False)
+
+    async def analyze_ticket_sentiment(self, command: object) -> AnalyzedTicketSentimentResult:
+        del command
+        return AnalyzedTicketSentimentResult(available=False)
+
+
+class StubSentimentAIClient(DisabledTestAIClient):
+    def __init__(self, result: AnalyzedTicketSentimentResult) -> None:
+        self.result = result
+        self.commands: list[AnalyzeTicketSentimentCommand] = []
+
+    async def analyze_ticket_sentiment(
+        self,
+        command: AnalyzeTicketSentimentCommand,
+    ) -> AnalyzedTicketSentimentResult:
+        self.commands.append(command)
+        return self.result
 
 
 def build_ai_client_factory(client: AIServiceClient | None = None) -> AIServiceClientFactory:
@@ -203,6 +224,10 @@ class StubTicketRepository:
             category_id=getattr(ticket, "category_id", None),
             category_code=getattr(ticket, "category_code", None),
             category_title=getattr(ticket, "category_title", None),
+            sentiment=getattr(ticket, "sentiment", None),
+            sentiment_confidence=getattr(ticket, "sentiment_confidence", None),
+            sentiment_reason=getattr(ticket, "sentiment_reason", None),
+            sentiment_detected_at=getattr(ticket, "sentiment_detected_at", None),
             tags=tuple(getattr(ticket, "tags", ())),
             last_message_text=getattr(ticket, "last_message_text", None),
             last_message_sender_type=getattr(ticket, "last_message_sender_type", None),
@@ -452,6 +477,8 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
     repository = Mock()
     repository.added_messages = []
     repository.allocated_internal_ids = []
+    repository.duplicate_marks = []
+    repository.recent_messages_by_ticket_id = {}
 
     async def add(
         *,
@@ -461,7 +488,26 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
         text: str | None,
         attachment: object | None = None,
         sender_operator_id: int | None = None,
+        sentiment: object | None = None,
+        sentiment_confidence: object | None = None,
+        sentiment_reason: str | None = None,
     ) -> None:
+        recent_messages = list(repository.recent_messages_by_ticket_id.get(ticket_id, ()))
+        recent_messages.append(
+            TicketMessageDetails(
+                telegram_message_id=telegram_message_id,
+                sender_type=sender_type,
+                sender_operator_id=sender_operator_id,
+                sender_operator_name=None,
+                text=text,
+                attachment=attachment,
+                sentiment=sentiment,
+                sentiment_confidence=sentiment_confidence,
+                sentiment_reason=sentiment_reason,
+                created_at=datetime.now(UTC),
+            )
+        )
+        repository.recent_messages_by_ticket_id[ticket_id] = tuple(recent_messages[-6:])
         repository.added_messages.append(
             {
                 "ticket_id": ticket_id,
@@ -470,6 +516,31 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
                 "text": text,
                 "attachment": attachment,
                 "sender_operator_id": sender_operator_id,
+                "sentiment": sentiment,
+                "sentiment_confidence": sentiment_confidence,
+                "sentiment_reason": sentiment_reason,
+            }
+        )
+
+    async def list_recent_for_ticket(
+        *,
+        ticket_id: int,
+        limit: int = 6,
+    ) -> tuple[object, ...]:
+        del limit
+        return tuple(repository.recent_messages_by_ticket_id.get(ticket_id, ()))
+
+    async def mark_duplicate(
+        *,
+        ticket_id: int,
+        telegram_message_id: int,
+        occurred_at: datetime,
+    ) -> None:
+        repository.duplicate_marks.append(
+            {
+                "ticket_id": ticket_id,
+                "telegram_message_id": telegram_message_id,
+                "occurred_at": occurred_at,
             }
         )
 
@@ -487,6 +558,8 @@ def build_message_repository_mock(*, next_internal_message_id: int = -1) -> Mock
         return next_internal_message_id
 
     repository.add = AsyncMock(side_effect=add)
+    repository.list_recent_for_ticket = AsyncMock(side_effect=list_recent_for_ticket)
+    repository.mark_duplicate = AsyncMock(side_effect=mark_duplicate)
     repository.allocate_internal_telegram_message_id = AsyncMock(
         side_effect=allocate_internal_telegram_message_id
     )
@@ -1089,6 +1162,7 @@ def build_service(
     ticket_category_repository: StubTicketCategoryRepository | None = None,
     ticket_tag_repository: StubTicketTagRepository | None = None,
     super_admin_telegram_user_ids: frozenset[int] | None = None,
+    ai_client_factory: AIServiceClientFactory | None = None,
 ) -> HelpdeskService:
     active_tag_repository = tag_repository or StubTagRepository()
     return HelpdeskService(
@@ -1129,7 +1203,7 @@ def build_service(
         ),
         ticket_tag_repository=ticket_tag_repository
         or StubTicketTagRepository(tag_repository=active_tag_repository),
-        ai_client_factory=build_ai_client_factory(),
+        ai_client_factory=ai_client_factory or build_ai_client_factory(),
         export_renderers=HelpdeskExportRenderers(
             ticket_report_csv=render_ticket_report_csv,
             ticket_report_html=render_ticket_report_html,
@@ -1206,6 +1280,101 @@ async def test_follow_up_client_message_reuses_active_open_ticket() -> None:
     assert message_repository.added_messages[0]["ticket_id"] == active_ticket.id
     assert [event["event_type"] for event in event_repository.added_events] == [
         TicketEventType.CLIENT_MESSAGE_ADDED,
+    ]
+
+
+async def test_follow_up_client_message_flags_sentiment_and_raises_priority() -> None:
+    public_id = uuid4()
+    active_ticket = build_ticket(
+        ticket_id=2,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        priority=TicketPriority.NORMAL,
+    )
+    ticket_repository = StubTicketRepository(
+        created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW),
+        active_ticket=active_ticket,
+    )
+    message_repository = build_message_repository_mock()
+    event_repository = build_event_repository_mock()
+    ai_client = StubSentimentAIClient(
+        AnalyzedTicketSentimentResult(
+            available=True,
+            sentiment=TicketSentiment.ESCALATION_RISK,
+            confidence=TicketSignalConfidence.HIGH,
+            reason="Резкие формулировки и требование немедленного ответа.",
+        )
+    )
+    service = build_service(
+        ticket_repository=ticket_repository,
+        message_repository=message_repository,
+        event_repository=event_repository,
+        ai_client_factory=build_ai_client_factory(ai_client),
+    )
+
+    result = await service.create_ticket_from_client_message(
+        ClientTicketMessageCommand(
+            client_chat_id=active_ticket.client_chat_id,
+            telegram_message_id=889,
+            text="Это уже безобразие, сколько можно, ответьте немедленно!",
+        )
+    )
+
+    assert result.event_type == TicketEventType.CLIENT_MESSAGE_ADDED
+    assert active_ticket.priority == TicketPriority.HIGH
+    assert active_ticket.sentiment == TicketSentiment.ESCALATION_RISK
+    assert message_repository.added_messages[0]["sentiment"] == TicketSentiment.ESCALATION_RISK
+    assert [event["event_type"] for event in event_repository.added_events] == [
+        TicketEventType.CLIENT_MESSAGE_ADDED,
+        TicketEventType.CLIENT_SENTIMENT_FLAGGED,
+    ]
+    assert ai_client.commands[0].text == "Это уже безобразие, сколько можно, ответьте немедленно!"
+
+
+async def test_follow_up_client_duplicate_burst_is_collapsed_without_new_message_row() -> None:
+    public_id = uuid4()
+    canonical_message = TicketMessageDetails(
+        telegram_message_id=501,
+        sender_type=TicketMessageSenderType.CLIENT,
+        sender_operator_id=None,
+        sender_operator_name=None,
+        text="????",
+        created_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    active_ticket = build_ticket(
+        ticket_id=2,
+        public_id=public_id,
+        status=TicketStatus.ASSIGNED,
+        last_message_text="????",
+        last_message_sender_type=TicketMessageSenderType.CLIENT,
+        message_history=(canonical_message,),
+    )
+    ticket_repository = StubTicketRepository(
+        created_ticket=build_ticket(ticket_id=1, public_id=uuid4(), status=TicketStatus.NEW),
+        active_ticket=active_ticket,
+    )
+    message_repository = build_message_repository_mock()
+    message_repository.recent_messages_by_ticket_id[active_ticket.id] = (canonical_message,)
+    event_repository = build_event_repository_mock()
+    service = build_service(
+        ticket_repository=ticket_repository,
+        message_repository=message_repository,
+        event_repository=event_repository,
+    )
+
+    result = await service.create_ticket_from_client_message(
+        ClientTicketMessageCommand(
+            client_chat_id=active_ticket.client_chat_id,
+            telegram_message_id=890,
+            text="????????",
+        )
+    )
+
+    assert result.event_type == TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED
+    assert message_repository.added_messages == []
+    assert message_repository.duplicate_marks[0]["telegram_message_id"] == 501
+    assert [event["event_type"] for event in event_repository.added_events] == [
+        TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
     ]
 
 

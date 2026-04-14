@@ -77,6 +77,10 @@ class SqlAlchemyTicketReadRepository:
             category_id=ticket.category_id,
             category_code=category_code,
             category_title=category_title,
+            sentiment=ticket.sentiment,
+            sentiment_confidence=ticket.sentiment_confidence,
+            sentiment_reason=ticket.sentiment_reason,
+            sentiment_detected_at=ticket.sentiment_detected_at,
             tags=tags,
             last_message_text=last_message_text,
             last_message_sender_type=last_message_sender_type,
@@ -337,6 +341,11 @@ class SqlAlchemyTicketReadRepository:
                 TicketMessage.attachment_filename,
                 TicketMessage.attachment_mime_type,
                 TicketMessage.attachment_storage_path,
+                TicketMessage.sentiment,
+                TicketMessage.sentiment_confidence,
+                TicketMessage.sentiment_reason,
+                TicketMessage.duplicate_count,
+                TicketMessage.last_duplicate_at,
                 TicketMessage.created_at,
             )
             .join(Operator, TicketMessage.sender_operator_id == Operator.id, isouter=True)
@@ -362,6 +371,31 @@ class SqlAlchemyTicketReadRepository:
                 attachment_filename = None
                 attachment_mime_type = None
                 attachment_storage_path = None
+                sentiment = None
+                sentiment_confidence = None
+                sentiment_reason = None
+                duplicate_count = 0
+                last_duplicate_at = None
+            elif len(values) == 17:
+                (
+                    telegram_message_id,
+                    sender_type,
+                    sender_operator_id,
+                    sender_operator_name,
+                    text,
+                    attachment_kind,
+                    attachment_file_id,
+                    attachment_file_unique_id,
+                    attachment_filename,
+                    attachment_mime_type,
+                    attachment_storage_path,
+                    sentiment,
+                    sentiment_confidence,
+                    sentiment_reason,
+                    duplicate_count,
+                    last_duplicate_at,
+                    created_at,
+                ) = values
             elif len(values) == 12:
                 (
                     telegram_message_id,
@@ -377,6 +411,11 @@ class SqlAlchemyTicketReadRepository:
                     attachment_storage_path,
                     created_at,
                 ) = values
+                sentiment = None
+                sentiment_confidence = None
+                sentiment_reason = None
+                duplicate_count = 0
+                last_duplicate_at = None
             else:
                 raise RuntimeError("Некорректная форма истории сообщений заявки.")
 
@@ -395,6 +434,11 @@ class SqlAlchemyTicketReadRepository:
                         mime_type=attachment_mime_type,
                         storage_path=attachment_storage_path,
                     ),
+                    sentiment=sentiment,
+                    sentiment_confidence=sentiment_confidence,
+                    sentiment_reason=sentiment_reason,
+                    duplicate_count=duplicate_count,
+                    last_duplicate_at=last_duplicate_at,
                     created_at=created_at,
                 )
             )

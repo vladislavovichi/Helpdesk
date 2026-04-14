@@ -16,12 +16,20 @@ from application.contracts.ai import (
     AIPredictedCategoryResult,
     AIPredictTicketCategoryCommand,
     AISuggestedMacro,
+    AnalyzedTicketSentimentResult,
+    AnalyzeTicketSentimentCommand,
     GeneratedTicketSummaryResult,
     GenerateTicketSummaryCommand,
     SuggestedMacrosResult,
     SuggestMacrosCommand,
 )
-from domain.enums.tickets import TicketAttachmentKind, TicketMessageSenderType, TicketStatus
+from domain.enums.tickets import (
+    TicketAttachmentKind,
+    TicketMessageSenderType,
+    TicketSentiment,
+    TicketSignalConfidence,
+    TicketStatus,
+)
 
 
 def serialize_timestamp(value: datetime) -> Timestamp:
@@ -281,6 +289,61 @@ def deserialize_predicted_category_result(
         unavailable_reason=(
             result.unavailable_reason if result.HasField("unavailable_reason") else None
         ),
+        model_id=result.model_id if result.HasField("model_id") else None,
+    )
+
+
+def serialize_analyze_ticket_sentiment_command(
+    command: AnalyzeTicketSentimentCommand,
+) -> ai_service_pb2.AnalyzeTicketSentimentCommand:
+    message = ai_service_pb2.AnalyzeTicketSentimentCommand()
+    if command.text is not None:
+        message.text = command.text
+    if command.attachment is not None:
+        message.attachment.CopyFrom(serialize_attachment(command.attachment))
+    message.recent_messages.extend(
+        serialize_context_message(item) for item in command.recent_messages
+    )
+    return message
+
+
+def deserialize_analyze_ticket_sentiment_command(
+    command: ai_service_pb2.AnalyzeTicketSentimentCommand,
+) -> AnalyzeTicketSentimentCommand:
+    return AnalyzeTicketSentimentCommand(
+        text=command.text if command.HasField("text") else None,
+        recent_messages=tuple(
+            deserialize_context_message(item) for item in command.recent_messages
+        ),
+        attachment=(
+            deserialize_attachment(command.attachment) if command.HasField("attachment") else None
+        ),
+    )
+
+
+def serialize_analyzed_ticket_sentiment_result(
+    result: AnalyzedTicketSentimentResult,
+) -> ai_service_pb2.AnalyzeTicketSentimentResponse:
+    message = ai_service_pb2.AnalyzeTicketSentimentResponse(
+        available=result.available,
+        sentiment=result.sentiment.value,
+        confidence=result.confidence.value,
+    )
+    if result.reason is not None:
+        message.reason = result.reason
+    if result.model_id is not None:
+        message.model_id = result.model_id
+    return message
+
+
+def deserialize_analyzed_ticket_sentiment_result(
+    result: ai_service_pb2.AnalyzeTicketSentimentResponse,
+) -> AnalyzedTicketSentimentResult:
+    return AnalyzedTicketSentimentResult(
+        available=result.available,
+        sentiment=TicketSentiment(result.sentiment),
+        confidence=TicketSignalConfidence(result.confidence),
+        reason=result.reason if result.HasField("reason") else None,
         model_id=result.model_id if result.HasField("model_id") else None,
     )
 
