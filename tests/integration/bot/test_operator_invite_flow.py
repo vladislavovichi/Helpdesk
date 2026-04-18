@@ -122,7 +122,12 @@ async def test_handle_operator_invite_confirm_redeems_invite_and_opens_operator_
         callback=callback,
         state=state,
         helpdesk_service_factory=_build_helpdesk_service_factory(service),
-        settings=SimpleNamespace(mini_app=SimpleNamespace(telegram_launch_url=None)),
+        settings=SimpleNamespace(
+            mini_app=SimpleNamespace(
+                telegram_launch_url=None,
+                public_url_is_valid=False,
+            )
+        ),
     )
 
     callback_answer = cast(AsyncMock, callback.answer)

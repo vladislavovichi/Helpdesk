@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TypeVar
 from uuid import UUID
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import SQLCoreOperations
+from sqlalchemy.sql.roles import TypedColumnsClauseRole
+from sqlalchemy.sql.selectable import ScalarSelect
 
 from domain.entities.ticket import (
     Ticket as TicketEntity,
@@ -33,6 +37,8 @@ from infrastructure.db.repositories.ticket_message_mapping import (
     build_attachment_from_message,
     build_ticket_message_details,
 )
+
+_T = TypeVar("_T")
 
 
 class SqlAlchemyTicketReadRepository:
@@ -389,7 +395,9 @@ def _as_ticket_entities(tickets: Sequence[TicketModel]) -> tuple[TicketEntity, .
     return tuple(tickets)
 
 
-def _first_client_message_scalar(column: object) -> object:
+def _first_client_message_scalar(
+    column: TypedColumnsClauseRole[_T] | SQLCoreOperations[_T],
+) -> ScalarSelect[_T]:
     return (
         select(column)
         .where(TicketMessage.ticket_id == TicketModel.id)

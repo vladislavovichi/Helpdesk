@@ -351,7 +351,7 @@ def build_handler_class(
             return launch, validated.user, session
 
         def _resolve_launch(self) -> ResolvedMiniAppLaunch:
-            launch = resolve_mini_app_launch(path=self.path, headers=self.headers)
+            launch = resolve_mini_app_launch(path=self.path, headers=dict(self.headers.items()))
             self._request_launch_source = launch.source
             self._request_client_source = launch.client_source or "<unknown>"
             self._request_telegram_webapp = _format_presence(launch.is_telegram_webapp)

@@ -13,10 +13,14 @@ import pytest
 from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.ai import (
     AIPredictedCategoryResult,
+    AIPredictTicketCategoryCommand,
     AIServiceClient,
     AIServiceClientFactory,
     AnalyzedTicketSentimentResult,
+    AnalyzeTicketSentimentCommand,
+    GenerateTicketSummaryCommand,
     GeneratedTicketSummaryResult,
+    SuggestMacrosCommand,
     SuggestedMacrosResult,
 )
 from application.contracts.tickets import (
@@ -44,7 +48,12 @@ from domain.contracts.repositories import (
     TicketRepository,
     TicketTagRepository,
 )
-from domain.entities.ticket import TicketDetails, TicketInternalNoteDetails, TicketMessageDetails
+from domain.entities.ticket import (
+    TicketAttachmentDetails,
+    TicketDetails,
+    TicketInternalNoteDetails,
+    TicketMessageDetails,
+)
 from domain.enums.roles import UserRole
 from domain.enums.tickets import (
     TicketEventType,
@@ -64,19 +73,28 @@ class DisabledTestAIClient(AIServiceClient):
     async def get_service_status(self) -> tuple[str, str]:
         return "helpdesk-ai-service", "ready"
 
-    async def generate_ticket_summary(self, command: object) -> GeneratedTicketSummaryResult:
+    async def generate_ticket_summary(
+        self,
+        command: GenerateTicketSummaryCommand,
+    ) -> GeneratedTicketSummaryResult:
         del command
         return GeneratedTicketSummaryResult(available=False)
 
-    async def suggest_macros(self, command: object) -> SuggestedMacrosResult:
+    async def suggest_macros(self, command: SuggestMacrosCommand) -> SuggestedMacrosResult:
         del command
         return SuggestedMacrosResult(available=False)
 
-    async def predict_ticket_category(self, command: object) -> AIPredictedCategoryResult:
+    async def predict_ticket_category(
+        self,
+        command: AIPredictTicketCategoryCommand,
+    ) -> AIPredictedCategoryResult:
         del command
         return AIPredictedCategoryResult(available=False)
 
-    async def analyze_ticket_sentiment(self, command: object) -> AnalyzedTicketSentimentResult:
+    async def analyze_ticket_sentiment(
+        self,
+        command: AnalyzeTicketSentimentCommand,
+    ) -> AnalyzedTicketSentimentResult:
         del command
         return AnalyzedTicketSentimentResult(available=False)
 
@@ -429,8 +447,8 @@ class InMemoryTicketRepository:
         sender_operator_id: int | None = None,
         sender_operator_name: str | None = None,
         created_at: datetime | None = None,
-        sentiment: object | None = None,
-        sentiment_confidence: object | None = None,
+        sentiment: TicketSentiment | None = None,
+        sentiment_confidence: TicketSignalConfidence | None = None,
         sentiment_reason: str | None = None,
     ) -> None:
         for ticket in self.tickets.values():
@@ -467,10 +485,10 @@ class InMemoryMessageRepository:
         telegram_message_id: int,
         sender_type: TicketMessageSenderType,
         text: str | None,
-        attachment: object | None = None,
+        attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
-        sentiment: object | None = None,
-        sentiment_confidence: object | None = None,
+        sentiment: TicketSentiment | None = None,
+        sentiment_confidence: TicketSignalConfidence | None = None,
         sentiment_reason: str | None = None,
     ) -> None:
         self.added_messages.append(

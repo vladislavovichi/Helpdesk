@@ -32,6 +32,7 @@ from domain.contracts.repositories import (
     TicketMessageRepository,
     TicketRepository,
 )
+from domain.entities.ticket import Ticket as TicketEntity
 from domain.entities.ticket import TicketAttachmentDetails, TicketMessageDetails
 from domain.enums.tickets import (
     TicketEventType,
@@ -194,7 +195,7 @@ class AddMessageToTicketUseCase:
             and message_sentiment_confidence
             in {TicketSignalConfidence.MEDIUM, TicketSignalConfidence.HIGH}
         ):
-            payload = {
+            payload: dict[str, object] = {
                 "sentiment": message_sentiment.value,
                 "sentiment_confidence": message_sentiment_confidence.value,
                 "telegram_message_id": telegram_message_id,
@@ -250,7 +251,7 @@ class AddMessageToTicketUseCase:
     def _apply_ticket_sentiment(
         self,
         *,
-        ticket: object,
+        ticket: TicketEntity,
         sentiment: TicketSentiment,
         confidence: TicketSignalConfidence,
         reason: str | None,

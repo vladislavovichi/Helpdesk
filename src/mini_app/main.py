@@ -4,13 +4,13 @@ import logging
 from pathlib import Path
 
 from backend.grpc.client import build_helpdesk_backend_client_factory
-from infrastructure.config.settings import get_settings
+from infrastructure.config.settings import Settings, get_settings
 from infrastructure.logging import configure_logging
 from mini_app.api import MiniAppGateway
 from mini_app.http import MiniAppHttpServer
 
 
-def _log_mini_app_configuration(logger: logging.Logger, settings) -> None:
+def _log_mini_app_configuration(logger: logging.Logger, settings: Settings) -> None:
     if settings.mini_app.public_url_is_valid:
         logger.info(
             "Mini App public URL is ready for Telegram public_url=%s host=%s temporary=%s",

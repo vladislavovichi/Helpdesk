@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -17,6 +18,7 @@ from bot.dispatcher import (
 )
 from bot.middlewares.authorization import AuthorizationMiddleware
 from bot.middlewares.context import UpdateContextMiddleware
+from infrastructure.config.settings import Settings
 from infrastructure.redis.fsm import build_fsm_storage
 
 
@@ -60,7 +62,9 @@ async def test_configure_mini_app_menu_button_uses_web_app_menu_when_url_is_vali
     bot = AsyncMock()
     bot.get_chat_menu_button.return_value = MenuButtonCommands()
     logger = Mock()
-    settings = SimpleNamespace(
+    settings = cast(
+        Settings,
+        SimpleNamespace(
         mini_app=SimpleNamespace(
             public_url_is_valid=True,
             telegram_launch_url="https://mini-app.example.com",
@@ -69,6 +73,7 @@ async def test_configure_mini_app_menu_button_uses_web_app_menu_when_url_is_vali
             public_url_hostname="mini-app.example.com",
             public_url_looks_temporary=False,
         )
+        ),
     )
 
     await _configure_mini_app_menu_button(
@@ -93,7 +98,9 @@ async def test_configure_mini_app_menu_button_falls_back_to_commands_when_url_in
         web_app=WebAppInfo(url="https://stale.example.com"),
     )
     logger = Mock()
-    settings = SimpleNamespace(
+    settings = cast(
+        Settings,
+        SimpleNamespace(
         mini_app=SimpleNamespace(
             public_url_is_valid=False,
             telegram_launch_url=None,
@@ -102,6 +109,7 @@ async def test_configure_mini_app_menu_button_falls_back_to_commands_when_url_in
             public_url_hostname=None,
             public_url_looks_temporary=False,
         )
+        ),
     )
 
     await _configure_mini_app_menu_button(
@@ -125,7 +133,9 @@ async def test_configure_mini_app_menu_button_skips_apply_when_remote_state_is_c
     bot = AsyncMock()
     bot.get_chat_menu_button.return_value = menu_button
     logger = Mock()
-    settings = SimpleNamespace(
+    settings = cast(
+        Settings,
+        SimpleNamespace(
         mini_app=SimpleNamespace(
             public_url_is_valid=True,
             telegram_launch_url="https://mini-app.example.com",
@@ -134,6 +144,7 @@ async def test_configure_mini_app_menu_button_skips_apply_when_remote_state_is_c
             public_url_hostname="mini-app.example.com",
             public_url_looks_temporary=False,
         )
+        ),
     )
 
     await _configure_mini_app_menu_button(
