@@ -55,7 +55,10 @@ export function renderAccessDenied(message) {
 export function renderInitDataMissing(copy) {
   return `
     <section class="state-panel">
-      <p class="eyebrow">Mini App</p>
+      <div class="state-badge-row">
+        <p class="eyebrow">Mini App</p>
+        <span class="soft-chip">Безопасный вход</span>
+      </div>
       <h2>${escapeHtml(copy?.title ?? "Откройте рабочее место из Telegram")}</h2>
       <p class="subtitle">${escapeHtml(copy?.message ?? "Для безопасного входа нужен запуск из бота.")}</p>
       ${
@@ -63,6 +66,10 @@ export function renderInitDataMissing(copy) {
           ? `<p class="launch-detail">${escapeHtml(copy.detail)}</p>`
           : ""
       }
+      <div class="state-hints">
+        <p>Откройте Mini App через кнопку меню «Рабочее место» в чате с ботом.</p>
+        <p>Если проблема повторяется, закройте окно и запустите рабочее место заново.</p>
+      </div>
     </section>
   `;
 }

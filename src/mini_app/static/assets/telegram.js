@@ -322,7 +322,7 @@ export function buildLaunchFailureCopy(context, requestError = null) {
   if (requestError?.code === "expired_init_data") {
     return {
       title: "Откройте рабочее место заново",
-      message: "Сеанс Mini App устарел. Вернитесь в бот и запустите рабочее место ещё раз.",
+      message: "Сеанс Mini App устарел. Вернитесь в бот и снова откройте его через кнопку меню.",
       detail: "Telegram передаёт временные данные запуска. После паузы их нужно обновить.",
     };
   }
@@ -330,7 +330,7 @@ export function buildLaunchFailureCopy(context, requestError = null) {
   if (requestError?.code === "invalid_signature" || requestError?.code === "malformed_init_data") {
     return {
       title: "Не удалось подтвердить запуск",
-      message: "Рабочее место открылось без корректных данных Telegram. Откройте его снова из бота.",
+      message: "Рабочее место открылось без корректных данных Telegram. Откройте его снова через кнопку меню в боте.",
       detail: "Если ссылка была открыта вручную в браузере, безопасный вход не сработает.",
     };
   }
@@ -339,13 +339,13 @@ export function buildLaunchFailureCopy(context, requestError = null) {
     return {
       title: "Telegram не передал запуск",
       message: "Рабочее место открылось внутри Telegram, но безопасные launch-данные ещё не пришли.",
-      detail: "Закройте окно и снова откройте «Рабочее место» кнопкой в чате с ботом.",
+      detail: "Закройте окно и снова откройте «Рабочее место» кнопкой меню в чате с ботом.",
     };
   }
 
   return {
     title: "Откройте рабочее место из Telegram",
-    message: "Для безопасного входа Mini App нужно запускать из кнопки в чате с ботом.",
-    detail: "Если кнопка не видна, проверьте настройку публичного HTTPS URL Mini App.",
+    message: "Для безопасного входа Mini App нужно запускать из кнопки меню в чате с ботом.",
+    detail: "Если кнопка меню не видна, проверьте настройку публичного HTTPS URL Mini App.",
   };
 }

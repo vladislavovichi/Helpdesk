@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 from bot.texts.buttons import (
     ARCHIVE_BUTTON_TEXT,
@@ -13,7 +13,6 @@ from bot.texts.buttons import (
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
     TAKE_NEXT_BUTTON_TEXT,
-    WORKSPACE_BUTTON_TEXT,
 )
 from domain.enums.roles import UserRole
 
@@ -25,17 +24,6 @@ def build_main_menu(role: UserRole, *, mini_app_url: str | None = None) -> Reply
         keyboard_rows.append([KeyboardButton(text=HELP_BUTTON_TEXT)])
         placeholder = "Сообщение в поддержку"
     else:
-        normalized_mini_app_url = mini_app_url.strip() if isinstance(mini_app_url, str) else ""
-        if normalized_mini_app_url:
-            keyboard_rows.append(
-                [
-                    KeyboardButton(
-                        text=WORKSPACE_BUTTON_TEXT,
-                        web_app=WebAppInfo(url=normalized_mini_app_url),
-                    )
-                ]
-            )
-
         keyboard_rows.extend(
             [
                 [

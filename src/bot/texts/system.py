@@ -35,13 +35,13 @@ def get_start_lines(role: UserRole, *, mini_app_available: bool = False) -> list
         if mini_app_available:
             lines.insert(
                 2,
-                "Кнопка «Рабочее место» открывает Mini App с обзором, очередью и аналитикой.",
+                "Кнопка меню «Рабочее место» открывает Mini App с обзором, очередью и аналитикой.",
             )
         else:
             lines.insert(
                 2,
                 (
-                    "Если кнопки «Рабочее место» нет, "
+                    "Если кнопки меню «Рабочее место» нет, "
                     "Mini App пока недоступен и работа остаётся в меню бота."
                 ),
             )
@@ -55,13 +55,13 @@ def get_start_lines(role: UserRole, *, mini_app_available: bool = False) -> list
         if mini_app_available:
             lines.insert(
                 2,
-                "Кнопка «Рабочее место» открывает Mini App с обзором и карточкой заявки.",
+                "Кнопка меню «Рабочее место» открывает Mini App с обзором и карточкой заявки.",
             )
         else:
             lines.insert(
                 2,
                 (
-                    "Если кнопки «Рабочее место» нет, "
+                    "Если кнопки меню «Рабочее место» нет, "
                     "Mini App пока недоступен и основные действия остаются в меню."
                 ),
             )
@@ -106,13 +106,13 @@ def get_help_guidance_lines(role: UserRole, *, mini_app_available: bool = False)
         if mini_app_available:
             lines.insert(
                 0,
-                "«Рабочее место» - открыть Mini App с обзором, очередью и аналитикой.",
+                "Кнопка меню «Рабочее место» - открыть Mini App с обзором, очередью и аналитикой.",
             )
         else:
             lines.insert(
                 0,
                 (
-                    "Если кнопки «Рабочее место» нет, "
+                    "Если кнопки меню «Рабочее место» нет, "
                     "проверьте публичный HTTPS URL Mini App в настройках."
                 ),
             )
@@ -129,13 +129,16 @@ def get_help_guidance_lines(role: UserRole, *, mini_app_available: bool = False)
         if mini_app_available:
             lines.insert(
                 0,
-                "«Рабочее место» - открыть Mini App с обзором, очередью и карточкой заявки.",
+                (
+                    "Кнопка меню «Рабочее место» - открыть Mini App "
+                    "с обзором, очередью и карточкой заявки."
+                ),
             )
         else:
             lines.insert(
                 0,
                 (
-                    "Если кнопки «Рабочее место» нет, "
+                    "Если кнопки меню «Рабочее место» нет, "
                     "Mini App сейчас недоступен и работа продолжается в меню."
                 ),
             )

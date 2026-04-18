@@ -16,7 +16,6 @@ from bot.texts.buttons import (
     QUEUE_BUTTON_TEXT,
     STATS_BUTTON_TEXT,
     TAKE_NEXT_BUTTON_TEXT,
-    WORKSPACE_BUTTON_TEXT,
 )
 from domain.enums.roles import UserRole
 
@@ -40,7 +39,7 @@ def test_build_start_text_for_super_admin_mentions_admin_scope() -> None:
 def test_build_start_text_for_operator_mentions_workspace_when_available() -> None:
     result = build_start_text(UserRole.OPERATOR, mini_app_available=True)
 
-    assert "Кнопка «Рабочее место» открывает Mini App" in result
+    assert "Кнопка меню «Рабочее место» открывает Mini App" in result
 
 
 def test_build_help_text_for_user_does_not_expose_operator_commands() -> None:
@@ -67,13 +66,13 @@ def test_build_help_text_for_operator_is_menu_first() -> None:
 def test_build_help_text_for_operator_mentions_workspace_when_available() -> None:
     result = build_help_text(UserRole.OPERATOR, mini_app_available=True)
 
-    assert "«Рабочее место» - открыть Mini App" in result
+    assert "Кнопка меню «Рабочее место» - открыть Mini App" in result
 
 
 def test_build_help_text_for_operator_mentions_missing_workspace_button_when_unavailable() -> None:
     result = build_help_text(UserRole.OPERATOR, mini_app_available=False)
 
-    assert "Если кнопки «Рабочее место» нет" in result
+    assert "Если кнопки меню «Рабочее место» нет" in result
 
 
 def test_build_help_text_for_super_admin_is_menu_first() -> None:
@@ -120,18 +119,18 @@ def test_build_main_menu_for_super_admin_contains_admin_navigation() -> None:
     assert keyboard.input_field_placeholder == "Главное меню"
 
 
-def test_build_main_menu_adds_mini_app_button_when_public_url_is_configured() -> None:
+def test_build_main_menu_keeps_operator_reply_menu_compact_when_public_url_is_configured() -> None:
     keyboard = build_main_menu(
         UserRole.OPERATOR,
         mini_app_url="https://mini-app.example.com",
     )
 
-    rows = keyboard.keyboard
-    assert rows is not None
-    workspace_button = rows[0][0]
-    assert workspace_button.text == WORKSPACE_BUTTON_TEXT
-    assert workspace_button.web_app is not None
-    assert workspace_button.web_app.url == "https://mini-app.example.com"
+    assert _keyboard_rows(keyboard) == (
+        (QUEUE_BUTTON_TEXT, MY_TICKETS_BUTTON_TEXT),
+        (ARCHIVE_BUTTON_TEXT, STATS_BUTTON_TEXT),
+        (TAKE_NEXT_BUTTON_TEXT,),
+        (HELP_BUTTON_TEXT, CANCEL_BUTTON_TEXT),
+    )
 
 
 def test_format_diagnostics_report_uses_compact_russian_output() -> None:
