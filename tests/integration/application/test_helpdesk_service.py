@@ -17,10 +17,10 @@ from application.contracts.ai import (
     AIServiceClientFactory,
     AnalyzedTicketSentimentResult,
     AnalyzeTicketSentimentCommand,
-    GenerateTicketSummaryCommand,
     GeneratedTicketSummaryResult,
-    SuggestMacrosCommand,
+    GenerateTicketSummaryCommand,
     SuggestedMacrosResult,
+    SuggestMacrosCommand,
 )
 from application.contracts.tickets import (
     ApplyMacroToTicketCommand,

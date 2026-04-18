@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TypeVar
 from uuid import UUID
 
 from sqlalchemy import desc, select
@@ -37,8 +36,6 @@ from infrastructure.db.repositories.ticket_message_mapping import (
     build_attachment_from_message,
     build_ticket_message_details,
 )
-
-_T = TypeVar("_T")
 
 
 class SqlAlchemyTicketReadRepository:
@@ -395,9 +392,9 @@ def _as_ticket_entities(tickets: Sequence[TicketModel]) -> tuple[TicketEntity, .
     return tuple(tickets)
 
 
-def _first_client_message_scalar(
-    column: TypedColumnsClauseRole[_T] | SQLCoreOperations[_T],
-) -> ScalarSelect[_T]:
+def _first_client_message_scalar[T](
+    column: TypedColumnsClauseRole[T] | SQLCoreOperations[T],
+) -> ScalarSelect[T]:
     return (
         select(column)
         .where(TicketMessage.ticket_id == TicketModel.id)

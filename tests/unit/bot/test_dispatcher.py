@@ -65,14 +65,14 @@ async def test_configure_mini_app_menu_button_uses_web_app_menu_when_url_is_vali
     settings = cast(
         Settings,
         SimpleNamespace(
-        mini_app=SimpleNamespace(
-            public_url_is_valid=True,
-            telegram_launch_url="https://mini-app.example.com",
-            public_url_status_detail="ok",
-            public_url="https://mini-app.example.com",
-            public_url_hostname="mini-app.example.com",
-            public_url_looks_temporary=False,
-        )
+            mini_app=SimpleNamespace(
+                public_url_is_valid=True,
+                telegram_launch_url="https://mini-app.example.com",
+                public_url_status_detail="ok",
+                public_url="https://mini-app.example.com",
+                public_url_hostname="mini-app.example.com",
+                public_url_looks_temporary=False,
+            )
         ),
     )
 
@@ -101,14 +101,14 @@ async def test_configure_mini_app_menu_button_falls_back_to_commands_when_url_in
     settings = cast(
         Settings,
         SimpleNamespace(
-        mini_app=SimpleNamespace(
-            public_url_is_valid=False,
-            telegram_launch_url=None,
-            public_url_status_detail="MINI_APP__PUBLIC_URL не задан.",
-            public_url="",
-            public_url_hostname=None,
-            public_url_looks_temporary=False,
-        )
+            mini_app=SimpleNamespace(
+                public_url_is_valid=False,
+                telegram_launch_url=None,
+                public_url_status_detail="MINI_APP__PUBLIC_URL не задан.",
+                public_url="",
+                public_url_hostname=None,
+                public_url_looks_temporary=False,
+            )
         ),
     )
 
@@ -136,14 +136,14 @@ async def test_configure_mini_app_menu_button_skips_apply_when_remote_state_is_c
     settings = cast(
         Settings,
         SimpleNamespace(
-        mini_app=SimpleNamespace(
-            public_url_is_valid=True,
-            telegram_launch_url="https://mini-app.example.com",
-            public_url_status_detail="ok",
-            public_url="https://mini-app.example.com",
-            public_url_hostname="mini-app.example.com",
-            public_url_looks_temporary=False,
-        )
+            mini_app=SimpleNamespace(
+                public_url_is_valid=True,
+                telegram_launch_url="https://mini-app.example.com",
+                public_url_status_detail="ok",
+                public_url="https://mini-app.example.com",
+                public_url_hostname="mini-app.example.com",
+                public_url_looks_temporary=False,
+            )
         ),
     )
 
