@@ -1,10 +1,13 @@
 import {
+  applyArchiveFilters,
   applyTicketFilters,
   escapeAttribute,
   escapeHtml,
+  findArchiveCategory,
   formatDateTime,
   formatDuration,
   priorityLabel,
+  buildArchiveCategories,
   renderBar,
   renderEmptyBlock,
   renderFact,
@@ -91,8 +94,8 @@ export function renderDashboard(data) {
         </p>
         <div class="inline-actions">
           <button class="action action-primary" data-action="take-next">Взять следующую</button>
-          <button class="action" data-route="queue">Открыть очередь</button>
         </div>
+        <p class="hero-note">Если нужен конкретный кейс, откройте очередь или свои заявки через навигацию.</p>
       </article>
       <article class="hero-card hero-card-secondary">
         <div class="section-caption">
@@ -200,12 +203,17 @@ export function renderMyTickets(data, filters) {
 }
 
 export function renderArchive(data, filters) {
-  const categories = Array.from(new Set(data.items.map((item) => item.category_title).filter(Boolean)));
-  const items = data.items.filter((item) => {
-    const matchesSearch = matchesTicketSearch(item, filters.search ?? "");
-    const matchesCategory = !filters.category || item.category_title === filters.category;
-    return matchesSearch && matchesCategory;
-  });
+  const categories = buildArchiveCategories(data.items);
+  const items = applyArchiveFilters(data.items, filters);
+  const selectedCategory = findArchiveCategory(categories, filters.category ?? "");
+  const pickerOpen = Boolean(filters.pickerOpen);
+  const archiveBody =
+    data.items.length === 0 && !filters.search && !filters.category
+      ? renderEmptyBlock(
+          "Архив пока пуст.",
+          "Закрытые дела появятся здесь автоматически и будут собраны по темам.",
+        )
+      : renderArchiveRows(items, true);
 
   return `
     <section class="surface surface-roomy">
@@ -213,29 +221,58 @@ export function renderArchive(data, filters) {
         <div>
           <p class="eyebrow">Архив</p>
           <h2>Закрытые и обработанные</h2>
-          <p class="subtitle">История по делам без визуального шума и лишних действий.</p>
+          <p class="subtitle">История по делам, темам и завершённым контекстам без лишнего шума.</p>
         </div>
-        <span class="soft-chip">${escapeHtml(String(items.length))} найдено</span>
+        <div class="archive-summary">
+          <span class="soft-chip">${escapeHtml(String(items.length))} найдено</span>
+          ${
+            selectedCategory
+              ? `<span class="soft-chip">${escapeHtml(selectedCategory.title)}</span>`
+              : `<span class="soft-chip">Все темы</span>`
+          }
+        </div>
       </div>
-      <div class="toolbar toolbar-wrap">
-        ${renderSearchRow("archive-search", "Поиск по номеру или описанию", filters.search ?? "")}
-        <label class="select-field">
-          <span>Тема</span>
-          <select id="archive-category">
-            <option value="">Все темы</option>
-            ${categories
-              .map(
-                (category) => `
-                  <option value="${escapeAttribute(category)}" ${filters.category === category ? "selected" : ""}>
-                    ${escapeHtml(category)}
-                  </option>
-                `,
-              )
-              .join("")}
-          </select>
-        </label>
+      <div class="archive-toolbar">
+        <div class="archive-search-block">
+          ${renderSearchRow("archive-search", "Поиск по номеру, теме или коду", filters.search ?? "")}
+        </div>
+        <div class="archive-filter-row">
+          <button
+            class="filter-chip ${!selectedCategory ? "is-active" : ""}"
+            data-archive-filter="all"
+            type="button"
+          >
+            Все темы
+          </button>
+          <button
+            class="filter-chip filter-chip-quiet ${pickerOpen ? "is-active" : ""}"
+            data-archive-filter="picker"
+            type="button"
+          >
+            ${selectedCategory ? "Сменить тему" : "Выбрать тему"}
+          </button>
+          ${
+            selectedCategory
+              ? `
+                <button
+                  class="filter-chip filter-chip-selected"
+                  data-archive-filter="picker"
+                  type="button"
+                >
+                  ${escapeHtml(selectedCategory.title)}
+                  ${selectedCategory.code ? `<span>${escapeHtml(selectedCategory.code)}</span>` : ""}
+                </button>
+              `
+              : ""
+          }
+        </div>
       </div>
-      ${renderArchiveRows(items, true)}
+      ${
+        pickerOpen
+          ? renderArchiveCategoryPicker(categories, selectedCategory)
+          : ""
+      }
+      ${archiveBody}
     </section>
   `;
 }
@@ -257,9 +294,10 @@ export function renderAnalytics(data, windowKey) {
           <h2>Рабочая картина</h2>
           <p class="subtitle">Ключевые метрики по нагрузке, качеству и SLA.</p>
         </div>
-        <div class="inline-actions">
-          <button class="action" data-export-analytics="html">HTML</button>
-          <button class="action" data-export-analytics="csv">CSV</button>
+        <div class="utility-actions utility-actions-end">
+          <span class="utility-label">Выгрузка</span>
+          <button class="action action-subtle" data-export-analytics="html">HTML</button>
+          <button class="action action-subtle" data-export-analytics="csv">CSV</button>
         </div>
       </div>
       <div class="segmented-control">
@@ -451,12 +489,17 @@ export function renderTicketWorkspace(data) {
             <span class="soft-chip">${ticket.category_title ? escapeHtml(ticket.category_title) : "Без темы"}</span>
           </div>
         </div>
-        <div class="inline-actions wrap-actions">
-          <button class="action" data-ticket-export="html">HTML</button>
-          <button class="action" data-ticket-export="csv">CSV</button>
-          <button class="action" data-ticket-action="take">Взять</button>
-          <button class="action" data-ticket-action="escalate">Эскалировать</button>
-          <button class="action action-primary" data-ticket-action="close">Закрыть</button>
+        <div class="detail-actions">
+          <div class="inline-actions wrap-actions">
+            <button class="action action-subtle" data-ticket-action="take">Взять</button>
+            <button class="action action-subtle" data-ticket-action="escalate">Эскалировать</button>
+            <button class="action action-primary" data-ticket-action="close">Закрыть</button>
+          </div>
+          <div class="utility-actions utility-actions-end">
+            <span class="utility-label">Экспорт</span>
+            <button class="action action-subtle" data-ticket-export="html">HTML</button>
+            <button class="action action-subtle" data-ticket-export="csv">CSV</button>
+          </div>
         </div>
       </div>
 
@@ -525,7 +568,7 @@ export function renderTicketWorkspace(data) {
                         .join("")}
                     </select>
                   </label>
-                  <button class="action" type="submit">Назначить</button>
+                  <button class="action action-subtle" type="submit">Назначить</button>
                 </form>
               `
               : ""
@@ -610,7 +653,7 @@ function renderTicketPreviewCard(title, subtitle, items, route) {
           <p class="eyebrow">${escapeHtml(title)}</p>
           <h3>${escapeHtml(subtitle)}</h3>
         </div>
-        <button class="action" data-route="${route}">Открыть</button>
+        <button class="soft-chip soft-chip-button" data-route="${route}" type="button">Открыть раздел</button>
       </div>
       <div class="ticket-table ticket-table-compact">
         ${
@@ -644,7 +687,7 @@ function renderTicketTable(items, options) {
               </div>
               <div class="row-actions">
                 ${options.showTake ? `<button class="action" data-take-ticket="${item.public_id}">Взять</button>` : ""}
-                <button class="action action-primary" data-open-ticket="${item.public_id}">Открыть</button>
+                <span class="row-hint">Открыть</span>
               </div>
             </article>
           `,
@@ -656,7 +699,10 @@ function renderTicketTable(items, options) {
 
 function renderArchiveRows(items, full = false) {
   if (!items.length) {
-    return renderEmptyBlock("Архив пока пуст.", "Закрытые дела появятся здесь автоматически.");
+    return renderEmptyBlock(
+      "Ничего не найдено.",
+      "Попробуйте убрать тему или изменить поисковый запрос.",
+    );
   }
 
   return `
@@ -665,21 +711,87 @@ function renderArchiveRows(items, full = false) {
         .map(
           (item) => `
             <article class="archive-row" data-open-ticket="${item.public_id}">
-              <div class="ticket-copy">
-                <p class="ticket-number">${escapeHtml(item.public_number)}</p>
-                <h3>${escapeHtml(item.mini_title)}</h3>
-                <p class="subtitle">
-                  ${item.category_title ? escapeHtml(item.category_title) : "Без темы"} ·
-                  ${item.closed_at ? formatDateTime(item.closed_at) : formatDateTime(item.created_at)}
-                </p>
+              <div class="archive-row-main">
+                <div class="ticket-copy">
+                  <p class="ticket-number">${escapeHtml(item.public_number)}</p>
+                  <h3>${escapeHtml(item.mini_title)}</h3>
+                  <p class="subtitle">${escapeHtml(buildArchivePreview(item))}</p>
+                </div>
+                <div class="archive-meta">
+                  <div class="archive-meta-row">
+                    <span class="soft-chip">${escapeHtml(item.category_title || "Без темы")}</span>
+                    ${
+                      item.category_code
+                        ? `<span class="soft-chip soft-chip-code">${escapeHtml(item.category_code)}</span>`
+                        : ""
+                    }
+                  </div>
+                  <p class="archive-date">
+                    ${item.closed_at ? formatDateTime(item.closed_at) : formatDateTime(item.created_at)}
+                  </p>
+                </div>
               </div>
-              ${full ? `<button class="action action-primary" data-open-ticket="${item.public_id}">Открыть</button>` : ""}
+              ${full ? `<span class="row-hint">Открыть</span>` : ""}
             </article>
           `,
         )
         .join("")}
     </div>
   `;
+}
+
+function renderArchiveCategoryPicker(categories, selectedCategory) {
+  return `
+    <section class="archive-picker">
+      <div class="surface-head archive-picker-head">
+        <div>
+          <p class="eyebrow">Тема</p>
+          <h3>Выберите тему</h3>
+          <p class="subtitle">Фильтр вернёт вас к списку и оставит архив в текущем контексте.</p>
+        </div>
+        <button class="action action-subtle" data-archive-filter="close-picker" type="button">Закрыть</button>
+      </div>
+      <div class="archive-picker-grid">
+        <button
+          class="archive-picker-card ${!selectedCategory ? "is-active" : ""}"
+          data-archive-category=""
+          type="button"
+        >
+          <strong>Все темы</strong>
+          <span>Показать весь архив без сужения.</span>
+        </button>
+        ${categories
+          .map(
+            (category) => `
+              <button
+                class="archive-picker-card ${selectedCategory?.value === category.value ? "is-active" : ""}"
+                data-archive-category="${escapeAttribute(category.value)}"
+                type="button"
+              >
+                <strong>${escapeHtml(category.title)}</strong>
+                <span>
+                  ${category.code ? `${escapeHtml(category.code)} · ` : ""}${escapeHtml(String(category.count))} в архиве
+                </span>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function buildArchivePreview(item) {
+  const parts = [];
+  if (item.category_title) {
+    parts.push(item.category_title);
+  }
+  if (item.category_code) {
+    parts.push(item.category_code);
+  }
+  const dateLabel = item.closed_at ? "Закрыта" : "Создана";
+  parts.push(`${dateLabel} ${item.closed_at ? formatDateTime(item.closed_at) : formatDateTime(item.created_at)}`);
+  return parts.join(" · ");
 }
 
 function renderTicketRow(item) {

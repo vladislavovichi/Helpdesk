@@ -36,7 +36,7 @@ const state = {
   filters: {
     queue: { search: "" },
     mine: { search: "" },
-    archive: { search: "", category: "" },
+    archive: { search: "", category: "", pickerOpen: false },
   },
   cache: {
     dashboard: null,
@@ -204,6 +204,31 @@ function bindGlobalEvents() {
       return;
     }
 
+    const archiveFilterButton = event.target.closest("[data-archive-filter]");
+    if (archiveFilterButton) {
+      const archiveFilterAction = archiveFilterButton.dataset.archiveFilter;
+      if (archiveFilterAction === "all") {
+        state.filters.archive.category = "";
+        state.filters.archive.pickerOpen = false;
+      }
+      if (archiveFilterAction === "picker") {
+        state.filters.archive.pickerOpen = true;
+      }
+      if (archiveFilterAction === "close-picker") {
+        state.filters.archive.pickerOpen = false;
+      }
+      content.innerHTML = renderArchive(await loadArchive(), state.filters.archive);
+      return;
+    }
+
+    const archiveCategoryButton = event.target.closest("[data-archive-category]");
+    if (archiveCategoryButton) {
+      state.filters.archive.category = archiveCategoryButton.dataset.archiveCategory ?? "";
+      state.filters.archive.pickerOpen = false;
+      content.innerHTML = renderArchive(await loadArchive(), state.filters.archive);
+      return;
+    }
+
     const takeButton = event.target.closest("[data-take-ticket]");
     if (takeButton) {
       await runMutation(async () => {
@@ -311,13 +336,6 @@ function bindGlobalEvents() {
 
     if (event.target.id === "archive-search") {
       state.filters.archive.search = event.target.value;
-      content.innerHTML = renderArchive(await loadArchive(), state.filters.archive);
-    }
-  });
-
-  content.addEventListener("change", async (event) => {
-    if (event.target.id === "archive-category") {
-      state.filters.archive.category = event.target.value;
       content.innerHTML = renderArchive(await loadArchive(), state.filters.archive);
     }
   });

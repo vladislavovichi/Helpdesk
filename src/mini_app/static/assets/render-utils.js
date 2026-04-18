@@ -71,6 +71,61 @@ export function applyTicketFilters(items, filters) {
   return items.filter((item) => matchesTicketSearch(item, filters.search ?? ""));
 }
 
+export function applyArchiveFilters(items, filters) {
+  const selectedCategory = normalizeSearch(filters.category ?? "");
+  return items.filter((item) => {
+    const matchesSearch = matchesArchiveSearch(item, filters.search ?? "");
+    const matchesCategory =
+      !selectedCategory ||
+      normalizeSearch(item.category_title).includes(selectedCategory) ||
+      normalizeSearch(item.category_code).includes(selectedCategory);
+    return matchesSearch && matchesCategory;
+  });
+}
+
+export function buildArchiveCategories(items) {
+  const categories = new Map();
+  for (const item of items) {
+    const title = typeof item.category_title === "string" ? item.category_title.trim() : "";
+    const code = typeof item.category_code === "string" ? item.category_code.trim() : "";
+    const key = `${title.toLowerCase()}::${code.toLowerCase()}`;
+    if (!title && !code) {
+      continue;
+    }
+    if (!categories.has(key)) {
+      categories.set(key, {
+        value: title || code,
+        title: title || "Без названия",
+        code: code || null,
+        count: 0,
+      });
+    }
+    categories.get(key).count += 1;
+  }
+
+  return Array.from(categories.values()).sort((left, right) => {
+    if (right.count !== left.count) {
+      return right.count - left.count;
+    }
+    return left.title.localeCompare(right.title, "ru");
+  });
+}
+
+export function findArchiveCategory(categories, selectedValue) {
+  const normalizedSelectedValue = normalizeSearch(selectedValue);
+  if (!normalizedSelectedValue) {
+    return null;
+  }
+  return (
+    categories.find(
+      (category) =>
+        normalizeSearch(category.value) === normalizedSelectedValue ||
+        normalizeSearch(category.title) === normalizedSelectedValue ||
+        normalizeSearch(category.code) === normalizedSelectedValue,
+    ) ?? null
+  );
+}
+
 export function statusLabel(status) {
   return STATUS_LABELS[status] ?? status;
 }
@@ -134,12 +189,36 @@ export function escapeAttribute(value) {
 }
 
 function matchesTicketSearch(item, search) {
-  const normalized = search.trim().toLowerCase();
+  const normalized = normalizeSearch(search);
   if (!normalized) {
     return true;
   }
 
   return [item.public_number, item.subject, item.mini_title]
     .filter(Boolean)
-    .some((value) => value.toLowerCase().includes(normalized));
+    .some((value) => normalizeSearch(value).includes(normalized));
+}
+
+function matchesArchiveSearch(item, search) {
+  const normalized = normalizeSearch(search);
+  if (!normalized) {
+    return true;
+  }
+
+  return [
+    item.public_number,
+    item.subject,
+    item.mini_title,
+    item.category_title,
+    item.category_code,
+  ]
+    .filter(Boolean)
+    .some((value) => normalizeSearch(value).includes(normalized));
+}
+
+function normalizeSearch(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim().toLowerCase();
 }
