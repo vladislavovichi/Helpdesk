@@ -4,6 +4,13 @@ from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, Mock
 from uuid import uuid4
 
+from tests.integration.bot.client_intake.conftest import (
+    BackendClientFactoryBuilder,
+    MessageHarnessBuilder,
+    TicketDetailsBuilder,
+    TicketSummaryBuilder,
+)
+
 from bot.handlers.user.intake import handle_client_intake_message
 from bot.handlers.user.intake_draft import (
     PendingClientIntakeDraft,
@@ -18,10 +25,10 @@ from domain.enums.tickets import TicketAttachmentKind
 
 
 async def test_intake_message_creates_ticket_with_selected_category(
-    backend_client_factory_builder,
-    message_harness_builder,
-    ticket_summary_builder,
-    ticket_details_builder,
+    backend_client_factory_builder: BackendClientFactoryBuilder,
+    message_harness_builder: MessageHarnessBuilder,
+    ticket_summary_builder: TicketSummaryBuilder,
+    ticket_details_builder: TicketDetailsBuilder,
     publisher: SimpleNamespace,
 ) -> None:
     ticket_public_id = uuid4()
@@ -71,10 +78,10 @@ async def test_intake_message_creates_ticket_with_selected_category(
 
 
 async def test_intake_with_initial_attachment_keeps_first_media_and_saves_follow_up_text(
-    backend_client_factory_builder,
-    message_harness_builder,
-    ticket_summary_builder,
-    ticket_details_builder,
+    backend_client_factory_builder: BackendClientFactoryBuilder,
+    message_harness_builder: MessageHarnessBuilder,
+    ticket_summary_builder: TicketSummaryBuilder,
+    ticket_details_builder: TicketDetailsBuilder,
     publisher: SimpleNamespace,
 ) -> None:
     ticket_public_id = uuid4()
@@ -152,10 +159,10 @@ async def test_intake_with_initial_attachment_keeps_first_media_and_saves_follow
 
 
 async def test_intake_preserves_first_media_when_follow_up_text_save_fails(
-    backend_client_factory_builder,
-    message_harness_builder,
-    ticket_summary_builder,
-    ticket_details_builder,
+    backend_client_factory_builder: BackendClientFactoryBuilder,
+    message_harness_builder: MessageHarnessBuilder,
+    ticket_summary_builder: TicketSummaryBuilder,
+    ticket_details_builder: TicketDetailsBuilder,
     publisher: SimpleNamespace,
 ) -> None:
     ticket_public_id = uuid4()

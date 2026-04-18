@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Protocol, cast
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -23,12 +24,47 @@ class MessageHarness:
     edit_text: AsyncMock
 
 
+class MessageHarnessBuilder(Protocol):
+    def __call__(
+        self,
+        *,
+        text: str,
+        chat_id: int = 2002,
+        message_id: int = 15,
+    ) -> MessageHarness: ...
+
+
+class CallbackBuilder(Protocol):
+    def __call__(
+        self,
+        *,
+        message: Message,
+        data: str,
+        user_id: int = 2002,
+    ) -> tuple[CallbackQuery, AsyncMock]: ...
+
+
+class TicketDetailsBuilder(Protocol):
+    def __call__(
+        self,
+        *,
+        public_id: UUID,
+        subject: str,
+        category_id: int,
+        category_title: str,
+    ) -> TicketDetailsSummary: ...
+
+
+BackendClientFactoryBuilder = Callable[[object], HelpdeskBackendClientFactory]
+TicketSummaryBuilder = Callable[[UUID], TicketSummary]
+
+
 def build_helpdesk_backend_client_factory(
-    service: HelpdeskBackendClient,
+    service: object,
 ) -> HelpdeskBackendClientFactory:
     @asynccontextmanager
     async def provide() -> AsyncIterator[HelpdeskBackendClient]:
-        yield service
+        yield cast(HelpdeskBackendClient, service)
 
     return provide
 
@@ -108,27 +144,27 @@ def build_ticket_details(
 
 
 @pytest.fixture
-def backend_client_factory_builder():
+def backend_client_factory_builder() -> BackendClientFactoryBuilder:
     return build_helpdesk_backend_client_factory
 
 
 @pytest.fixture
-def message_harness_builder():
+def message_harness_builder() -> MessageHarnessBuilder:
     return build_message_harness
 
 
 @pytest.fixture
-def callback_builder():
+def callback_builder() -> CallbackBuilder:
     return build_callback
 
 
 @pytest.fixture
-def ticket_summary_builder():
+def ticket_summary_builder() -> TicketSummaryBuilder:
     return build_ticket_summary
 
 
 @pytest.fixture
-def ticket_details_builder():
+def ticket_details_builder() -> TicketDetailsBuilder:
     return build_ticket_details
 
 

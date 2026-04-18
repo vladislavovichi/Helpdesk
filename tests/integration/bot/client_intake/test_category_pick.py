@@ -4,6 +4,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
+from tests.integration.bot.client_intake.conftest import (
+    BackendClientFactoryBuilder,
+    CallbackBuilder,
+    MessageHarnessBuilder,
+    TicketDetailsBuilder,
+    TicketSummaryBuilder,
+)
+
 from application.use_cases.tickets.summaries import TicketCategorySummary
 from bot.handlers.user.intake import handle_client_intake_category_pick
 from bot.handlers.user.intake_draft import (
@@ -16,11 +24,11 @@ from domain.enums.tickets import TicketAttachmentKind
 
 
 async def test_category_pick_creates_ticket_immediately_when_first_text_is_already_saved(
-    backend_client_factory_builder,
-    callback_builder,
-    message_harness_builder,
-    ticket_summary_builder,
-    ticket_details_builder,
+    backend_client_factory_builder: BackendClientFactoryBuilder,
+    callback_builder: CallbackBuilder,
+    message_harness_builder: MessageHarnessBuilder,
+    ticket_summary_builder: TicketSummaryBuilder,
+    ticket_details_builder: TicketDetailsBuilder,
 ) -> None:
     ticket_public_id = uuid4()
     harness = message_harness_builder(text="stub", message_id=77)
@@ -84,11 +92,11 @@ async def test_category_pick_creates_ticket_immediately_when_first_text_is_alrea
 
 
 async def test_category_pick_with_initial_photo_creates_ticket_immediately(
-    backend_client_factory_builder,
-    callback_builder,
-    message_harness_builder,
-    ticket_summary_builder,
-    ticket_details_builder,
+    backend_client_factory_builder: BackendClientFactoryBuilder,
+    callback_builder: CallbackBuilder,
+    message_harness_builder: MessageHarnessBuilder,
+    ticket_summary_builder: TicketSummaryBuilder,
+    ticket_details_builder: TicketDetailsBuilder,
 ) -> None:
     ticket_public_id = uuid4()
     harness = message_harness_builder(text="stub", message_id=77)
