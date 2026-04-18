@@ -156,7 +156,7 @@ async def handle_operator_invite_confirm(
             "Рабочее место оператора готово.",
             reply_markup=build_main_menu(
                 UserRole.OPERATOR,
-                mini_app_url=settings.mini_app.public_url,
+                mini_app_url=settings.mini_app.telegram_launch_url,
             ),
         )
         return

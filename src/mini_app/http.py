@@ -88,7 +88,17 @@ def build_handler_class(
 
             try:
                 if method == "GET" and path == "/healthz":
-                    self._write_json(HTTPStatus.OK, {"status": "ok"})
+                    self._write_json(
+                        HTTPStatus.OK,
+                        {
+                            "status": "ok",
+                            "mini_app": {
+                                "public_url": self.config.public_url or None,
+                                "public_url_valid": self.config.public_url_is_valid,
+                                "detail": self.config.public_url_status_detail,
+                            },
+                        },
+                    )
                     return
                 if method == "GET" and (path == "/" or path == "/index.html"):
                     self._serve_file(

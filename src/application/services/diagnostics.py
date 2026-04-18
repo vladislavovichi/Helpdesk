@@ -12,6 +12,7 @@ class DiagnosticsCheck:
     category: str
     ok: bool
     detail: str
+    affects_readiness: bool = True
 
 
 @dataclass(slots=True, frozen=True)
@@ -28,7 +29,15 @@ class DiagnosticsReport:
 
     @property
     def readiness_ok(self) -> bool:
-        return all(check.ok for check in self.checks if check.category != "liveness")
+        return all(
+            check.ok
+            for check in self.checks
+            if check.category != "liveness" and check.affects_readiness
+        )
+
+    @property
+    def has_warnings(self) -> bool:
+        return any(not check.ok and not check.affects_readiness for check in self.checks)
 
 
 @dataclass(slots=True)
@@ -43,6 +52,10 @@ class DiagnosticsService:
     dispatcher_initialized: bool
     fsm_storage_initialized: bool
     redis_workflow_initialized: bool
+    mini_app_url_valid: bool = False
+    mini_app_url_detail: str = "MINI_APP__PUBLIC_URL не задан."
+    mini_app_http_check: AsyncDependencyCheck | None = None
+    mini_app_http_target: str = ""
 
     async def collect_report(self) -> DiagnosticsReport:
         checks = [
@@ -86,7 +99,24 @@ class DiagnosticsService:
                 ok=self._is_bot_runtime_ready(),
                 detail=self._build_bot_runtime_detail(),
             ),
+            DiagnosticsCheck(
+                name="mini_app_url",
+                category="integration",
+                ok=self.mini_app_url_valid,
+                detail=self.mini_app_url_detail,
+                affects_readiness=False,
+            ),
         ]
+        if self.mini_app_http_check is not None:
+            checks.append(
+                await self._run_check(
+                    name="mini_app_http",
+                    category="integration",
+                    check=self.mini_app_http_check,
+                    success_detail=f"Mini App endpoint доступен ({self.mini_app_http_target})",
+                    affects_readiness=False,
+                )
+            )
         return DiagnosticsReport(checks=tuple(checks))
 
     async def _run_check(
@@ -96,6 +126,7 @@ class DiagnosticsService:
         category: str,
         check: AsyncDependencyCheck,
         success_detail: str,
+        affects_readiness: bool = True,
     ) -> DiagnosticsCheck:
         try:
             is_ready = await check()
@@ -105,6 +136,7 @@ class DiagnosticsService:
                 category=category,
                 ok=False,
                 detail=f"{exc.__class__.__name__}: {exc}",
+                affects_readiness=affects_readiness,
             )
 
         if is_ready:
@@ -113,6 +145,7 @@ class DiagnosticsService:
                 category=category,
                 ok=True,
                 detail=success_detail,
+                affects_readiness=affects_readiness,
             )
 
         return DiagnosticsCheck(
@@ -120,6 +153,7 @@ class DiagnosticsService:
             category=category,
             ok=False,
             detail="проверка вернула отрицательный результат",
+            affects_readiness=affects_readiness,
         )
 
     def _is_bot_runtime_ready(self) -> bool:

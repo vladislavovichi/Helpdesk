@@ -30,6 +30,12 @@ make health
 make smoke
 ```
 
+Если нужен полный локальный стек и сразу публичный HTTPS URL для Mini App через `cloudflared`:
+
+```bash
+make full-cloudflared
+```
+
 ## Основные команды
 
 - `make format` — форматирование и автоисправления Ruff;

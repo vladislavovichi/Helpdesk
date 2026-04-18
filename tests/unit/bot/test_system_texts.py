@@ -37,6 +37,12 @@ def test_build_start_text_for_super_admin_mentions_admin_scope() -> None:
     assert "операторы, макросы и темы" in result
 
 
+def test_build_start_text_for_operator_mentions_workspace_when_available() -> None:
+    result = build_start_text(UserRole.OPERATOR, mini_app_available=True)
+
+    assert "Кнопка «Рабочее место» открывает Mini App" in result
+
+
 def test_build_help_text_for_user_does_not_expose_operator_commands() -> None:
     result = build_help_text(UserRole.USER)
 
@@ -56,6 +62,12 @@ def test_build_help_text_for_operator_is_menu_first() -> None:
     assert "/health" not in result
     assert "/ticket" not in result
     assert "/operators" not in result
+
+
+def test_build_help_text_for_operator_mentions_workspace_when_available() -> None:
+    result = build_help_text(UserRole.OPERATOR, mini_app_available=True)
+
+    assert "«Рабочее место» - открыть Mini App" in result
 
 
 def test_build_help_text_for_super_admin_is_menu_first() -> None:
@@ -110,7 +122,7 @@ def test_build_main_menu_adds_mini_app_button_when_public_url_is_configured() ->
 
     rows = keyboard.keyboard
     assert rows is not None
-    workspace_button = rows[3][0]
+    workspace_button = rows[0][0]
     assert workspace_button.text == WORKSPACE_BUTTON_TEXT
     assert workspace_button.web_app is not None
     assert workspace_button.web_app.url == "https://mini-app.example.com"
@@ -141,6 +153,31 @@ def test_format_diagnostics_report_uses_compact_russian_output() -> None:
     assert "- readiness: ошибка" in result
     assert "- bootstrap: в порядке (runtime инициализирован)" in result
     assert "- redis: ошибка (RuntimeError: timeout)" in result
+
+
+def test_format_diagnostics_report_marks_non_blocking_warning() -> None:
+    report = DiagnosticsReport(
+        checks=(
+            DiagnosticsCheck(
+                name="bootstrap",
+                category="liveness",
+                ok=True,
+                detail="runtime инициализирован",
+            ),
+            DiagnosticsCheck(
+                name="mini_app_url",
+                category="integration",
+                ok=False,
+                detail="MINI_APP__PUBLIC_URL должен начинаться с https://.",
+                affects_readiness=False,
+            ),
+        )
+    )
+
+    result = format_diagnostics_report(report)
+
+    assert "Сервис готов к работе, но есть замечания." in result
+    assert "- mini_app_url: внимание (MINI_APP__PUBLIC_URL должен начинаться с https://.)" in result
 
 
 def _keyboard_rows(keyboard: ReplyKeyboardMarkup) -> tuple[tuple[str, ...], ...]:

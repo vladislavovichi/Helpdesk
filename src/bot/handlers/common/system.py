@@ -28,6 +28,8 @@ async def handle_start(
     settings: Settings,
     event_user_role: UserRole = UserRole.USER,
 ) -> None:
+    mini_app_url = settings.mini_app.telegram_launch_url
+    mini_app_available = settings.mini_app.public_url_is_valid
     if (
         event_user_role == UserRole.USER
         and command is not None
@@ -43,10 +45,10 @@ async def handle_start(
         if started:
             return
     await message.answer(
-        build_start_text(event_user_role),
+        build_start_text(event_user_role, mini_app_available=mini_app_available),
         reply_markup=build_main_menu(
             event_user_role,
-            mini_app_url=settings.mini_app.public_url,
+            mini_app_url=mini_app_url,
         ),
     )
 
@@ -58,11 +60,15 @@ async def handle_help(
     settings: Settings,
     event_user_role: UserRole = UserRole.USER,
 ) -> None:
+    mini_app_url = settings.mini_app.telegram_launch_url
     await message.answer(
-        build_help_text(event_user_role),
+        build_help_text(
+            event_user_role,
+            mini_app_available=settings.mini_app.public_url_is_valid,
+        ),
         reply_markup=build_main_menu(
             event_user_role,
-            mini_app_url=settings.mini_app.public_url,
+            mini_app_url=mini_app_url,
         ),
     )
 
@@ -84,6 +90,6 @@ async def handle_health(
         format_diagnostics_report(report),
         reply_markup=build_main_menu(
             event_user_role,
-            mini_app_url=settings.mini_app.public_url,
+            mini_app_url=settings.mini_app.telegram_launch_url,
         ),
     )

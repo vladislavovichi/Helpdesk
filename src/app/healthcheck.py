@@ -26,7 +26,8 @@ async def run() -> int:
         f"[{'OK' if report.liveness_ok else 'FAIL'}] liveness",
         f"[{'OK' if report.readiness_ok else 'FAIL'}] readiness",
         *[
-            f"[{'OK' if check.ok else 'FAIL'}] {check.category}/{check.name}: {check.detail}"
+            f"[{'OK' if check.ok else ('WARN' if not check.affects_readiness else 'FAIL')}] "
+            f"{check.category}/{check.name}: {check.detail}"
             for check in report.checks
         ],
     ]

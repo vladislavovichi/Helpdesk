@@ -89,3 +89,28 @@ def test_settings_apply_root_expose_ports_to_nested_configs() -> None:
 
     assert settings.database.expose_port == 5434
     assert settings.redis.expose_port == 6381
+
+
+def test_mini_app_public_url_is_exposed_only_when_valid() -> None:
+    settings = Settings.model_validate(
+        {
+            "authorization": {"super_admin_telegram_user_ids": [99]},
+            "mini_app": {"public_url": "https://mini-app.example.com/workspace"},
+        }
+    )
+
+    assert settings.mini_app.public_url_is_valid is True
+    assert settings.mini_app.telegram_launch_url == "https://mini-app.example.com/workspace"
+
+
+def test_mini_app_public_url_rejects_local_http_address() -> None:
+    settings = Settings.model_validate(
+        {
+            "authorization": {"super_admin_telegram_user_ids": [99]},
+            "mini_app": {"public_url": "http://localhost:8080"},
+        }
+    )
+
+    assert settings.mini_app.public_url_is_valid is False
+    assert settings.mini_app.telegram_launch_url is None
+    assert "https://" in settings.mini_app.public_url_status_detail

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import http.client
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -21,7 +23,7 @@ from application.services.helpdesk.components import HelpdeskExportRenderers
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from backend.grpc.client import build_helpdesk_backend_client_factory as build_grpc_client_factory
 from backend.grpc.contracts import HelpdeskBackendClientFactory
-from infrastructure.config.settings import Settings
+from infrastructure.config.settings import MiniAppConfig, Settings
 from infrastructure.db.repositories.ai import SqlAlchemyTicketAISummaryRepository
 from infrastructure.db.repositories.audit import SqlAlchemyAuditLogRepository
 from infrastructure.db.repositories.catalog import (
@@ -56,6 +58,25 @@ from infrastructure.redis.streams import (
     RedisTicketStreamPublisher,
 )
 from infrastructure.runtime_context import get_correlation_id
+
+
+def _ping_mini_app_http_blocking(config: MiniAppConfig) -> bool:
+    host = config.listen_host
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+
+    connection = http.client.HTTPConnection(host=host, port=config.port, timeout=5)
+    try:
+        connection.request("GET", "/healthz")
+        response = connection.getresponse()
+        response.read()
+        return response.status == 200
+    finally:
+        connection.close()
+
+
+async def ping_mini_app_http(config: MiniAppConfig) -> bool:
+    return await asyncio.to_thread(_ping_mini_app_http_blocking, config)
 
 
 def build_authorization_service(
@@ -203,4 +224,8 @@ def build_diagnostics_service(
         dispatcher_initialized=dispatcher is not None,
         fsm_storage_initialized=fsm_storage is not None,
         redis_workflow_initialized=redis_workflow is not None,
+        mini_app_url_valid=settings.mini_app.public_url_is_valid,
+        mini_app_url_detail=settings.mini_app.public_url_status_detail,
+        mini_app_http_check=lambda: ping_mini_app_http(settings.mini_app),
+        mini_app_http_target=settings.mini_app.healthcheck_url,
     )

@@ -7,32 +7,49 @@ PING_RESPONSE_TEXT = "понг"
 
 
 def format_diagnostics_report(report: DiagnosticsReport) -> str:
-    status_line = (
-        "Сервис готов к работе." if report.readiness_ok else "Есть проблемы с готовностью сервиса."
-    )
+    if not report.readiness_ok:
+        status_line = "Есть проблемы с готовностью сервиса."
+    elif report.has_warnings:
+        status_line = "Сервис готов к работе, но есть замечания."
+    else:
+        status_line = "Сервис готов к работе."
     lines = [status_line, ""]
     lines.append(f"- liveness: {'в порядке' if report.liveness_ok else 'ошибка'}")
     lines.append(f"- readiness: {'в порядке' if report.readiness_ok else 'ошибка'}")
     lines.extend(
-        f"- {check.name}: {'в порядке' if check.ok else 'ошибка'} ({check.detail})"
+        f"- {check.name}: "
+        f"{'в порядке' if check.ok else ('внимание' if not check.affects_readiness else 'ошибка')} "
+        f"({check.detail})"
         for check in report.checks
     )
     return "\n".join(lines)
 
 
-def get_start_lines(role: UserRole) -> list[str]:
+def get_start_lines(role: UserRole, *, mini_app_available: bool = False) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
-        return [
+        lines = [
             "Панель суперадминистратора.",
             "Ниже доступны очередь, архив, личные заявки, операторы, макросы и темы.",
             "Откройте раздел и продолжайте работу кнопками в карточках.",
         ]
+        if mini_app_available:
+            lines.insert(
+                2,
+                "Кнопка «Рабочее место» открывает Mini App с обзором, очередью и аналитикой.",
+            )
+        return lines
     if role == UserRole.OPERATOR:
-        return [
+        lines = [
             "Рабочее место оператора.",
             "Очередь, архив, личные заявки и статистика уже в меню.",
             "Откройте заявку, чтобы ответить, применить макрос или изменить метки.",
         ]
+        if mini_app_available:
+            lines.insert(
+                2,
+                "Кнопка «Рабочее место» открывает Mini App с обзором и карточкой заявки.",
+            )
+        return lines
     return [
         "Поддержка в Telegram.",
         "Сначала выберите тему обращения, затем коротко опишите ситуацию.",
@@ -57,9 +74,9 @@ def get_help_intro_lines(role: UserRole) -> list[str]:
     ]
 
 
-def get_help_guidance_lines(role: UserRole) -> list[str]:
+def get_help_guidance_lines(role: UserRole, *, mini_app_available: bool = False) -> list[str]:
     if role == UserRole.SUPER_ADMIN:
-        return [
+        lines = [
             "«Очередь» - открыть новые заявки.",
             "«Взять следующую» - быстро забрать ближайшую заявку.",
             "«Мои заявки» - вернуться к своим активным диалогам.",
@@ -70,8 +87,11 @@ def get_help_guidance_lines(role: UserRole) -> list[str]:
             "«Темы» - настроить темы новых обращений.",
             "«Отмена» - выйти из текущего шага.",
         ]
+        if mini_app_available:
+            lines.insert(0, "«Рабочее место» - открыть Mini App с обзором, очередью и аналитикой.")
+        return lines
     if role == UserRole.OPERATOR:
-        return [
+        lines = [
             "«Очередь» - открыть новые заявки.",
             "«Взять следующую» - сразу взять ближайшую заявку.",
             "«Мои заявки» - вернуться к активным диалогам.",
@@ -79,6 +99,9 @@ def get_help_guidance_lines(role: UserRole) -> list[str]:
             "«Статистика» - посмотреть текущую нагрузку.",
             "«Отмена» - выйти из текущего шага.",
         ]
+        if mini_app_available:
+            lines.insert(0, "«Рабочее место» - открыть Mini App с обзором, очередью и карточкой заявки.")
+        return lines
     return [
         "Напишите сообщение, чтобы начать новое обращение.",
         "Сначала бот предложит выбрать тему, затем попросит коротко описать вопрос.",

@@ -42,6 +42,12 @@ cp .env.example .env
 make full
 ```
 
+Если нужен полный локальный стек сразу с публичным HTTPS URL для Telegram Mini App:
+
+```bash
+make full-cloudflared
+```
+
 Если нужен локальный запуск без реального polling Telegram, оставьте в `.env`:
 
 ```dotenv
@@ -49,6 +55,20 @@ APP__DRY_RUN=true
 ```
 
 Для более аккуратной сборки окружения можно брать значения из шаблонов в [ops/env/README.md](ops/env/README.md).
+
+## Mini App
+
+Для кнопки `Рабочее место` в Telegram нужен реальный публичный `HTTPS` адрес:
+
+```dotenv
+MINI_APP__PUBLIC_URL=https://mini-app.example.com
+```
+
+Важно:
+
+- пустой `MINI_APP__PUBLIC_URL` отключает кнопку Mini App;
+- `http://`, `localhost`, приватные IP и локальные домены Telegram не подходят;
+- текущее состояние Mini App видно в логах запуска, `bot /health` и `GET /healthz` у `mini-app`.
 
 ## AI-контур
 

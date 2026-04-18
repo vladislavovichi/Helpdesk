@@ -25,6 +25,17 @@ def build_main_menu(role: UserRole, *, mini_app_url: str | None = None) -> Reply
         keyboard_rows.append([KeyboardButton(text=HELP_BUTTON_TEXT)])
         placeholder = "Сообщение в поддержку"
     else:
+        normalized_mini_app_url = mini_app_url.strip() if isinstance(mini_app_url, str) else ""
+        if normalized_mini_app_url:
+            keyboard_rows.append(
+                [
+                    KeyboardButton(
+                        text=WORKSPACE_BUTTON_TEXT,
+                        web_app=WebAppInfo(url=normalized_mini_app_url),
+                    )
+                ]
+            )
+
         keyboard_rows.extend(
             [
                 [
@@ -39,17 +50,6 @@ def build_main_menu(role: UserRole, *, mini_app_url: str | None = None) -> Reply
             ]
         )
         placeholder = "Главное меню"
-
-        normalized_mini_app_url = mini_app_url.strip() if isinstance(mini_app_url, str) else ""
-        if normalized_mini_app_url:
-            keyboard_rows.append(
-                [
-                    KeyboardButton(
-                        text=WORKSPACE_BUTTON_TEXT,
-                        web_app=WebAppInfo(url=normalized_mini_app_url),
-                    )
-                ]
-            )
 
         if role == UserRole.SUPER_ADMIN:
             keyboard_rows.append(

@@ -10,11 +10,27 @@ from mini_app.api import MiniAppGateway
 from mini_app.http import MiniAppHttpServer
 
 
+def _log_mini_app_configuration(logger: logging.Logger, settings) -> None:
+    if settings.mini_app.public_url_is_valid:
+        logger.info(
+            "Mini App public URL is ready for Telegram public_url=%s",
+            settings.mini_app.telegram_launch_url,
+        )
+        return
+
+    logger.warning(
+        "Mini App public URL is not ready detail=%s configured_public_url=%s",
+        settings.mini_app.public_url_status_detail,
+        settings.mini_app.public_url or "<not-set>",
+    )
+
+
 def main() -> None:
     settings = get_settings()
     configure_logging(settings.logging, app=settings.app)
 
     logger = logging.getLogger(__name__)
+    _log_mini_app_configuration(logger, settings)
     gateway = MiniAppGateway(
         backend_client_factory=build_helpdesk_backend_client_factory(
             settings.backend_service,
@@ -30,10 +46,11 @@ def main() -> None:
     ).build_server()
 
     logger.info(
-        "Starting Mini App HTTP gateway bind=%s:%s public_url=%s",
+        "Starting Mini App HTTP gateway bind=%s:%s public_url=%s healthcheck=%s",
         settings.mini_app.listen_host,
         settings.mini_app.port,
-        settings.mini_app.public_url or "<not-set>",
+        settings.mini_app.telegram_launch_url or "<not-available>",
+        settings.mini_app.healthcheck_url,
     )
     try:
         server.serve_forever()

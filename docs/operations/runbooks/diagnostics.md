@@ -18,9 +18,11 @@ make smoke
 - `make logs-backend` — миграции, PostgreSQL, Redis, доступность `ai-service`, внутренняя авторизация;
 - `make logs-ai` — состояние AI-провайдера, ошибки внешнего API, внутренний gRPC;
 - `make logs-bot` — запуск Telegram-слоя, связь с `backend`, ошибки polling;
+- `make logs-mini-app` — запуск Mini App gateway, состояние `MINI_APP__PUBLIC_URL`, ошибки HTTP;
 - `make health-backend` — прикладная проверка `backend`;
 - `make health-ai` — прикладная проверка `ai-service`;
 - `make health-bot` — внутренняя диагностика bot-процесса.
+- `curl http://127.0.0.1:8088/healthz` — локальная проверка Mini App endpoint.
 
 ## Если недоступен `backend`
 
@@ -77,6 +79,35 @@ make health-ai
 - часть интерактивных сценариев ведёт себя так, будто контекст потерян.
 
 Redis в проекте нужен для координации во время работы, но не является долговременным источником данных. После его восстановления стоит сразу прогнать `make health` и `make smoke`.
+
+## Если не видно кнопку Mini App
+
+Проверьте три вещи по порядку:
+
+1. `MINI_APP__PUBLIC_URL` задан и это публичный `HTTPS` адрес.
+2. В логах `bot` или `mini-app` нет предупреждения про невалидный Mini App URL.
+3. Сам HTTP endpoint Mini App отвечает локально.
+
+Быстрый маршрут:
+
+```bash
+make logs-bot
+make logs-mini-app
+make health-bot
+curl http://127.0.0.1:8088/healthz
+```
+
+Что считать проблемой конфигурации:
+
+- URL пустой;
+- используется `http://`;
+- указан `localhost`, приватный IP или локальный домен;
+- `mini-app` поднят, но `GET /healthz` не отвечает.
+
+В `bot /health` Mini App показывается отдельными проверками:
+
+- `mini_app_url` — сконфигурирован ли Telegram-валидный launch URL;
+- `mini_app_http` — отвечает ли сам Mini App endpoint.
 
 ## Как читать startup checks
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from ipaddress import ip_address
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +11,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from infrastructure.config.parsers import parse_positive_int_list
 
 _DOCKER_ENV_PATH = Path("/.dockerenv")
+_LOCAL_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
+_LOCAL_HOST_SUFFIXES = (".internal", ".local", ".localhost", ".test", ".invalid")
 
 
 def _is_running_in_docker() -> bool:
@@ -30,6 +33,40 @@ def _resolve_service_target(
         return host, port
 
     return "localhost", expose_port
+
+
+def _validate_telegram_mini_app_public_url(value: str) -> str | None:
+    normalized = value.strip()
+    if not normalized:
+        return "MINI_APP__PUBLIC_URL не задан."
+
+    parsed = urlsplit(normalized)
+    if parsed.scheme.lower() != "https":
+        return "MINI_APP__PUBLIC_URL должен начинаться с https://."
+    if not parsed.netloc:
+        return "MINI_APP__PUBLIC_URL должен быть абсолютным публичным URL."
+    if parsed.fragment:
+        return "MINI_APP__PUBLIC_URL не должен содержать fragment."
+
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        return "MINI_APP__PUBLIC_URL должен содержать домен."
+    if hostname in _LOCAL_HOSTNAMES or hostname.endswith(_LOCAL_HOST_SUFFIXES):
+        return "MINI_APP__PUBLIC_URL должен указывать на публичный домен, доступный Telegram."
+
+    try:
+        address = ip_address(hostname)
+    except ValueError:
+        if "." not in hostname:
+            return "MINI_APP__PUBLIC_URL должен указывать на публичный домен с HTTPS."
+    else:
+        if not address.is_global:
+            return (
+                "MINI_APP__PUBLIC_URL с IP-адресом должен быть глобально "
+                "маршрутизируемым и доступным Telegram."
+            )
+
+    return None
 
 
 class AppConfig(BaseModel):
@@ -261,6 +298,45 @@ class MiniAppConfig(BaseModel):
     port: int = 8080
     public_url: str = ""
     init_data_ttl_seconds: int = 3600
+
+    @field_validator("public_url", mode="before")
+    @classmethod
+    def validate_public_url(cls, value: object) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return ""
+
+    @property
+    def public_url_validation_error(self) -> str | None:
+        return _validate_telegram_mini_app_public_url(self.public_url)
+
+    @property
+    def public_url_is_configured(self) -> bool:
+        return bool(self.public_url)
+
+    @property
+    def public_url_is_valid(self) -> bool:
+        return self.public_url_validation_error is None
+
+    @property
+    def telegram_launch_url(self) -> str | None:
+        if not self.public_url_is_valid:
+            return None
+        return self.public_url
+
+    @property
+    def public_url_status_detail(self) -> str:
+        error = self.public_url_validation_error
+        if error is None:
+            return f"Mini App URL готов для Telegram: {self.public_url}"
+        return error
+
+    @property
+    def healthcheck_url(self) -> str:
+        host = self.listen_host
+        if host == "0.0.0.0":
+            host = "127.0.0.1"
+        return f"http://{host}:{self.port}/healthz"
 
 
 class Settings(BaseSettings):

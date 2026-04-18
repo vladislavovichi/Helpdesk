@@ -9,6 +9,11 @@ APP_MODULE ?= app.main
 BACKEND_MODULE ?= backend.main
 AI_SERVICE_MODULE ?= ai_service.main
 MINI_APP_MODULE ?= mini_app.main
+CLOUDFLARED_BIN ?= cloudflared
+MINI_APP_TUNNEL_HOST ?= 127.0.0.1
+MINI_APP_TUNNEL_PORT ?= 8088
+MINI_APP_TUNNEL_URL ?= http://$(MINI_APP_TUNNEL_HOST):$(MINI_APP_TUNNEL_PORT)
+ENV_FILE ?= .env
 FULL_SCRIPT ?= ops/docker/full.sh
 FULL_SERVICES ?= postgres redis ai-service backend bot mini-app
 FULL_TIMEOUT ?= 180
@@ -33,7 +38,11 @@ define ensure_poetry_env
 	fi
 endef
 
-.PHONY: help install lint format typecheck test proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke run run-backend run-ai run-bot run-mini-app migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
+define port_is_available
+python3 -c 'import socket, sys; sock = socket.socket(); sock.settimeout(0.2); result = sock.connect_ex(("127.0.0.1", int(sys.argv[1]))); sock.close(); sys.exit(0 if result != 0 else 1)' "$(1)"
+endef
+
+.PHONY: help install lint format typecheck test proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
 
 COMPOSE_CMD = $(COMPOSE) $(COMPOSE_FILES)
 
@@ -58,6 +67,7 @@ help:
 	@printf "  run-ai             Start the ai-service gRPC runtime locally\n"
 	@printf "  run-bot            Start the Telegram bot runtime locally\n"
 	@printf "  run-mini-app       Start the Telegram Mini App gateway locally\n"
+	@printf "  run-mini-app-cloudflared  Expose the local Mini App over cloudflared HTTPS tunnel\n"
 	@printf "  migrate            Apply Alembic migrations\n"
 	@printf "  migrate-stack      Apply Alembic migrations inside the backend container\n"
 	@printf "  migration-check    Verify that migrations match the SQLAlchemy metadata\n"
@@ -67,6 +77,7 @@ help:
 	@printf "  restart            Restart the Docker Compose stack\n"
 	@printf "  ps                 Show Docker Compose service state\n"
 	@printf "  full               Build, start, and verify the full Docker Compose stack\n"
+	@printf "  full-cloudflared   Start the full Docker Compose stack and expose Mini App over cloudflared\n"
 	@printf "  full-down          Stop the full Docker Compose stack\n"
 	@printf "  logs               Tail application logs from Docker Compose\n"
 	@printf "  logs-bot           Tail bot logs from Docker Compose\n"
@@ -151,6 +162,65 @@ run-mini-app:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m $(MINI_APP_MODULE)
 
+run-mini-app-cloudflared:
+	@set -eu; \
+	if command -v "$(CLOUDFLARED_BIN)" >/dev/null 2>&1; then \
+		cloudflared_bin="$(CLOUDFLARED_BIN)"; \
+	elif [ -x /tmp/cloudflared ]; then \
+		cloudflared_bin="/tmp/cloudflared"; \
+	else \
+		echo "cloudflared not found. Install it or place a standalone binary at /tmp/cloudflared."; \
+		echo "Then run: make run-mini-app-cloudflared"; \
+		exit 1; \
+	fi; \
+	log_file="$$(mktemp /tmp/helpdesk-cloudflared.XXXXXX.log)"; \
+	trap 'status="$$?"; if [ -n "$${tail_pid:-}" ]; then kill "$$tail_pid" 2>/dev/null || true; wait "$$tail_pid" 2>/dev/null || true; fi; if [ -n "$${cloudflared_pid:-}" ]; then kill "$$cloudflared_pid" 2>/dev/null || true; wait "$$cloudflared_pid" 2>/dev/null || true; fi; rm -f "$$log_file"; exit "$$status"' INT TERM EXIT; \
+	"$$cloudflared_bin" tunnel --url "$(MINI_APP_TUNNEL_URL)" --no-autoupdate >"$$log_file" 2>&1 & \
+	cloudflared_pid="$$!"; \
+	public_url=""; \
+	attempt=0; \
+	while [ "$$attempt" -lt 60 ]; do \
+		if ! kill -0 "$$cloudflared_pid" 2>/dev/null; then \
+			echo "cloudflared exited before publishing a public URL."; \
+			cat "$$log_file"; \
+			exit 1; \
+		fi; \
+		public_url="$$(awk 'match($$0, /https:\/\/[-a-zA-Z0-9.]*trycloudflare.com/) { print substr($$0, RSTART, RLENGTH); exit }' "$$log_file")"; \
+		if [ -n "$$public_url" ]; then \
+			break; \
+		fi; \
+		attempt="$$((attempt + 1))"; \
+		sleep 1; \
+	done; \
+	if [ -z "$$public_url" ]; then \
+		echo "cloudflared did not publish a public URL within 60 seconds."; \
+		cat "$$log_file"; \
+		exit 1; \
+	fi; \
+	if [ -f "$(ENV_FILE)" ] && grep -q '^MINI_APP__PUBLIC_URL=' "$(ENV_FILE)"; then \
+		sed -i "s#^MINI_APP__PUBLIC_URL=.*#MINI_APP__PUBLIC_URL=$$public_url#" "$(ENV_FILE)"; \
+	else \
+		printf '\nMINI_APP__PUBLIC_URL=%s\n' "$$public_url" >> "$(ENV_FILE)"; \
+	fi; \
+	printf '%s\n' "Tunnel is ready: $$public_url"; \
+	printf '%s\n' "Updated $(ENV_FILE): MINI_APP__PUBLIC_URL=$$public_url"; \
+	compose_has_consumers=0; \
+	for service in bot mini-app; do \
+		if [ -n "$$($(COMPOSE_CMD) ps -q $$service 2>/dev/null || true)" ]; then \
+			compose_has_consumers=1; \
+		fi; \
+	done; \
+	if [ "$$compose_has_consumers" -eq 1 ]; then \
+		printf '%s\n' "Restarting docker services so they pick up the new MINI_APP__PUBLIC_URL..."; \
+		MINI_APP_EXPOSE_PORT="$(MINI_APP_TUNNEL_PORT)" $(COMPOSE_CMD) up -d bot mini-app >/dev/null; \
+		printf '%s\n' "Docker services restarted: bot, mini-app"; \
+	else \
+		printf '%s\n' "Restart the bot so Telegram buttons use the new Mini App URL."; \
+	fi; \
+	tail -n +1 -f "$$log_file" & \
+	tail_pid="$$!"; \
+	wait "$$cloudflared_pid"
+
 migrate:
 	$(call ensure_poetry_env)
 	$(ALEMBIC) upgrade head
@@ -180,7 +250,23 @@ ps:
 	$(COMPOSE_CMD) ps
 
 full:
-	COMPOSE="$(COMPOSE_CMD)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh $(FULL_SCRIPT)
+	COMPOSE="$(COMPOSE_CMD)" MINI_APP_EXPOSE_PORT="$(MINI_APP_EXPOSE_PORT)" FULL_SERVICES="$(FULL_SERVICES)" FULL_TIMEOUT="$(FULL_TIMEOUT)" sh $(FULL_SCRIPT)
+
+full-cloudflared:
+	@set -eu; \
+	desired_port="$${MINI_APP_EXPOSE_PORT:-$$(awk -F= '/^MINI_APP_EXPOSE_PORT=/{print $$2; exit}' "$(ENV_FILE)" 2>/dev/null)}"; \
+	if [ -z "$$desired_port" ]; then \
+		desired_port="$(MINI_APP_TUNNEL_PORT)"; \
+	fi; \
+	mini_app_port="$$desired_port"; \
+	while ! $(call port_is_available,$$mini_app_port); do \
+		mini_app_port="$$((mini_app_port + 1))"; \
+	done; \
+	if [ "$$mini_app_port" != "$$desired_port" ]; then \
+		printf '%s\n' "Port $$desired_port is busy. Using $$mini_app_port for docker mini-app and cloudflared."; \
+	fi; \
+	$(MAKE) full MINI_APP_EXPOSE_PORT="$$mini_app_port" && \
+	$(MAKE) run-mini-app-cloudflared MINI_APP_TUNNEL_PORT="$$mini_app_port"
 
 full-down: docker-down
 
