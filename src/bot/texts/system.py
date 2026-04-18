@@ -37,6 +37,14 @@ def get_start_lines(role: UserRole, *, mini_app_available: bool = False) -> list
                 2,
                 "Кнопка «Рабочее место» открывает Mini App с обзором, очередью и аналитикой.",
             )
+        else:
+            lines.insert(
+                2,
+                (
+                    "Если кнопки «Рабочее место» нет, "
+                    "Mini App пока недоступен и работа остаётся в меню бота."
+                ),
+            )
         return lines
     if role == UserRole.OPERATOR:
         lines = [
@@ -48,6 +56,14 @@ def get_start_lines(role: UserRole, *, mini_app_available: bool = False) -> list
             lines.insert(
                 2,
                 "Кнопка «Рабочее место» открывает Mini App с обзором и карточкой заявки.",
+            )
+        else:
+            lines.insert(
+                2,
+                (
+                    "Если кнопки «Рабочее место» нет, "
+                    "Mini App пока недоступен и основные действия остаются в меню."
+                ),
             )
         return lines
     return [
@@ -88,7 +104,18 @@ def get_help_guidance_lines(role: UserRole, *, mini_app_available: bool = False)
             "«Отмена» - выйти из текущего шага.",
         ]
         if mini_app_available:
-            lines.insert(0, "«Рабочее место» - открыть Mini App с обзором, очередью и аналитикой.")
+            lines.insert(
+                0,
+                "«Рабочее место» - открыть Mini App с обзором, очередью и аналитикой.",
+            )
+        else:
+            lines.insert(
+                0,
+                (
+                    "Если кнопки «Рабочее место» нет, "
+                    "проверьте публичный HTTPS URL Mini App в настройках."
+                ),
+            )
         return lines
     if role == UserRole.OPERATOR:
         lines = [
@@ -100,7 +127,18 @@ def get_help_guidance_lines(role: UserRole, *, mini_app_available: bool = False)
             "«Отмена» - выйти из текущего шага.",
         ]
         if mini_app_available:
-            lines.insert(0, "«Рабочее место» - открыть Mini App с обзором, очередью и карточкой заявки.")
+            lines.insert(
+                0,
+                "«Рабочее место» - открыть Mini App с обзором, очередью и карточкой заявки.",
+            )
+        else:
+            lines.insert(
+                0,
+                (
+                    "Если кнопки «Рабочее место» нет, "
+                    "Mini App сейчас недоступен и работа продолжается в меню."
+                ),
+            )
         return lines
     return [
         "Напишите сообщение, чтобы начать новое обращение.",

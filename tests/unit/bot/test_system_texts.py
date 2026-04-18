@@ -70,6 +70,12 @@ def test_build_help_text_for_operator_mentions_workspace_when_available() -> Non
     assert "«Рабочее место» - открыть Mini App" in result
 
 
+def test_build_help_text_for_operator_mentions_missing_workspace_button_when_unavailable() -> None:
+    result = build_help_text(UserRole.OPERATOR, mini_app_available=False)
+
+    assert "Если кнопки «Рабочее место» нет" in result
+
+
 def test_build_help_text_for_super_admin_is_menu_first() -> None:
     result = build_help_text(UserRole.SUPER_ADMIN)
 

@@ -56,6 +56,33 @@ def test_validate_telegram_mini_app_init_data_rejects_modified_payload() -> None
         )
 
 
+def test_validate_telegram_mini_app_init_data_rejects_malformed_payload() -> None:
+    with pytest.raises(TelegramMiniAppAuthError) as exc_info:
+        validate_telegram_mini_app_init_data(
+            init_data="user=%7Bbroken&hash",
+            bot_token="123:ABC",
+            max_age_seconds=3600,
+        )
+
+    assert exc_info.value.code == "malformed_init_data"
+
+
+def test_validate_telegram_mini_app_init_data_rejects_duplicate_keys() -> None:
+    now = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
+    init_data = _build_init_data(bot_token="123:ABC", auth_date=now)
+    duplicated = f"{init_data}&auth_date={int(now.timestamp())}"
+
+    with pytest.raises(TelegramMiniAppAuthError) as exc_info:
+        validate_telegram_mini_app_init_data(
+            init_data=duplicated,
+            bot_token="123:ABC",
+            max_age_seconds=3600,
+            now=now,
+        )
+
+    assert exc_info.value.code == "duplicate_init_data_keys"
+
+
 def _build_init_data(*, bot_token: str, auth_date: datetime) -> str:
     values = {
         "auth_date": str(int(auth_date.timestamp())),

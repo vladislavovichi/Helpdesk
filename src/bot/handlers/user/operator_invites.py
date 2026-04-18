@@ -153,7 +153,14 @@ async def handle_operator_invite_confirm(
     if isinstance(callback.message, Message):
         await callback.message.edit_text(welcome_text, reply_markup=None)
         await callback.message.answer(
-            "Рабочее место оператора готово.",
+            (
+                "Рабочее место оператора готово."
+                if settings.mini_app.public_url_is_valid
+                else (
+                    "Рабочее место оператора готово. "
+                    "Mini App появится после настройки публичного HTTPS URL."
+                )
+            ),
             reply_markup=build_main_menu(
                 UserRole.OPERATOR,
                 mini_app_url=settings.mini_app.telegram_launch_url,

@@ -25,6 +25,7 @@ from mini_app.auth import (
     TelegramMiniAppUser,
     validate_telegram_mini_app_init_data,
 )
+from mini_app.launch import ResolvedMiniAppLaunch, resolve_mini_app_launch
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +115,18 @@ def build_handler_class(
                     self._write_json(HTTPStatus.NOT_FOUND, {"error": "Маршрут Mini App не найден."})
                     return
 
-                user, session = self._load_session()
+                launch, user, session = self._load_session()
                 if method == "GET" and path == "/api/session":
-                    self._write_json(HTTPStatus.OK, session)
+                    self._write_json(
+                        HTTPStatus.OK,
+                        {
+                            **session,
+                            "launch": {
+                                "source": launch.source,
+                                "client_source": launch.client_source,
+                            },
+                        },
+                    )
                     return
 
                 if session["access"]["role"] == UserRole.USER.value:
@@ -124,8 +134,7 @@ def build_handler_class(
                         HTTPStatus.FORBIDDEN,
                         {
                             "error": (
-                                "Рабочее место доступно только операторам "
-                                "и суперадминистраторам."
+                                "Рабочее место доступно только операторам и суперадминистраторам."
                             )
                         },
                     )
@@ -267,41 +276,90 @@ def build_handler_class(
 
                 self._write_json(HTTPStatus.NOT_FOUND, {"error": "Маршрут Mini App не найден."})
             except TelegramMiniAppAuthError as exc:
-                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+                logger.warning(
+                    "Mini App auth failed method=%s path=%s code=%s",
+                    method,
+                    path,
+                    exc.code,
+                )
+                self._write_json(
+                    HTTPStatus.UNAUTHORIZED,
+                    {
+                        "error": str(exc),
+                        "code": exc.code,
+                    },
+                )
             except PermissionError as exc:
-                self._write_json(HTTPStatus.FORBIDDEN, {"error": str(exc)})
+                self._write_json(
+                    HTTPStatus.FORBIDDEN,
+                    {"error": str(exc), "code": "access_denied"},
+                )
             except LookupError as exc:
-                self._write_json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+                self._write_json(
+                    HTTPStatus.NOT_FOUND,
+                    {"error": str(exc), "code": "not_found"},
+                )
             except ValueError as exc:
-                self._write_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-            except Exception as exc:  # noqa: BLE001
+                self._write_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": str(exc), "code": "invalid_request"},
+                )
+            except RuntimeError as exc:
+                logger.warning(
+                    "Mini App backend dependency failed method=%s path=%s error=%s",
+                    method,
+                    path,
+                    exc,
+                )
+                self._write_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {
+                        "error": "Mini App временно недоступен. Попробуйте ещё раз чуть позже.",
+                        "code": "backend_unavailable",
+                    },
+                )
+            except Exception:  # noqa: BLE001
                 logger.exception("Mini App request failed method=%s path=%s", method, self.path)
                 self._write_json(
                     HTTPStatus.INTERNAL_SERVER_ERROR,
-                    {"error": f"Mini App временно недоступен: {exc.__class__.__name__}."},
+                    {
+                        "error": "Mini App временно недоступен. Попробуйте ещё раз.",
+                        "code": "internal_error",
+                    },
                 )
 
-        def _load_session(self) -> tuple[TelegramMiniAppUser, dict[str, Any]]:
+        def _load_session(
+            self,
+        ) -> tuple[ResolvedMiniAppLaunch, TelegramMiniAppUser, dict[str, Any]]:
+            launch = self._resolve_launch()
             validated = validate_telegram_mini_app_init_data(
-                init_data=self._resolve_init_data(),
+                init_data=launch.init_data,
                 bot_token=self.bot_token,
                 max_age_seconds=self.config.init_data_ttl_seconds,
             )
             session = asyncio.run(self.gateway.get_session(user=validated.user))
-            return validated.user, session
+            return launch, validated.user, session
 
-        def _resolve_init_data(self) -> str:
-            header_value = self.headers.get("X-Telegram-Init-Data", "").strip()
-            if header_value:
-                return header_value
+        def _resolve_launch(self) -> ResolvedMiniAppLaunch:
+            launch = resolve_mini_app_launch(path=self.path, headers=self.headers)
+            if launch.has_init_data:
+                logger.debug(
+                    "Mini App launch resolved source=%s client_source=%s path=%s diagnostics=%s",
+                    launch.source,
+                    launch.client_source or "<unknown>",
+                    urlparse(self.path).path,
+                    ",".join(launch.diagnostics) or "<none>",
+                )
+                return launch
 
-            authorization = self.headers.get("Authorization", "").strip()
-            if authorization.lower().startswith("tma "):
-                return authorization[4:].strip()
-
-            parsed = urlparse(self.path)
-            query = parse_qs(parsed.query)
-            return query.get("init_data", [""])[0]
+            logger.warning(
+                "Mini App launch missing source=%s client_source=%s path=%s diagnostics=%s",
+                launch.source,
+                launch.client_source or "<unknown>",
+                urlparse(self.path).path,
+                ",".join(launch.diagnostics) or "<none>",
+            )
+            return launch
 
         def _parse_analytics_window(self, parsed: ParseResult) -> AnalyticsWindow:
             query = parse_qs(parsed.query)

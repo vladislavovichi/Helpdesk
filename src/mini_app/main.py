@@ -18,8 +18,15 @@ def _log_mini_app_configuration(logger: logging.Logger, settings) -> None:
         )
         return
 
+    if not settings.mini_app.public_url_is_configured:
+        logger.warning(
+            "Mini App public URL is missing. Telegram launch button will stay hidden detail=%s",
+            settings.mini_app.public_url_status_detail,
+        )
+        return
+
     logger.warning(
-        "Mini App public URL is not ready detail=%s configured_public_url=%s",
+        "Mini App public URL is not suitable for Telegram detail=%s configured_public_url=%s",
         settings.mini_app.public_url_status_detail,
         settings.mini_app.public_url or "<not-set>",
     )
