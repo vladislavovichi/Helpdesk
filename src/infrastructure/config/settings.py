@@ -13,6 +13,13 @@ from infrastructure.config.parsers import parse_positive_int_list
 _DOCKER_ENV_PATH = Path("/.dockerenv")
 _LOCAL_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 _LOCAL_HOST_SUFFIXES = (".internal", ".local", ".localhost", ".test", ".invalid")
+_TEMPORARY_PUBLIC_HOST_SUFFIXES = (
+    ".trycloudflare.com",
+    ".ngrok-free.app",
+    ".ngrok.app",
+    ".ngrok.io",
+    ".loca.lt",
+)
 
 
 def _is_running_in_docker() -> bool:
@@ -325,9 +332,31 @@ class MiniAppConfig(BaseModel):
         return self.public_url
 
     @property
+    def public_url_hostname(self) -> str | None:
+        normalized = self.public_url.strip()
+        if not normalized:
+            return None
+        hostname = urlsplit(normalized).hostname
+        if hostname is None:
+            return None
+        return hostname.strip().lower() or None
+
+    @property
+    def public_url_looks_temporary(self) -> bool:
+        hostname = self.public_url_hostname
+        if hostname is None:
+            return False
+        return hostname.endswith(_TEMPORARY_PUBLIC_HOST_SUFFIXES)
+
+    @property
     def public_url_status_detail(self) -> str:
         error = self.public_url_validation_error
         if error is None:
+            if self.public_url_looks_temporary:
+                return (
+                    f"Mini App URL готов для Telegram: {self.public_url} "
+                    "(временный публичный домен)"
+                )
             return f"Mini App URL готов для Telegram: {self.public_url}"
         return error
 

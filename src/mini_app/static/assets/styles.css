@@ -186,8 +186,10 @@ select:focus-visible {
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  padding: 4px 2px 14px;
-  margin-bottom: 8px;
+  padding: 8px 2px 16px;
+  margin-bottom: 10px;
+  background: linear-gradient(180deg, rgba(245, 241, 235, 0.94), rgba(245, 241, 235, 0.34));
+  backdrop-filter: blur(14px);
   scrollbar-width: none;
 }
 
@@ -202,8 +204,8 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 44px;
-  padding: 11px 16px;
+  min-height: 42px;
+  padding: 10px 15px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.58);
@@ -362,7 +364,7 @@ select:focus-visible {
 }
 
 .surface-head {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .surface-head-tight {
@@ -379,6 +381,7 @@ select:focus-visible {
 .subsurface {
   padding: 22px;
   border-radius: 22px;
+  background: rgba(255, 255, 255, 0.7);
   box-shadow: var(--shadow-soft);
 }
 
@@ -406,6 +409,9 @@ select:focus-visible {
 
 .soft-chip-button {
   cursor: pointer;
+  justify-content: center;
+  border: 1px solid rgba(30, 38, 46, 0.06);
+  box-shadow: 0 8px 18px rgba(26, 33, 41, 0.03);
 }
 
 .status-chip-live {
@@ -444,7 +450,7 @@ select:focus-visible {
   min-height: 118px;
   padding: 18px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.74);
   border: 1px solid rgba(30, 38, 46, 0.05);
 }
 
@@ -515,6 +521,7 @@ select:focus-visible {
   font-size: 13px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .archive-toolbar,
@@ -644,7 +651,7 @@ select:focus-visible {
   padding: 16px 18px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.72);
   min-width: 0;
 }
 
@@ -657,6 +664,7 @@ select:focus-visible {
   align-items: stretch;
   gap: 18px;
   padding: 20px 22px;
+  box-shadow: 0 10px 24px rgba(26, 33, 41, 0.03);
 }
 
 .archive-row-main {

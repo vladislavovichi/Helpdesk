@@ -56,16 +56,23 @@ def _backend_target(settings: Settings) -> str:
 def _log_mini_app_configuration(logger: logging.Logger, settings: Settings) -> None:
     if settings.mini_app.public_url_is_valid:
         logger.info(
-            "Mini App launch enabled public_url=%s healthcheck=%s",
+            "Mini App launch enabled public_url=%s host=%s temporary=%s healthcheck=%s",
             settings.mini_app.telegram_launch_url,
+            settings.mini_app.public_url_hostname or "<unknown>",
+            settings.mini_app.public_url_looks_temporary,
             settings.mini_app.healthcheck_url,
         )
         return
 
     logger.warning(
-        "Mini App launch disabled detail=%s configured_public_url=%s healthcheck=%s",
+        (
+            "Mini App launch disabled detail=%s configured_public_url=%s "
+            "host=%s temporary=%s healthcheck=%s"
+        ),
         settings.mini_app.public_url_status_detail,
         settings.mini_app.public_url or "<not-set>",
+        settings.mini_app.public_url_hostname or "<unknown>",
+        settings.mini_app.public_url_looks_temporary,
         settings.mini_app.healthcheck_url,
     )
 

@@ -39,7 +39,7 @@ def test_build_start_text_for_super_admin_mentions_admin_scope() -> None:
 def test_build_start_text_for_operator_mentions_workspace_when_available() -> None:
     result = build_start_text(UserRole.OPERATOR, mini_app_available=True)
 
-    assert "Кнопка меню «Рабочее место» открывает Mini App" in result
+    assert "Кнопка меню «Панель» открывает Mini App" in result
 
 
 def test_build_help_text_for_user_does_not_expose_operator_commands() -> None:
@@ -66,13 +66,13 @@ def test_build_help_text_for_operator_is_menu_first() -> None:
 def test_build_help_text_for_operator_mentions_workspace_when_available() -> None:
     result = build_help_text(UserRole.OPERATOR, mini_app_available=True)
 
-    assert "Кнопка меню «Рабочее место» - открыть Mini App" in result
+    assert "Кнопка меню «Панель» - открыть Mini App" in result
 
 
 def test_build_help_text_for_operator_mentions_missing_workspace_button_when_unavailable() -> None:
     result = build_help_text(UserRole.OPERATOR, mini_app_available=False)
 
-    assert "Если кнопки меню «Рабочее место» нет" in result
+    assert "Если кнопки меню «Панель» нет" in result
 
 
 def test_build_help_text_for_super_admin_is_menu_first() -> None:

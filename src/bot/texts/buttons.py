@@ -1,5 +1,5 @@
 HELP_BUTTON_TEXT = "Справка"
-WORKSPACE_BUTTON_TEXT = "Рабочее место"
+WORKSPACE_BUTTON_TEXT = "Панель"
 QUEUE_BUTTON_TEXT = "Очередь"
 TAKE_NEXT_BUTTON_TEXT = "Взять следующую"
 MY_TICKETS_BUTTON_TEXT = "Мои заявки"

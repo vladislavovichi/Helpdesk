@@ -154,10 +154,7 @@ async def handle_operator_invite_confirm(
         await callback.message.edit_text(welcome_text, reply_markup=None)
         await callback.message.answer(
             (
-                (
-                    "Рабочее место оператора готово. "
-                    "Mini App доступен через кнопку меню «Рабочее место»."
-                )
+                ("Рабочее место оператора готово. Mini App доступен через кнопку меню «Панель».")
                 if settings.mini_app.public_url_is_valid
                 else (
                     "Рабочее место оператора готово. "

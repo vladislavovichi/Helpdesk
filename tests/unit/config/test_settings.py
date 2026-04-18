@@ -101,6 +101,8 @@ def test_mini_app_public_url_is_exposed_only_when_valid() -> None:
 
     assert settings.mini_app.public_url_is_valid is True
     assert settings.mini_app.telegram_launch_url == "https://mini-app.example.com/workspace"
+    assert settings.mini_app.public_url_hostname == "mini-app.example.com"
+    assert settings.mini_app.public_url_looks_temporary is False
 
 
 def test_mini_app_public_url_rejects_local_http_address() -> None:
@@ -114,3 +116,17 @@ def test_mini_app_public_url_rejects_local_http_address() -> None:
     assert settings.mini_app.public_url_is_valid is False
     assert settings.mini_app.telegram_launch_url is None
     assert "https://" in settings.mini_app.public_url_status_detail
+
+
+def test_mini_app_public_url_marks_temporary_public_domains_in_diagnostics() -> None:
+    settings = Settings.model_validate(
+        {
+            "authorization": {"super_admin_telegram_user_ids": [99]},
+            "mini_app": {"public_url": "https://helpdesk-demo.trycloudflare.com"},
+        }
+    )
+
+    assert settings.mini_app.public_url_is_valid is True
+    assert settings.mini_app.public_url_looks_temporary is True
+    assert settings.mini_app.public_url_hostname == "helpdesk-demo.trycloudflare.com"
+    assert "временный публичный домен" in settings.mini_app.public_url_status_detail

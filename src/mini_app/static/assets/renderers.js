@@ -124,7 +124,7 @@ export function renderDashboard(data) {
             <p class="eyebrow">Недавняя история</p>
             <h3>Закрытые заявки</h3>
           </div>
-          <button class="action" data-route="archive">Архив</button>
+          <button class="soft-chip soft-chip-button" data-route="archive" type="button">Архив</button>
         </div>
         ${renderArchiveRows(data.recent_archive)}
       </article>
@@ -134,7 +134,7 @@ export function renderDashboard(data) {
             <p class="eyebrow">Качество</p>
             <h3>Сигналы по сервису</h3>
           </div>
-          <button class="action" data-route="analytics">Аналитика</button>
+          <button class="soft-chip soft-chip-button" data-route="analytics" type="button">Аналитика</button>
         </div>
         <div class="stats-stack">
           ${renderMetric("Средняя оценка", snapshot.satisfaction_average ? snapshot.satisfaction_average.toFixed(1) : "—")}
