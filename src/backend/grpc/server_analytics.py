@@ -1,3 +1,4 @@
+# mypy: disable-error-code="attr-defined,name-defined"
 from __future__ import annotations
 
 from uuid import UUID

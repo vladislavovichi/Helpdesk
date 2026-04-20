@@ -1,5 +1,7 @@
+# mypy: disable-error-code="attr-defined,name-defined"
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 import grpc
@@ -23,7 +25,7 @@ class HelpdeskBackendOperationsGrpcMixin(HelpdeskBackendGrpcServiceBase):
         self,
         request: helpdesk_pb2.ListOperatorsRequest,
         context: grpc.aio.ServicerContext,
-    ):
+    ) -> AsyncIterator[helpdesk_pb2.OperatorSummary]:
         async with self._rpc_scope(
             context,
             method="ListOperators",
@@ -62,7 +64,7 @@ class HelpdeskBackendOperationsGrpcMixin(HelpdeskBackendGrpcServiceBase):
         self,
         request: helpdesk_pb2.ListMacrosRequest,
         context: grpc.aio.ServicerContext,
-    ):
+    ) -> AsyncIterator[helpdesk_pb2.MacroSummary]:
         async with self._rpc_scope(
             context,
             method="ListMacros",

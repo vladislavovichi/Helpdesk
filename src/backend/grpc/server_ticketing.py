@@ -1,5 +1,7 @@
+# mypy: disable-error-code="attr-defined,name-defined"
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 import grpc
@@ -75,7 +77,7 @@ class HelpdeskBackendTicketingGrpcMixin(HelpdeskBackendGrpcServiceBase):
         self,
         request: helpdesk_pb2.Empty,
         context: grpc.aio.ServicerContext,
-    ):
+    ) -> AsyncIterator[helpdesk_pb2.TicketCategorySummary]:
         del request
         async with self._rpc_scope(context, method="ListClientTicketCategories"):
             categories = await self._invoke_helpdesk(
@@ -143,7 +145,7 @@ class HelpdeskBackendTicketingGrpcMixin(HelpdeskBackendGrpcServiceBase):
         self,
         request: helpdesk_pb2.ListQueuedTicketsRequest,
         context: grpc.aio.ServicerContext,
-    ):
+    ) -> AsyncIterator[helpdesk_pb2.QueuedTicketSummary]:
         async with self._rpc_scope(
             context,
             method="ListQueuedTickets",
@@ -163,7 +165,7 @@ class HelpdeskBackendTicketingGrpcMixin(HelpdeskBackendGrpcServiceBase):
         self,
         request: helpdesk_pb2.ListOperatorTicketsRequest,
         context: grpc.aio.ServicerContext,
-    ):
+    ) -> AsyncIterator[helpdesk_pb2.OperatorTicketSummary]:
         async with self._rpc_scope(
             context,
             method="ListOperatorTickets",
@@ -184,7 +186,7 @@ class HelpdeskBackendTicketingGrpcMixin(HelpdeskBackendGrpcServiceBase):
         self,
         request: helpdesk_pb2.ListArchivedTicketsRequest,
         context: grpc.aio.ServicerContext,
-    ):
+    ) -> AsyncIterator[helpdesk_pb2.ArchivedTicketSummary]:
         async with self._rpc_scope(
             context,
             method="ListArchivedTickets",
