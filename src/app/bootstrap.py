@@ -5,6 +5,8 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.base import BaseStorage
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.runtime import AppRuntime, RedisWorkflowRuntime
@@ -89,25 +91,25 @@ async def _close_runtime_resources(
     if bot is not None:
         try:
             await bot.session.close()
-        except Exception:
+        except (OSError, RuntimeError):
             logger.exception("Failed to close Telegram bot session cleanly.")
 
     if fsm_storage is not None:
         try:
             await fsm_storage.close()
-        except Exception:
+        except (OSError, RedisError, RuntimeError):
             logger.exception("Failed to close FSM storage cleanly.")
 
     if redis is not None:
         try:
             await close_redis_client(redis)
-        except Exception:
+        except (OSError, RedisError, RuntimeError):
             logger.exception("Failed to close Redis client cleanly.")
 
     if db_engine is not None:
         try:
             await dispose_engine(db_engine)
-        except Exception:
+        except (OSError, RuntimeError, SQLAlchemyError):
             logger.exception("Failed to dispose SQLAlchemy engine cleanly.")
 
 

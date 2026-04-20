@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from ai_service.grpc.client import ping_ai_service
@@ -58,13 +60,13 @@ async def _close_runtime_resources(
     if redis is not None:
         try:
             await close_redis_client(redis)
-        except Exception:
+        except (OSError, RedisError, RuntimeError):
             logger.exception("Failed to close Redis client cleanly.")
 
     if db_engine is not None:
         try:
             await dispose_engine(db_engine)
-        except Exception:
+        except (OSError, RuntimeError, SQLAlchemyError):
             logger.exception("Failed to dispose SQLAlchemy engine cleanly.")
 
 

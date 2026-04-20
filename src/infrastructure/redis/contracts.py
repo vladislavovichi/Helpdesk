@@ -79,6 +79,14 @@ class TicketLiveSessionStore(Protocol):
         """Remove the live session for the ticket."""
 
 
+@dataclass(slots=True, frozen=True)
+class TicketStreamMessage:
+    message_id: str
+    ticket_id: str
+    client_chat_id: int
+    subject: str
+
+
 class SLADeadlineScheduler(Protocol):
     async def schedule(self, *, ticket_id: str, deadline_at: datetime) -> None:
         """Schedule an SLA deadline."""
@@ -88,6 +96,9 @@ class SLADeadlineScheduler(Protocol):
 
     async def get_due(self, *, until: datetime, limit: int = 100) -> Sequence[str]:
         """Return due ticket identifiers."""
+
+    async def claim_due(self, *, until: datetime, limit: int = 100) -> Sequence[str]:
+        """Return due ticket identifiers and remove them from the active deadline set."""
 
 
 class TicketStreamPublisher(Protocol):
@@ -102,6 +113,15 @@ class TicketStreamPublisher(Protocol):
 
 
 class TicketStreamConsumer(Protocol):
+    async def read_new_ticket_messages(
+        self,
+        *,
+        last_id: str = "0-0",
+        count: int = 10,
+        block_ms: int | None = None,
+    ) -> Sequence[TicketStreamMessage]:
+        """Read new-ticket events as structured stream messages."""
+
     async def poll_new_tickets(
         self,
         *,
@@ -113,5 +133,8 @@ class TicketStreamConsumer(Protocol):
 
 
 class SLATimeoutProcessor(Protocol):
+    async def claim_due_ticket_ids(self, *, limit: int = 100) -> Sequence[str]:
+        """Claim due SLA ticket identifiers for immediate synchronous handling."""
+
     async def run_once(self, *, limit: int = 100) -> int:
-        """Run a single SLA timeout processing iteration."""
+        """Claim due SLA ticket identifiers and return the claimed count."""

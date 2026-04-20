@@ -29,15 +29,28 @@ class RedisSLADeadlineScheduler(SLADeadlineScheduler):
         )
         return list(items)
 
+    async def claim_due(self, *, until: datetime, limit: int = 100) -> Sequence[str]:
+        due_ticket_ids = list(await self.get_due(until=until, limit=limit))
+        if not due_ticket_ids:
+            return []
+        await self.redis.zrem(SLA_DEADLINES_KEY, *due_ticket_ids)
+        return due_ticket_ids
+
 
 class RedisSLATimeoutProcessor(SLATimeoutProcessor):
     def __init__(self, scheduler: SLADeadlineScheduler) -> None:
         self.scheduler = scheduler
 
+    async def claim_due_ticket_ids(self, *, limit: int = 100) -> Sequence[str]:
+        return list(
+            await self.scheduler.claim_due(
+                until=datetime.now(UTC),
+                limit=limit,
+            )
+        )
+
     async def run_once(self, *, limit: int = 100) -> int:
-        due_ticket_ids = await self.scheduler.get_due(
-            until=datetime.now(UTC),
+        due_ticket_ids = await self.claim_due_ticket_ids(
             limit=limit,
         )
-        # TODO: fan out SLA timeout events into queue/stream processing when workflow workers exist.
         return len(due_ticket_ids)

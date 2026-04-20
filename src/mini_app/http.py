@@ -88,193 +88,21 @@ def build_handler_class(
             path = parsed.path
 
             try:
-                if method == "GET" and path == "/healthz":
-                    self._write_json(
-                        HTTPStatus.OK,
-                        {
-                            "status": "ok",
-                            "mini_app": {
-                                "public_url": self.config.public_url or None,
-                                "public_url_valid": self.config.public_url_is_valid,
-                                "detail": self.config.public_url_status_detail,
-                            },
-                        },
-                    )
-                    return
-                if method == "GET" and (path == "/" or path == "/index.html"):
-                    self._serve_file(
-                        self.static_dir / "index.html",
-                        content_type="text/html; charset=utf-8",
-                    )
-                    return
-                if method == "GET" and path.startswith("/assets/"):
-                    asset_path = path.removeprefix("/assets/")
-                    self._serve_file(self.static_dir / "assets" / asset_path)
+                if self._handle_public_request(method=method, path=path, parsed=parsed):
                     return
                 if not path.startswith("/api/"):
                     self._write_json(HTTPStatus.NOT_FOUND, {"error": "Маршрут Mini App не найден."})
                     return
 
                 launch, user, session = self._load_session()
-                if method == "GET" and path == "/api/session":
-                    self._write_json(
-                        HTTPStatus.OK,
-                        {
-                            **session,
-                            "launch": {
-                                "source": launch.source,
-                                "client_source": launch.client_source,
-                            },
-                        },
-                    )
-                    return
-
-                if session["access"]["role"] == UserRole.USER.value:
-                    self._write_json(
-                        HTTPStatus.FORBIDDEN,
-                        {
-                            "error": (
-                                "Рабочее место доступно только операторам и суперадминистраторам."
-                            )
-                        },
-                    )
-                    return
-
-                if method == "GET" and path == "/api/dashboard":
-                    self._write_async_json(self.gateway.get_dashboard(user=user))
-                    return
-                if method == "GET" and path == "/api/queue":
-                    self._write_async_json(self.gateway.list_queue(user=user))
-                    return
-                if method == "POST" and path == "/api/queue/take-next":
-                    self._write_async_json(self.gateway.take_next_ticket(user=user))
-                    return
-                if method == "GET" and path == "/api/my-tickets":
-                    self._write_async_json(self.gateway.list_my_tickets(user=user))
-                    return
-                if method == "GET" and path == "/api/archive":
-                    self._write_async_json(self.gateway.list_archive(user=user))
-                    return
-                if method == "GET" and path == "/api/analytics":
-                    window = self._parse_analytics_window(parsed)
-                    self._write_async_json(self.gateway.get_analytics(user=user, window=window))
-                    return
-                if method == "GET" and path == "/api/analytics/export":
-                    window = self._parse_analytics_window(parsed)
-                    query = parse_qs(parsed.query)
-                    section = AnalyticsSection(query.get("section", ["overview"])[0])
-                    analytics_format = AnalyticsExportFormat(query.get("format", ["html"])[0])
-                    self._write_binary(
-                        asyncio.run(
-                            self.gateway.export_analytics(
-                                user=user,
-                                window=window,
-                                section=section,
-                                format=analytics_format,
-                            )
-                        )
-                    )
-                    return
-                if method == "GET" and path == "/api/admin/operators":
-                    self._require_admin(session)
-                    self._write_async_json(self.gateway.list_operators(user=user))
-                    return
-                if method == "POST" and path == "/api/admin/invites":
-                    self._require_admin(session)
-                    self._write_async_json(self.gateway.create_operator_invite(user=user))
-                    return
-
-                ticket_match = _TICKET_ROUTE.fullmatch(path)
-                if method == "GET" and ticket_match is not None:
-                    ticket_public_id = UUID(ticket_match.group(1))
-                    self._write_async_json(
-                        self.gateway.get_ticket_workspace(
-                            user=user,
-                            ticket_public_id=ticket_public_id,
-                        )
-                    )
-                    return
-
-                action_match = _TICKET_ACTION_ROUTE.fullmatch(path)
-                if method == "POST" and action_match is not None:
-                    ticket_public_id = UUID(action_match.group(1))
-                    action = action_match.group(2)
-                    if action == "take":
-                        self._write_async_json(
-                            self.gateway.take_ticket(
-                                user=user,
-                                ticket_public_id=ticket_public_id,
-                            )
-                        )
-                        return
-                    if action == "close":
-                        self._write_async_json(
-                            self.gateway.close_ticket(
-                                user=user,
-                                ticket_public_id=ticket_public_id,
-                            )
-                        )
-                        return
-                    if action == "escalate":
-                        self._write_async_json(
-                            self.gateway.escalate_ticket(
-                                user=user,
-                                ticket_public_id=ticket_public_id,
-                            )
-                        )
-                        return
-                    payload = self._read_json_body()
-                    if action == "assign":
-                        operator = OperatorIdentity(
-                            telegram_user_id=_require_int(payload, "telegram_user_id"),
-                            display_name=_require_string(payload, "display_name"),
-                            username=_optional_string(payload, "username"),
-                        )
-                        self._write_async_json(
-                            self.gateway.assign_ticket(
-                                user=user,
-                                ticket_public_id=ticket_public_id,
-                                operator_identity=operator,
-                            )
-                        )
-                        return
-                    if action == "notes":
-                        self._write_async_json(
-                            self.gateway.add_note(
-                                user=user,
-                                ticket_public_id=ticket_public_id,
-                                text=_require_string(payload, "text"),
-                            )
-                        )
-                        return
-
-                macro_match = _TICKET_MACRO_ROUTE.fullmatch(path)
-                if method == "POST" and macro_match is not None:
-                    self._write_async_json(
-                        self.gateway.apply_macro(
-                            user=user,
-                            ticket_public_id=UUID(macro_match.group(1)),
-                            macro_id=int(macro_match.group(2)),
-                        )
-                    )
-                    return
-
-                export_match = _TICKET_EXPORT_ROUTE.fullmatch(path)
-                if method == "GET" and export_match is not None:
-                    query = parse_qs(parsed.query)
-                    ticket_format = TicketReportFormat(query.get("format", ["html"])[0])
-                    self._write_binary(
-                        asyncio.run(
-                            self.gateway.export_ticket(
-                                user=user,
-                                ticket_public_id=UUID(export_match.group(1)),
-                                format=ticket_format,
-                            )
-                        )
-                    )
-                    return
-
-                self._write_json(HTTPStatus.NOT_FOUND, {"error": "Маршрут Mini App не найден."})
+                self._handle_authenticated_request(
+                    method=method,
+                    path=path,
+                    parsed=parsed,
+                    launch=launch,
+                    user=user,
+                    session=session,
+                )
             except TelegramMiniAppAuthError as exc:
                 logger.warning(
                     (
@@ -314,7 +142,7 @@ def build_handler_class(
                     HTTPStatus.BAD_REQUEST,
                     {"error": str(exc), "code": "invalid_request"},
                 )
-            except RuntimeError as exc:
+            except (ConnectionError, OSError, RuntimeError, TimeoutError) as exc:
                 logger.warning(
                     "Mini App backend dependency failed method=%s path=%s error=%s",
                     method,
@@ -337,6 +165,238 @@ def build_handler_class(
                         "code": "internal_error",
                     },
                 )
+
+        def _handle_public_request(
+            self,
+            *,
+            method: str,
+            path: str,
+            parsed: ParseResult,
+        ) -> bool:
+            del parsed
+            if method == "GET" and path == "/healthz":
+                self._write_json(
+                    HTTPStatus.OK,
+                    {
+                        "status": "ok",
+                        "mini_app": {
+                            "public_url": self.config.public_url or None,
+                            "public_url_valid": self.config.public_url_is_valid,
+                            "detail": self.config.public_url_status_detail,
+                        },
+                    },
+                )
+                return True
+            if method == "GET" and (path == "/" or path == "/index.html"):
+                self._serve_file(
+                    self.static_dir / "index.html",
+                    content_type="text/html; charset=utf-8",
+                )
+                return True
+            if method == "GET" and path.startswith("/assets/"):
+                asset_path = path.removeprefix("/assets/")
+                self._serve_file(self.static_dir / "assets" / asset_path)
+                return True
+            return False
+
+        def _handle_authenticated_request(
+            self,
+            *,
+            method: str,
+            path: str,
+            parsed: ParseResult,
+            launch: ResolvedMiniAppLaunch,
+            user: TelegramMiniAppUser,
+            session: dict[str, Any],
+        ) -> None:
+            if method == "GET" and path == "/api/session":
+                self._write_json(
+                    HTTPStatus.OK,
+                    {
+                        **session,
+                        "launch": {
+                            "source": launch.source,
+                            "client_source": launch.client_source,
+                        },
+                    },
+                )
+                return
+
+            if session["access"]["role"] == UserRole.USER.value:
+                self._write_json(
+                    HTTPStatus.FORBIDDEN,
+                    {"error": ("Рабочее место доступно только операторам и суперадминистраторам.")},
+                )
+                return
+
+            if method == "GET" and path == "/api/dashboard":
+                self._write_async_json(self.gateway.get_dashboard(user=user))
+                return
+            if method == "GET" and path == "/api/queue":
+                self._write_async_json(self.gateway.list_queue(user=user))
+                return
+            if method == "POST" and path == "/api/queue/take-next":
+                self._write_async_json(self.gateway.take_next_ticket(user=user))
+                return
+            if method == "GET" and path == "/api/my-tickets":
+                self._write_async_json(self.gateway.list_my_tickets(user=user))
+                return
+            if method == "GET" and path == "/api/archive":
+                self._write_async_json(self.gateway.list_archive(user=user))
+                return
+            if method == "GET" and path == "/api/analytics":
+                window = self._parse_analytics_window(parsed)
+                self._write_async_json(self.gateway.get_analytics(user=user, window=window))
+                return
+            if method == "GET" and path == "/api/analytics/export":
+                self._handle_analytics_export(user=user, parsed=parsed)
+                return
+            if method == "GET" and path == "/api/admin/operators":
+                self._require_admin(session)
+                self._write_async_json(self.gateway.list_operators(user=user))
+                return
+            if method == "POST" and path == "/api/admin/invites":
+                self._require_admin(session)
+                self._write_async_json(self.gateway.create_operator_invite(user=user))
+                return
+            if self._handle_ticket_routes(method=method, path=path, parsed=parsed, user=user):
+                return
+
+            self._write_json(HTTPStatus.NOT_FOUND, {"error": "Маршрут Mini App не найден."})
+
+        def _handle_analytics_export(
+            self,
+            *,
+            user: TelegramMiniAppUser,
+            parsed: ParseResult,
+        ) -> None:
+            window = self._parse_analytics_window(parsed)
+            query = parse_qs(parsed.query)
+            section = AnalyticsSection(query.get("section", ["overview"])[0])
+            analytics_format = AnalyticsExportFormat(query.get("format", ["html"])[0])
+            self._write_binary(
+                asyncio.run(
+                    self.gateway.export_analytics(
+                        user=user,
+                        window=window,
+                        section=section,
+                        format=analytics_format,
+                    )
+                )
+            )
+
+        def _handle_ticket_routes(
+            self,
+            *,
+            method: str,
+            path: str,
+            parsed: ParseResult,
+            user: TelegramMiniAppUser,
+        ) -> bool:
+            ticket_match = _TICKET_ROUTE.fullmatch(path)
+            if method == "GET" and ticket_match is not None:
+                ticket_public_id = UUID(ticket_match.group(1))
+                self._write_async_json(
+                    self.gateway.get_ticket_workspace(
+                        user=user,
+                        ticket_public_id=ticket_public_id,
+                    )
+                )
+                return True
+
+            action_match = _TICKET_ACTION_ROUTE.fullmatch(path)
+            if method == "POST" and action_match is not None:
+                return self._handle_ticket_action(
+                    user=user,
+                    ticket_public_id=UUID(action_match.group(1)),
+                    action=action_match.group(2),
+                )
+
+            macro_match = _TICKET_MACRO_ROUTE.fullmatch(path)
+            if method == "POST" and macro_match is not None:
+                self._write_async_json(
+                    self.gateway.apply_macro(
+                        user=user,
+                        ticket_public_id=UUID(macro_match.group(1)),
+                        macro_id=int(macro_match.group(2)),
+                    )
+                )
+                return True
+
+            export_match = _TICKET_EXPORT_ROUTE.fullmatch(path)
+            if method == "GET" and export_match is not None:
+                query = parse_qs(parsed.query)
+                ticket_format = TicketReportFormat(query.get("format", ["html"])[0])
+                self._write_binary(
+                    asyncio.run(
+                        self.gateway.export_ticket(
+                            user=user,
+                            ticket_public_id=UUID(export_match.group(1)),
+                            format=ticket_format,
+                        )
+                    )
+                )
+                return True
+
+            return False
+
+        def _handle_ticket_action(
+            self,
+            *,
+            user: TelegramMiniAppUser,
+            ticket_public_id: UUID,
+            action: str,
+        ) -> bool:
+            if action == "take":
+                self._write_async_json(
+                    self.gateway.take_ticket(
+                        user=user,
+                        ticket_public_id=ticket_public_id,
+                    )
+                )
+                return True
+            if action == "close":
+                self._write_async_json(
+                    self.gateway.close_ticket(
+                        user=user,
+                        ticket_public_id=ticket_public_id,
+                    )
+                )
+                return True
+            if action == "escalate":
+                self._write_async_json(
+                    self.gateway.escalate_ticket(
+                        user=user,
+                        ticket_public_id=ticket_public_id,
+                    )
+                )
+                return True
+
+            payload = self._read_json_body()
+            if action == "assign":
+                operator = OperatorIdentity(
+                    telegram_user_id=_require_int(payload, "telegram_user_id"),
+                    display_name=_require_string(payload, "display_name"),
+                    username=_optional_string(payload, "username"),
+                )
+                self._write_async_json(
+                    self.gateway.assign_ticket(
+                        user=user,
+                        ticket_public_id=ticket_public_id,
+                        operator_identity=operator,
+                    )
+                )
+                return True
+            if action == "notes":
+                self._write_async_json(
+                    self.gateway.add_note(
+                        user=user,
+                        ticket_public_id=ticket_public_id,
+                        text=_require_string(payload, "text"),
+                    )
+                )
+                return True
+            return False
 
         def _load_session(
             self,
@@ -408,7 +468,7 @@ def build_handler_class(
             payload = self.rfile.read(content_length) if content_length > 0 else b"{}"
             try:
                 decoded = json.loads(payload.decode("utf-8"))
-            except json.JSONDecodeError as exc:
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise ValueError("Не удалось разобрать JSON payload.") from exc
             if not isinstance(decoded, dict):
                 raise ValueError("JSON payload должен быть объектом.")

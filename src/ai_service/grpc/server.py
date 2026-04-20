@@ -222,4 +222,6 @@ async def _abort_for_exception(
         await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
     if isinstance(exc, ValueError):
         await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+    if isinstance(exc, (ConnectionError, OSError, TimeoutError)):
+        await context.abort(grpc.StatusCode.UNAVAILABLE, "AI-service временно недоступен.")
     await context.abort(grpc.StatusCode.INTERNAL, "Внутренняя ошибка ai-service.")
