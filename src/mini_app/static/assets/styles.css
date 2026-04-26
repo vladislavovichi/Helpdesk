@@ -1016,6 +1016,109 @@ select:focus-visible {
   justify-self: start;
 }
 
+.ticket-timeline {
+  display: grid;
+  gap: 0;
+  position: relative;
+}
+
+.ticket-timeline::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 12px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(31, 40, 52, 0.1);
+}
+
+.ticket-timeline .timeline-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 14px;
+  padding: 0 0 20px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ticket-timeline .timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.timeline-marker {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(30, 38, 46, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(26, 33, 41, 0.06);
+}
+
+.timeline-content {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(30, 38, 46, 0.07);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.timeline-content h4 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.timeline-content p {
+  margin: 0;
+  color: var(--muted-strong);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.timeline-item.is-ai .timeline-marker {
+  background: rgba(236, 228, 217, 0.96);
+  border-color: rgba(31, 40, 52, 0.16);
+}
+
+.timeline-item.is-sla .timeline-marker {
+  background: rgba(255, 246, 230, 0.96);
+  border-color: rgba(146, 103, 44, 0.22);
+}
+
+.timeline-item.is-assignment .timeline-marker {
+  background: rgba(235, 239, 242, 0.96);
+}
+
+.timeline-item.is-message .timeline-marker {
+  background: rgba(241, 247, 243, 0.96);
+  border-color: rgba(53, 89, 75, 0.18);
+}
+
+.timeline-item.is-note .timeline-marker {
+  background: rgba(233, 223, 210, 0.96);
+}
+
+.timeline-item.is-close .timeline-marker {
+  background: rgba(31, 40, 52, 0.92);
+  border-color: rgba(31, 40, 52, 0.92);
+}
+
 .invite-card {
   align-items: center;
 }

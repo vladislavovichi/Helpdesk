@@ -28,6 +28,7 @@ from mini_app.serializers import (
     serialize_ticket_ai_snapshot,
     serialize_ticket_details,
     serialize_ticket_reply_draft,
+    serialize_ticket_timeline,
 )
 
 
@@ -150,10 +151,19 @@ class MiniAppGateway:
             macros = await client.list_macros(actor=actor)
             operators = await client.list_operators(actor=actor)
 
+        try:
+            timeline = serialize_ticket_timeline(details, ai_snapshot)
+        except Exception:  # noqa: BLE001
+            timeline = {
+                "items": [],
+                "warning": "Ticket history is temporarily unavailable.",
+            }
+
         return {
             "session": serialize_access_context(session),
             "ticket": serialize_ticket_details(details),
             "ai": serialize_ticket_ai_snapshot(ai_snapshot),
+            "timeline": timeline,
             "macros": [serialize_macro(item) for item in macros],
             "operators": [serialize_operator(item) for item in operators],
         }

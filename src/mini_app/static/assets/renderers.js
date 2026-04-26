@@ -117,6 +117,17 @@ export function renderDashboard(data) {
       ${renderTicketPreviewCard("Риск SLA", "Кейсы с повышенным вниманием", data.escalations, "queue")}
     </section>
 
+    <section class="surface">
+      <div class="surface-head">
+        <div>
+          <p class="eyebrow">Oldest first</p>
+          <h3>Ticket history</h3>
+          <p class="subtitle">Chronological view of important ticket events.</p>
+        </div>
+      </div>
+      ${renderTicketTimeline(data.timeline)}
+    </section>
+
     <section class="surface-grid">
       <article class="surface">
         <div class="surface-head">
@@ -842,6 +853,66 @@ function renderAttachment(attachment) {
       <span>${attachment.mime_type ? escapeHtml(attachment.mime_type) : "Вложение без mime"}</span>
     </div>
   `;
+}
+
+function renderTicketTimeline(timeline) {
+  const items = Array.isArray(timeline?.items) ? timeline.items : [];
+  const warning =
+    typeof timeline?.warning === "string" && timeline.warning.trim() ? timeline.warning : "";
+  if (warning) {
+    return `<div class="ai-warning">${escapeHtml(warning)}</div>`;
+  }
+  if (!items.length) {
+    return renderInlineEmpty("No ticket history yet.");
+  }
+  return `
+    <div class="ticket-timeline">
+      ${items.map(renderTicketTimelineItem).join("")}
+    </div>
+  `;
+}
+
+function renderTicketTimelineItem(item) {
+  const modifier = timelineTypeModifier(item?.type);
+  return `
+    <article class="timeline-item ${modifier}">
+      <span class="timeline-marker" aria-hidden="true"></span>
+      <div class="timeline-content">
+        <div class="timeline-meta">
+          <span>${formatDateTime(item?.created_at)}</span>
+          ${
+            item?.actor_label
+              ? `<span>${escapeHtml(item.actor_label)}</span>`
+              : ""
+          }
+        </div>
+        <h4>${escapeHtml(item?.title || "Ticket event")}</h4>
+        <p>${escapeHtml(item?.description || "Event recorded.")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function timelineTypeModifier(type) {
+  if (type === "ai_summary_generated" || type === "ai_reply_draft_generated") {
+    return "is-ai";
+  }
+  if (type === "sla_warning" || type === "sla_breached") {
+    return "is-sla";
+  }
+  if (type === "ticket_assigned" || type === "ticket_unassigned") {
+    return "is-assignment";
+  }
+  if (type === "message_received" || type === "operator_reply") {
+    return "is-message";
+  }
+  if (type === "internal_note_added") {
+    return "is-note";
+  }
+  if (type === "ticket_closed" || type === "ticket_reopened") {
+    return "is-close";
+  }
+  return "";
 }
 
 function renderTicketAiCard(ai) {
