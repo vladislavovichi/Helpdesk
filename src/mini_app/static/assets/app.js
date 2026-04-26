@@ -294,6 +294,21 @@ function bindGlobalEvents() {
       return;
     }
 
+    const ticketAiRefreshButton = event.target.closest("[data-ticket-ai-refresh]");
+    if (ticketAiRefreshButton && state.currentTicketId) {
+      let refreshed = false;
+      await runMutation(async () => {
+        await state.api.refreshTicketAi(state.currentTicketId);
+        invalidateTicketData(state.currentTicketId);
+        await renderRoute();
+        refreshed = true;
+      });
+      if (refreshed) {
+        showNotice("AI summary updated.", "success");
+      }
+      return;
+    }
+
     const ticketExportButton = event.target.closest("[data-ticket-export]");
     if (ticketExportButton && state.currentTicketId) {
       await runMutation(() =>

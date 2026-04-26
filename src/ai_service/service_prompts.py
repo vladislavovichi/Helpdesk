@@ -12,6 +12,8 @@ from application.contracts.ai import (
     SuggestMacrosCommand,
 )
 
+MAX_HISTORY_MESSAGES = 20
+
 SUMMARY_INSTRUCTIONS = (
     "Ты помогаешь оператору русскоязычного helpdesk. "
     "Верни только JSON без пояснений и markdown. "
@@ -45,13 +47,14 @@ def build_ticket_summary_prompt(command: GenerateTicketSummaryCommand) -> str:
                 '"actions_taken":"...","current_status":"..."}'
             ),
             "",
-            f"Заявка: {command.ticket_public_id}",
-            f"Тема: {command.subject}",
-            f"Статус: {command.status.value}",
-            f"Категория: {command.category_title or 'не указана'}",
-            f"Теги: {', '.join(command.tags) if command.tags else 'нет'}",
+            "Метаданные заявки:",
+            f"- public_id: {command.ticket_public_id}",
+            f"- subject: {command.subject}",
+            f"- status: {command.status.value}",
+            f"- category: {command.category_title or 'не указана'}",
+            f"- tags: {', '.join(command.tags) if command.tags else 'нет'}",
             "",
-            "Полная история сообщений:",
+            "История сообщений:",
             format_ticket_history(command.message_history),
             "",
             "Внутренние заметки:",
@@ -114,17 +117,20 @@ def format_ticket_history(messages: Sequence[AIContextMessage]) -> str:
     if not messages:
         return "История сообщений пуста."
 
-    lines: list[str] = []
-    for index, message in enumerate(messages, start=1):
-        sender = message.sender_label or message.sender_type.value
-        attachment_hint = ""
+    total_count = len(messages)
+    shown_messages = tuple(messages[-MAX_HISTORY_MESSAGES:])
+    lines: list[str] = [
+        f"Всего сообщений: {total_count}. Показано последних: {len(shown_messages)}."
+    ]
+    for index, message in enumerate(shown_messages, start=total_count - len(shown_messages) + 1):
+        role = format_message_role(message)
+        sender = f"; sender_label={message.sender_label}" if message.sender_label else ""
+        created = message.created_at.isoformat()
+        body = normalize_inline(message.text or "Сообщение без текста", 400)
+        lines.append(f"{index}. role={role}{sender}; created_at={created}")
+        lines.append(f"   text: {body}")
         if message.attachment is not None:
-            attachment_hint = (
-                f" [вложение: {message.attachment.kind.value}"
-                f"{f', {message.attachment.filename}' if message.attachment.filename else ''}]"
-            )
-        body = message.text or "Сообщение без текста"
-        lines.append(f"{index}. {sender}: {normalize_inline(body, 400)}{attachment_hint}")
+            lines.append(f"   attachment_hint: {format_attachment_hint(message.attachment)}")
     return "\n".join(lines)
 
 
@@ -132,9 +138,21 @@ def format_internal_notes(notes: Sequence[AIContextInternalNote]) -> str:
     if not notes:
         return "Заметок нет."
     return "\n".join(
-        f"{index}. {note.author_name or 'оператор'}: {normalize_inline(note.text, 280)}"
+        (
+            f"{index}. author={note.author_name or 'оператор'}; "
+            f"created_at={note.created_at.isoformat()}; "
+            f"text={normalize_inline(note.text, 280)}"
+        )
         for index, note in enumerate(notes, start=1)
     )
+
+
+def format_message_role(message: AIContextMessage) -> str:
+    if message.sender_type.value == "client":
+        return "customer"
+    if message.sender_type.value == "operator":
+        return "operator"
+    return "system"
 
 
 def format_attachment_hint(attachment: AIContextAttachment | None) -> str:

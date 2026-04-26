@@ -124,11 +124,7 @@ def normalize_ai_reason(value: str | None) -> str | None:
 
 
 def has_prediction_signal(command: AIPredictTicketCategoryCommand) -> bool:
-    return bool(
-        (command.text and command.text.strip())
-        or command.attachment is not None
-        or any(category.title.strip() for category in command.categories)
-    )
+    return bool((command.text and command.text.strip()) or command.attachment is not None)
 
 
 def unavailable_summary_result(model_id: str | None) -> GeneratedTicketSummaryResult:

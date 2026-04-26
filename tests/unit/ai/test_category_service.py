@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from ai_service.service import AIApplicationService
+from ai_service.service_results import has_prediction_signal
 from application.ai.contracts import AIProvider
 from application.ai.summaries import AIPredictionConfidence
-from application.contracts.ai import AICategoryOption, AIPredictTicketCategoryCommand
+from application.contracts.ai import (
+    AICategoryOption,
+    AIContextAttachment,
+    AIPredictTicketCategoryCommand,
+)
+from domain.enums.tickets import TicketAttachmentKind
 from infrastructure.config.settings import AIConfig
 
 
@@ -59,3 +65,40 @@ async def test_predict_ticket_category_requires_medium_or_high_confidence() -> N
 
     assert result.available is False
     assert result.confidence is AIPredictionConfidence.NONE
+
+
+def test_has_prediction_signal_ignores_categories_without_text_or_attachment() -> None:
+    assert (
+        has_prediction_signal(
+            AIPredictTicketCategoryCommand(
+                text="   ",
+                categories=(AICategoryOption(id=2, code="billing", title="Оплата"),),
+            )
+        )
+        is False
+    )
+
+
+def test_has_prediction_signal_accepts_text() -> None:
+    assert (
+        has_prediction_signal(
+            AIPredictTicketCategoryCommand(
+                text="Не вижу оплату",
+                categories=(AICategoryOption(id=2, code="billing", title="Оплата"),),
+            )
+        )
+        is True
+    )
+
+
+def test_has_prediction_signal_accepts_attachment() -> None:
+    assert (
+        has_prediction_signal(
+            AIPredictTicketCategoryCommand(
+                text=None,
+                attachment=AIContextAttachment(kind=TicketAttachmentKind.DOCUMENT),
+                categories=(AICategoryOption(id=2, code="billing", title="Оплата"),),
+            )
+        )
+        is True
+    )

@@ -157,6 +157,26 @@ class MiniAppGateway:
             "operators": [serialize_operator(item) for item in operators],
         }
 
+    async def refresh_ticket_ai_summary(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: UUID,
+    ) -> dict[str, Any]:
+        actor = RequestActor(telegram_user_id=user.telegram_user_id)
+        async with self.backend_client_factory() as client:
+            ai_snapshot = await client.get_ticket_ai_assist_snapshot(
+                ticket_public_id=ticket_public_id,
+                refresh_summary=True,
+                actor=actor,
+            )
+        if ai_snapshot is None:
+            raise LookupError("Заявка не найдена.")
+        serialized = serialize_ticket_ai_snapshot(ai_snapshot)
+        if serialized is None:
+            raise LookupError("Заявка не найдена.")
+        return serialized
+
     async def take_ticket(
         self,
         *,

@@ -489,7 +489,7 @@ export function renderTicketWorkspace(data) {
             <span class="soft-chip">${ticket.category_title ? escapeHtml(ticket.category_title) : "Без темы"}</span>
           </div>
         </div>
-        <div class="detail-actions">
+        <div class="detail-actions ticket-action-bar">
           <div class="inline-actions wrap-actions">
             <button class="action action-subtle" data-ticket-action="take">Взять</button>
             <button class="action action-subtle" data-ticket-action="escalate">Эскалировать</button>
@@ -503,17 +503,12 @@ export function renderTicketWorkspace(data) {
         </div>
       </div>
 
-      <div class="workspace-grid">
+      <div class="ticket-workspace-grid">
         <article class="subsurface">
           <div class="subsurface-head">
-            <h3>Сводка</h3>
+            <h3>Карточка</h3>
             <span class="soft-chip">Карточка</span>
           </div>
-          ${
-            ai?.short_summary
-              ? `<p class="lead">${escapeHtml(ai.short_summary)}</p>`
-              : `<p class="subtitle">AI-сводка пока недоступна. Основной контекст остаётся в истории сообщений и заметках.</p>`
-          }
           <div class="facts">
             ${renderFact("Статус", statusLabel(ticket.status))}
             ${renderFact("Приоритет", priorityLabel(ticket.priority))}
@@ -533,6 +528,8 @@ export function renderTicketWorkspace(data) {
               : ""
           }
         </article>
+
+        ${renderTicketAiCard(ai)}
 
         <article class="subsurface">
           <div class="subsurface-head">
@@ -845,21 +842,148 @@ function renderAttachment(attachment) {
   `;
 }
 
+function renderTicketAiCard(ai) {
+  const status = normalizeSummaryStatus(ai?.summary_status);
+  const statusText = summaryStatusLabel(status);
+  const refreshLabel = status === "missing" ? "Generate summary" : "Refresh summary";
+
+  if (!ai) {
+    return `
+      <article class="subsurface ai-card is-missing">
+        <div class="subsurface-head">
+          <div>
+            <h3>AI-сводка</h3>
+            <p class="subtitle">AI-контекст не вернулся от backend.</p>
+          </div>
+          <span class="soft-chip">Missing</span>
+        </div>
+        <div class="ai-section">
+          <p class="empty-inline">Можно продолжать работу по истории сообщений и заметкам.</p>
+        </div>
+        <button class="action action-primary" data-ticket-ai-refresh type="button">Generate summary</button>
+      </article>
+    `;
+  }
+
+  const unavailable = ai.available === false;
+  return `
+    <article class="subsurface ai-card is-${status}">
+      <div class="subsurface-head">
+        <div>
+          <h3>AI-сводка</h3>
+          <p class="subtitle">${unavailable ? "AI-помощник сейчас работает в деградированном режиме." : "Краткий контекст для ответа оператору."}</p>
+        </div>
+        <span class="soft-chip">${escapeHtml(statusText)}</span>
+      </div>
+      ${
+        status === "stale"
+          ? `<div class="ai-warning">После генерации появилась новая активность. Обновите сводку перед ответом.</div>`
+          : ""
+      }
+      ${
+        unavailable && ai.unavailable_reason
+          ? `<div class="ai-warning">${escapeHtml(ai.unavailable_reason)}</div>`
+          : ""
+      }
+      <div class="ai-section">
+        ${renderAiField("Сводка", ai.short_summary)}
+        ${renderAiField("Цель клиента", ai.user_goal)}
+        ${renderAiField("Что сделано", ai.actions_taken)}
+        ${renderAiField("Текущий статус", ai.current_status)}
+      </div>
+      <div class="facts">
+        ${renderFact("Свежесть", statusText)}
+        ${renderFact("Сгенерирована", ai.summary_generated_at ? formatDateTime(ai.summary_generated_at) : "—")}
+        ${renderFact("Модель", ai.model_id || "—")}
+        ${renderFact("Комментарий", ai.status_note || "—")}
+      </div>
+      <button class="action action-primary" data-ticket-ai-refresh type="button">${refreshLabel}</button>
+    </article>
+  `;
+}
+
+function renderAiField(label, value) {
+  return `
+    <div class="ai-field">
+      <span>${escapeHtml(label)}</span>
+      <p>${value ? escapeHtml(value) : "—"}</p>
+    </div>
+  `;
+}
+
 function renderMacroList(macros, suggestions) {
-  const suggestedIds = new Set(suggestions.map((item) => item.macro_id));
-  if (!macros.length) {
+  const suggestedIds = new Set(suggestions.map((item) => item.macro_id).filter(Boolean));
+  const remainingMacros = macros.filter((macro) => !suggestedIds.has(macro.id));
+  if (!macros.length && !suggestions.length) {
     return renderInlineEmpty("Макросы ещё не созданы.");
   }
 
-  return macros
-    .slice(0, 8)
-    .map(
-      (macro) => `
-        <button class="macro-button ${suggestedIds.has(macro.id) ? "is-suggested" : ""}" data-apply-macro="${macro.id}">
-          <strong>${escapeHtml(macro.title)}</strong>
-          <span>${escapeHtml(macro.body)}</span>
-        </button>
-      `,
-    )
-    .join("");
+  return `
+    <section class="macro-section">
+      <div class="macro-section-head">
+        <h5>AI recommends</h5>
+        <span class="soft-chip">${escapeHtml(String(suggestions.length))}</span>
+      </div>
+      ${
+        suggestions.length
+          ? suggestions.map(renderMacroSuggestion).join("")
+          : renderInlineEmpty("Точных AI-рекомендаций сейчас нет.")
+      }
+    </section>
+    <section class="macro-section">
+      <div class="macro-section-head">
+        <h5>All macros</h5>
+        <span class="soft-chip">${escapeHtml(String(remainingMacros.length))}</span>
+      </div>
+      ${
+        remainingMacros.length
+          ? remainingMacros
+              .slice(0, 8)
+              .map(
+                (macro) => `
+                  <button class="macro-button" data-apply-macro="${macro.id}">
+                    <strong>${escapeHtml(macro.title)}</strong>
+                    <span>${escapeHtml(macro.body)}</span>
+                  </button>
+                `,
+              )
+              .join("")
+          : renderInlineEmpty("Все подходящие макросы уже показаны в рекомендациях.")
+      }
+    </section>
+  `;
+}
+
+function renderMacroSuggestion(suggestion) {
+  return `
+    <button class="macro-button macro-suggestion is-suggested" data-apply-macro="${suggestion.macro_id}">
+      <strong>${escapeHtml(suggestion.title || `Макрос ${suggestion.macro_id}`)}</strong>
+      <span>${escapeHtml(suggestion.body || "Быстрый ответ из библиотеки макросов.")}</span>
+      <small>
+        ${suggestion.reason ? escapeHtml(suggestion.reason) : "AI-рекомендация"}
+        ${suggestion.confidence ? ` · ${escapeHtml(confidenceLabel(suggestion.confidence))}` : ""}
+      </small>
+    </button>
+  `;
+}
+
+function normalizeSummaryStatus(status) {
+  return ["fresh", "stale", "missing"].includes(status) ? status : "missing";
+}
+
+function summaryStatusLabel(status) {
+  return {
+    fresh: "Fresh",
+    stale: "Stale",
+    missing: "Missing",
+  }[status];
+}
+
+function confidenceLabel(confidence) {
+  return {
+    high: "high confidence",
+    medium: "medium confidence",
+    low: "low confidence",
+    none: "no confidence",
+  }[confidence] ?? confidence;
 }

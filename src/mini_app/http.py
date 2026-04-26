@@ -33,6 +33,7 @@ _TICKET_ROUTE = re.compile(r"^/api/tickets/([0-9a-fA-F-]{36})$")
 _TICKET_ACTION_ROUTE = re.compile(
     r"^/api/tickets/([0-9a-fA-F-]{36})/(take|close|escalate|assign|notes)$"
 )
+_TICKET_AI_SUMMARY_ROUTE = re.compile(r"^/api/tickets/([0-9a-fA-F-]{36})/ai-summary$")
 _TICKET_MACRO_ROUTE = re.compile(r"^/api/tickets/([0-9a-fA-F-]{36})/macros/(\d+)$")
 _TICKET_EXPORT_ROUTE = re.compile(r"^/api/tickets/([0-9a-fA-F-]{36})/export$")
 
@@ -311,6 +312,16 @@ def build_handler_class(
                     ticket_public_id=UUID(action_match.group(1)),
                     action=action_match.group(2),
                 )
+
+            ai_summary_match = _TICKET_AI_SUMMARY_ROUTE.fullmatch(path)
+            if method == "POST" and ai_summary_match is not None:
+                self._write_async_json(
+                    self.gateway.refresh_ticket_ai_summary(
+                        user=user,
+                        ticket_public_id=UUID(ai_summary_match.group(1)),
+                    )
+                )
+                return True
 
             macro_match = _TICKET_MACRO_ROUTE.fullmatch(path)
             if method == "POST" and macro_match is not None:

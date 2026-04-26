@@ -121,6 +121,9 @@ export function createMiniAppApi(launchContext) {
     getTicket(publicId) {
       return request(`/api/tickets/${publicId}`);
     },
+    refreshTicketAi(publicId) {
+      return request(`/api/tickets/${publicId}/ai-summary`, { method: "POST" });
+    },
     takeTicket(publicId) {
       return request(`/api/tickets/${publicId}/take`, { method: "POST" });
     },

@@ -1,4 +1,5 @@
 const STATUS_LABELS = {
+  new: "Новая",
   queued: "В очереди",
   assigned: "В работе",
   escalated: "Эскалация",
