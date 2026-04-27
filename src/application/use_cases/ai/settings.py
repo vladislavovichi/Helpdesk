@@ -133,8 +133,7 @@ def normalize_reply_draft_tone(value: str) -> str:
     normalized = (normalize_optional_string(value) or DEFAULT_REPLY_DRAFT_TONE).lower()
     if normalized not in ALLOWED_REPLY_DRAFT_TONES:
         raise ValueError(
-            "reply_draft_tone must be one of: "
-            f"{', '.join(sorted(ALLOWED_REPLY_DRAFT_TONES))}"
+            f"reply_draft_tone must be one of: {', '.join(sorted(ALLOWED_REPLY_DRAFT_TONES))}"
         )
     return normalized
 

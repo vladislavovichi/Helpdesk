@@ -68,9 +68,7 @@ class HelpdeskService(
     export_renderers: HelpdeskExportRenderers
     super_admin_telegram_user_ids: frozenset[int]
     include_internal_notes_in_ticket_reports: bool = True
-    ai_settings_provider: AISettingsProvider = field(
-        default_factory=InMemoryAISettingsRepository
-    )
+    ai_settings_provider: AISettingsProvider = field(default_factory=InMemoryAISettingsRepository)
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
     correlation_id_provider: CorrelationIdProvider | None = None
     _components: HelpdeskComponents = field(init=False, repr=False)

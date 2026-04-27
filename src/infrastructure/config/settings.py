@@ -420,9 +420,7 @@ class Settings(BaseSettings):
     backend_auth: BackendAuthConfig = Field(default_factory=BackendAuthConfig)
     ai_service_auth: AIServiceAuthConfig = Field(default_factory=AIServiceAuthConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
-    ai_runtime_settings: RuntimeAISettingsConfig = Field(
-        default_factory=RuntimeAISettingsConfig
-    )
+    ai_runtime_settings: RuntimeAISettingsConfig = Field(default_factory=RuntimeAISettingsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     resilience: ResilienceConfig = Field(default_factory=ResilienceConfig)
     attachments: AttachmentLimitsConfig = Field(default_factory=AttachmentLimitsConfig)

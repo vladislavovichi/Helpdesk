@@ -284,25 +284,31 @@ class MiniAppGateway:
         actor = RequestActor(telegram_user_id=user.telegram_user_id)
         settings = self.ai_settings_repository.get()
         if not settings.ai_reply_drafts_enabled:
-            return serialize_ticket_reply_draft(
-                TicketReplyDraft(
-                    available=False,
-                    unavailable_reason="AI reply drafts are disabled by admin settings.",
-                    model_id=settings.default_model_id,
+            return (
+                serialize_ticket_reply_draft(
+                    TicketReplyDraft(
+                        available=False,
+                        unavailable_reason="AI reply drafts are disabled by admin settings.",
+                        model_id=settings.default_model_id,
+                    )
                 )
-            ) or {}
+                or {}
+            )
         if not await self.ai_rate_limiter.allow(
             operation="reply_draft",
             operator_telegram_user_id=user.telegram_user_id,
             ticket_public_id=ticket_public_id,
         ):
-            return serialize_ticket_reply_draft(
-                TicketReplyDraft(
-                    available=False,
-                    unavailable_reason="rate_limited",
-                    model_id=settings.default_model_id,
+            return (
+                serialize_ticket_reply_draft(
+                    TicketReplyDraft(
+                        available=False,
+                        unavailable_reason="rate_limited",
+                        model_id=settings.default_model_id,
+                    )
                 )
-            ) or {}
+                or {}
+            )
         async with self.backend_client_factory() as client:
             draft = await client.generate_ticket_reply_draft(
                 ticket_public_id=ticket_public_id,
@@ -665,9 +671,7 @@ class MiniAppGateway:
                 route="queue",
                 severity="critical",
                 empty_label="Живой SLA пока недоступен.",
-                unavailable_reason=(
-                    "Живой SLA пока не передаётся в рабочее место."
-                ),
+                unavailable_reason=("Живой SLA пока не передаётся в рабочее место."),
             ),
             "sla_at_risk_tickets": serialize_dashboard_bucket(
                 key="sla_at_risk_tickets",
@@ -676,9 +680,7 @@ class MiniAppGateway:
                 route="queue",
                 severity="warning",
                 empty_label="Живой SLA пока недоступен.",
-                unavailable_reason=(
-                    "Живой SLA пока не передаётся в рабочее место."
-                ),
+                unavailable_reason=("Живой SLA пока не передаётся в рабочее место."),
             ),
             "negative_sentiment_tickets": serialize_dashboard_bucket(
                 key="negative_sentiment_tickets",

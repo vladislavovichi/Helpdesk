@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from application.services.stats import (
     AnalyticsCategorySnapshot,
     AnalyticsOperatorSnapshot,
@@ -302,4 +304,4 @@ def _build_analytics_snapshot(**overrides: object) -> HelpdeskAnalyticsSnapshot:
         ),
     }
     values.update(overrides)
-    return HelpdeskAnalyticsSnapshot(**values)
+    return HelpdeskAnalyticsSnapshot(**cast(Any, values))

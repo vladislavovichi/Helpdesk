@@ -164,9 +164,7 @@ def build_handler_class(
                     HTTPStatus.SERVICE_UNAVAILABLE,
                     {
                         "error": "Mini App временно недоступен. Попробуйте ещё раз чуть позже.",
-                        "code": (
-                            "ai_unavailable" if _is_ai_route(path) else "backend_unavailable"
-                        ),
+                        "code": ("ai_unavailable" if _is_ai_route(path) else "backend_unavailable"),
                     },
                 )
             except Exception:  # noqa: BLE001

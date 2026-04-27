@@ -153,7 +153,9 @@ def _dispatch_invite(handler: Any, *, role: UserRole) -> None:
     path = "/api/admin/invites"
     handler.path = path
 
-    def load_session(self: Any) -> tuple[ResolvedMiniAppLaunch, TelegramMiniAppUser, dict[str, Any]]:
+    def load_session(
+        self: Any,
+    ) -> tuple[ResolvedMiniAppLaunch, TelegramMiniAppUser, dict[str, Any]]:
         del self
         return (
             ResolvedMiniAppLaunch(

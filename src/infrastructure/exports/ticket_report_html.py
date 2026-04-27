@@ -579,12 +579,7 @@ def _summary_card(label: str, value: str, note: str) -> str:
 
 
 def _context_card(title: str, text: str) -> str:
-    return (
-        '<article class="context-card">'
-        f"<h3>{escape(title)}</h3>"
-        f"<p>{escape(text)}</p>"
-        "</article>"
-    )
+    return f'<article class="context-card"><h3>{escape(title)}</h3><p>{escape(text)}</p></article>'
 
 
 def _meta_item(label: str, value: str) -> str:
@@ -1030,9 +1025,11 @@ def _render_message_flags(message: TicketReportMessage) -> str:
         )
     if not flags:
         return ""
-    return '<div class="message-flags">' + "".join(
-        f'<span class="flag">{escape(flag)}</span>' for flag in flags
-    ) + "</div>"
+    return (
+        '<div class="message-flags">'
+        + "".join(f'<span class="flag">{escape(flag)}</span>' for flag in flags)
+        + "</div>"
+    )
 
 
 def _sentiment_label(value: str) -> str:

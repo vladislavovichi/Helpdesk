@@ -35,9 +35,7 @@ async def test_operator_dashboard_bucket_counts_use_available_ticket_data() -> N
     escalated_id = uuid4()
     assigned_id = uuid4()
     client = StubDashboardBackendClient(
-        queued=(
-            _queued_ticket(queued_id, subject="Cannot sign in", category_title=None),
-        ),
+        queued=(_queued_ticket(queued_id, subject="Cannot sign in", category_title=None),),
         mine=(
             _operator_ticket(
                 escalated_id,

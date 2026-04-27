@@ -57,23 +57,29 @@ def render_analytics_snapshot_html(
       {_stat_card("Закрыто всего", snapshot.closed_tickets_count, "Исторически закрытые")}
       {_stat_card("Создано", snapshot.period_created_tickets_count, "За выбранный период")}
       {_stat_card("Закрыто", snapshot.period_closed_tickets_count, "За выбранный период")}
-      {_stat_card(
-          "Первый ответ",
-          _format_duration(snapshot.average_first_response_time_seconds),
-          "Среднее время",
-      )}
-      {_stat_card(
-          "Решение",
-          _format_duration(snapshot.average_resolution_time_seconds),
-          "Среднее время",
-      )}
+      {
+        _stat_card(
+            "Первый ответ",
+            _format_duration(snapshot.average_first_response_time_seconds),
+            "Среднее время",
+        )
+    }
+      {
+        _stat_card(
+            "Решение",
+            _format_duration(snapshot.average_resolution_time_seconds),
+            "Среднее время",
+        )
+    }
       {_stat_card("Satisfaction", _format_rating(snapshot.satisfaction_average), "Средняя оценка")}
       {_stat_card("Feedback", snapshot.feedback_count, "Количество оценок")}
-      {_stat_card(
-          "Coverage",
-          _format_percent(snapshot.feedback_coverage_percent),
-          "Покрытие отзывами",
-      )}
+      {
+        _stat_card(
+            "Coverage",
+            _format_percent(snapshot.feedback_coverage_percent),
+            "Покрытие отзывами",
+        )
+    }
     </section>
     <section class="report-section">
       <div class="section-head">
@@ -462,7 +468,7 @@ def _render_status_mix_chart(snapshot: HelpdeskAnalyticsSnapshot) -> str:
             '<div class="legend-row">'
             f'<div class="legend-label">{escape(label)}</div>'
             f'<div class="legend-value">{value} · '
-            f'{_format_percent(round((value / chart_total) * 100))}</div>'
+            f"{_format_percent(round((value / chart_total) * 100))}</div>"
             "</div>"
         )
         for label, value, _ in items
