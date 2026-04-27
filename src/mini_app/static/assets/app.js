@@ -25,6 +25,8 @@ const navStrip = document.getElementById("nav-strip");
 const identityName = document.getElementById("identity-name");
 const identityRole = document.getElementById("identity-role");
 const appNotice = document.getElementById("app-notice");
+const DEFAULT_ROUTE = "dashboard";
+const NAV_ROUTES = new Set(["dashboard", "queue", "mine", "archive", "analytics", "admin"]);
 
 const state = {
   api: null,
@@ -98,15 +100,17 @@ function updateIdentity() {
 }
 
 function syncRoute() {
-  const hash = window.location.hash.replace(/^#/, "");
-  if (hash.startsWith("ticket/")) {
+  const hash = normalizeHashRoute(window.location.hash);
+  if (hash.startsWith("ticket/") && hash.split("/")[1]) {
     state.currentRoute = "ticket";
     state.currentTicketId = hash.split("/")[1] ?? null;
     navStrip.innerHTML = buildNavigation(state.session.access.role, "");
     return;
   }
 
-  state.currentRoute = hash || "dashboard";
+  const route = NAV_ROUTES.has(hash) ? hash : DEFAULT_ROUTE;
+  state.currentRoute =
+    route === "admin" && state.session.access.role !== "super_admin" ? DEFAULT_ROUTE : route;
   state.currentTicketId = null;
   navStrip.innerHTML = buildNavigation(state.session.access.role, state.currentRoute);
 }
@@ -167,7 +171,10 @@ async function renderRoute() {
       return;
     }
 
-    content.innerHTML = renderError("Маршрут не распознан.");
+    state.currentRoute = DEFAULT_ROUTE;
+    state.currentTicketId = null;
+    navStrip.innerHTML = buildNavigation(state.session.access.role, state.currentRoute);
+    content.innerHTML = renderDashboard(await loadDashboard());
   } catch (error) {
     renderRouteFailure(error);
   }
@@ -327,7 +334,7 @@ function bindGlobalEvents() {
         refreshed = true;
       });
       if (refreshed) {
-        showNotice("AI summary updated.", "success");
+        showNotice("AI-сводка обновлена.", "success");
       }
       return;
     }
@@ -348,7 +355,7 @@ function bindGlobalEvents() {
       }
       await renderRoute();
       if (generated) {
-        showNotice("AI reply draft generated.", "success");
+        showNotice("AI-черновик подготовлен.", "success");
       }
       return;
     }
@@ -459,7 +466,7 @@ function bindGlobalEvents() {
       });
       await renderRoute();
       if (saved) {
-        showNotice("AI settings saved.", "success");
+        showNotice("Настройки AI сохранены.", "success");
       }
     }
   });
@@ -596,6 +603,14 @@ function resolveErrorMessage(error) {
     return error.message;
   }
   return "Сервис временно недоступен.";
+}
+
+function normalizeHashRoute(hash) {
+  return String(hash || "")
+    .replace(/^#/, "")
+    .split("?")[0]
+    .replace(/^\/+/, "")
+    .trim();
 }
 
 function normalizeNullableInput(value) {

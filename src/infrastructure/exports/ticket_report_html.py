@@ -472,7 +472,7 @@ def _render_hero(
         '<section class="cover">'
         '<div class="cover-grid">'
         "<div>"
-        '<p class="eyebrow">Ticket case file</p>'
+        '<p class="eyebrow">Карточка заявки</p>'
         f"<h1>{escape(report.public_number)}</h1>"
         f'<p class="subject">{escape(report.subject)}</p>'
         '<div class="chip-row">'

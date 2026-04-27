@@ -322,7 +322,7 @@ export function buildLaunchFailureCopy(context, requestError = null) {
   if (requestError?.code === "expired_init_data") {
     return {
       title: "Откройте рабочее место заново",
-      message: "Сеанс Mini App устарел. Вернитесь в бот и снова откройте его через кнопку меню.",
+      message: "Сеанс рабочего места устарел. Вернитесь в бот и снова откройте его через кнопку меню.",
       detail: "Telegram передаёт временные данные запуска. После паузы их нужно обновить.",
     };
   }
@@ -338,14 +338,14 @@ export function buildLaunchFailureCopy(context, requestError = null) {
   if (context.isTelegramWebApp) {
     return {
       title: "Telegram не передал запуск",
-      message: "Рабочее место открылось внутри Telegram, но безопасные launch-данные ещё не пришли.",
+      message: "Рабочее место открылось внутри Telegram, но безопасные данные запуска ещё не пришли.",
       detail: "Закройте окно и снова откройте «Рабочее место» кнопкой меню в чате с ботом.",
     };
   }
 
   return {
     title: "Откройте рабочее место из Telegram",
-    message: "Для безопасного входа Mini App нужно запускать из кнопки меню в чате с ботом.",
-    detail: "Если кнопка меню не видна, проверьте настройку публичного HTTPS URL Mini App.",
+    message: "Для безопасного входа рабочее место нужно запускать из кнопки меню в чате с ботом.",
+    detail: "Если кнопка меню не видна, проверьте настройку публичного HTTPS URL рабочего места.",
   };
 }

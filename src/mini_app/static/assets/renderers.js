@@ -28,6 +28,12 @@ const ROUTE_LABELS = {
   admin: "Управление",
 };
 
+const TONE_LABELS = {
+  polite: "вежливый",
+  friendly: "дружелюбный",
+  formal: "формальный",
+};
+
 export function buildNavigation(role, currentRoute) {
   const routes = ["dashboard", "queue", "mine", "archive", "analytics"];
   if (role === "super_admin") {
@@ -50,7 +56,7 @@ export function renderAccessDenied(message) {
   return `
     <section class="state-panel premium-state">
       <div class="state-orb" aria-hidden="true"></div>
-      <p class="eyebrow">Mini App</p>
+      <p class="eyebrow">Рабочее место</p>
       <h2>Доступ закрыт</h2>
       <p class="subtitle">${escapeHtml(message)}</p>
     </section>
@@ -62,7 +68,7 @@ export function renderInitDataMissing(copy) {
     <section class="state-panel premium-state">
       <div class="state-orb" aria-hidden="true"></div>
       <div class="state-badge-row">
-        <p class="eyebrow">Mini App</p>
+        <p class="eyebrow">Рабочее место</p>
         <span class="soft-chip">Безопасный вход</span>
       </div>
       <h2>${escapeHtml(copy?.title ?? "Откройте рабочее место из Telegram")}</h2>
@@ -73,7 +79,7 @@ export function renderInitDataMissing(copy) {
           : ""
       }
       <div class="state-hints">
-        <p>Откройте Mini App через кнопку меню «Рабочее место» в чате с ботом.</p>
+        <p>Откройте приложение через кнопку меню «Рабочее место» в чате с ботом.</p>
         <p>Если проблема повторяется, закройте окно и запустите рабочее место заново.</p>
       </div>
     </section>
@@ -471,7 +477,7 @@ export function renderAdmin(data, invite, aiSettingsDraft = null) {
                         <div>
                           <strong>${escapeHtml(item.display_name)}</strong>
                           <p class="subtitle">
-                            ${item.username ? `@${escapeHtml(item.username)}` : "Без username"} ·
+                            ${item.username ? `@${escapeHtml(item.username)}` : "Без юзернейма"} ·
                             ${escapeHtml(String(item.telegram_user_id))}
                           </p>
                         </div>
@@ -489,8 +495,9 @@ export function renderAdmin(data, invite, aiSettingsDraft = null) {
       <article class="surface surface-roomy surface-quiet">
         <div class="surface-head">
           <div>
-            <p class="eyebrow">AI settings</p>
-            <h2>Safe AI controls</h2>
+            <p class="eyebrow">AI</p>
+            <h2>Безопасные настройки</h2>
+            <p class="subtitle">Сводки, черновики и рекомендации работают только как помощь оператору.</p>
           </div>
         </div>
         ${renderAISettingsForm(aiSettings)}
@@ -509,44 +516,44 @@ function renderAISettingsForm(settings) {
       <div class="settings-toggle-grid">
         ${renderSettingsToggle(
           "ai_summaries_enabled",
-          "AI summaries",
-          "Generate operator-facing ticket summaries.",
+          "AI-сводки",
+          "Собирают короткий контекст заявки для оператора.",
           settings.ai_summaries_enabled !== false,
         )}
         ${renderSettingsToggle(
           "ai_macro_suggestions_enabled",
-          "Macro suggestions",
-          "Suggest existing macros from ticket context.",
+          "Подбор макросов",
+          "Предлагают готовые ответы по контексту диалога.",
           settings.ai_macro_suggestions_enabled !== false,
         )}
         ${renderSettingsToggle(
           "ai_reply_drafts_enabled",
-          "Reply drafts",
-          "Prepare drafts that operators must review.",
+          "Черновики ответов",
+          "Готовят текст, который оператор проверяет перед отправкой.",
           settings.ai_reply_drafts_enabled !== false,
         )}
         ${renderSettingsToggle(
           "ai_category_prediction_enabled",
-          "Category prediction",
-          "Predict ticket category from safe intake context.",
+          "Определение темы",
+          "Помогает выбрать категорию по безопасному контексту заявки.",
           settings.ai_category_prediction_enabled !== false,
         )}
       </div>
 
       <label class="settings-field">
-        <span>Default model id</span>
+        <span>Модель по умолчанию</span>
         <input
           name="default_model_id"
           type="text"
           value="${escapeAttribute(settings.default_model_id || "")}"
-          placeholder="Use env/provider default"
+          placeholder="По умолчанию из окружения"
           autocomplete="off"
         />
       </label>
 
       <div class="settings-row">
         <label class="settings-field">
-          <span>Max history messages</span>
+          <span>Глубина истории</span>
           <input
             name="max_history_messages"
             type="number"
@@ -557,13 +564,13 @@ function renderAISettingsForm(settings) {
           />
         </label>
         <label class="settings-field">
-          <span>Reply tone</span>
+          <span>Тон ответа</span>
           <select name="reply_draft_tone">
             ${["polite", "friendly", "formal"]
               .map(
                 (value) => `
                   <option value="${value}" ${tone === value ? "selected" : ""}>
-                    ${value}
+                    ${TONE_LABELS[value]}
                   </option>
                 `,
               )
@@ -573,13 +580,13 @@ function renderAISettingsForm(settings) {
       </div>
 
       <div class="settings-review-note">
-        <strong>Operator review required</strong>
-        <span>AI output remains draft-only. Provider secrets and API keys are never shown here.</span>
+        <strong>Проверка оператором обязательна</strong>
+        <span>AI-ответы остаются черновиками. Секреты провайдера и API-ключи здесь не показываются.</span>
       </div>
 
       <div class="inline-actions">
-        <button class="action action-primary" type="submit">Save settings</button>
-        <button class="action action-subtle" data-ai-settings-cancel type="button">Cancel</button>
+        <button class="action action-primary" type="submit">Сохранить</button>
+        <button class="action action-subtle" data-ai-settings-cancel type="button">Отменить</button>
       </div>
     </form>
   `;
@@ -819,7 +826,7 @@ function renderAttentionBucket(bucket) {
       <div class="attention-bucket-head">
         <div>
           <span class="attention-count">${escapeHtml(String(bucket.count ?? 0))}</span>
-          <h4>${escapeHtml(bucket.label || bucket.key || "Bucket")}</h4>
+          <h4>${escapeHtml(bucket.label || bucket.key || "Блок")}</h4>
         </div>
         <span class="row-hint">Открыть</span>
       </div>
@@ -847,7 +854,7 @@ function renderTicketPreviewList(items) {
 
 function renderTicketPreviewCard(item) {
   const sentiment = item.sentiment?.value ? sentimentLabel(item.sentiment.value) : "";
-  const slaState = item.sla_state?.status ? `SLA: ${item.sla_state.status}` : "";
+  const slaState = item.sla_state?.status ? `SLA: ${slaStatusLabel(item.sla_state.status)}` : "";
   const assignedOperator = item.assigned_operator?.name || "";
   return `
     <article class="ticket-preview-card priority-${escapeAttribute(item.priority || "normal")}" data-open-ticket="${escapeAttribute(item.public_id)}">
@@ -1100,7 +1107,7 @@ function renderTicketTimeline(timeline) {
     return `<div class="ai-warning">${escapeHtml(warning)}</div>`;
   }
   if (!items.length) {
-    return renderInlineEmpty("No ticket history yet.");
+    return renderInlineEmpty("История заявки пока пуста.");
   }
   return `
     <div class="ticket-timeline">
@@ -1123,8 +1130,8 @@ function renderTicketTimelineItem(item) {
               : ""
           }
         </div>
-        <h4>${escapeHtml(item?.title || "Ticket event")}</h4>
-        <p>${escapeHtml(item?.description || "Event recorded.")}</p>
+        <h4>${escapeHtml(item?.title || "Событие заявки")}</h4>
+        <p>${escapeHtml(item?.description || "Событие зафиксировано.")}</p>
       </div>
     </article>
   `;
@@ -1155,7 +1162,7 @@ function timelineTypeModifier(type) {
 function renderTicketAiCard(ai) {
   const status = normalizeSummaryStatus(ai?.summary_status);
   const statusText = summaryStatusLabel(status);
-  const refreshLabel = status === "missing" ? "Generate summary" : "Refresh summary";
+  const refreshLabel = status === "missing" ? "Собрать сводку" : "Обновить сводку";
 
   if (!ai) {
     return `
@@ -1163,14 +1170,14 @@ function renderTicketAiCard(ai) {
         <div class="subsurface-head">
           <div>
             <h3>AI-сводка</h3>
-            <p class="subtitle">AI-контекст не вернулся от backend.</p>
+            <p class="subtitle">AI-контекст не вернулся от сервера.</p>
           </div>
-          <span class="soft-chip">Missing</span>
+          <span class="soft-chip">Нет сводки</span>
         </div>
         <div class="ai-section">
           <p class="empty-inline">Можно продолжать работу по истории сообщений и заметкам.</p>
         </div>
-        <button class="action action-primary" data-ticket-ai-refresh type="button">Generate summary</button>
+        <button class="action action-primary" data-ticket-ai-refresh type="button">Собрать сводку</button>
       </article>
     `;
   }
@@ -1219,7 +1226,7 @@ function renderAiReplyCard(replyDraftState) {
     <article class="ticket-section premium-panel ai-reply-card">
       <div class="subsurface-head">
         <div>
-          <h3>AI reply draft</h3>
+          <h3>AI-черновик ответа</h3>
           <p class="subtitle">Черновик только для проверки оператором. Автоотправки нет.</p>
         </div>
         <button
@@ -1228,7 +1235,7 @@ function renderAiReplyCard(replyDraftState) {
           type="button"
           ${isLoading ? "disabled" : ""}
         >
-          ${isLoading ? "Generating..." : "Generate AI reply"}
+          ${isLoading ? "Готовим..." : "Сгенерировать ответ"}
         </button>
       </div>
       ${renderAiReplyDraft(payload, isLoading)}
@@ -1255,18 +1262,18 @@ function renderAiReplyDraft(payload, isLoading) {
       <p>${escapeHtml(payload.reply_text || "Черновик пуст.")}</p>
       ${
         payload.reply_text
-          ? `<button class="action action-subtle copy-draft-button" data-copy-draft type="button">Copy draft</button>`
+          ? `<button class="action action-subtle copy-draft-button" data-copy-draft type="button">Скопировать черновик</button>`
           : ""
       }
     </div>
     <div class="ai-reply-meta">
-      ${payload.tone ? `<span class="soft-chip">Tone: ${escapeHtml(payload.tone)}</span>` : ""}
+      ${payload.tone ? `<span class="soft-chip">Тон: ${escapeHtml(TONE_LABELS[payload.tone] ?? payload.tone)}</span>` : ""}
       ${
         payload.confidence !== null && payload.confidence !== undefined
-          ? `<span class="soft-chip">Confidence: ${escapeHtml(formatConfidence(payload.confidence))}</span>`
+          ? `<span class="soft-chip">Уверенность: ${escapeHtml(formatConfidence(payload.confidence))}</span>`
           : ""
       }
-      ${payload.model_id ? `<span class="soft-chip">Model: ${escapeHtml(payload.model_id)}</span>` : ""}
+      ${payload.model_id ? `<span class="soft-chip">Модель: ${escapeHtml(payload.model_id)}</span>` : ""}
     </div>
     ${
       payload.safety_note
@@ -1283,7 +1290,7 @@ function renderMissingInformation(items) {
   }
   return `
     <div class="ai-missing-info">
-      <strong>Missing information</strong>
+      <strong>Не хватает информации</strong>
       <ul>
         ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ul>
@@ -1365,7 +1372,7 @@ function renderMacroSuggestion(suggestion) {
       : (suggestion ?? {});
   return `
     <button class="macro-button macro-suggestion is-suggested" data-apply-macro="${escapeAttribute(normalized.macro_id)}">
-      <span class="macro-recommendation">Recommended</span>
+      <span class="macro-recommendation">Рекомендовано</span>
       <strong>${escapeHtml(normalized.title || `Макрос ${normalized.macro_id}`)}</strong>
       <span>${escapeHtml(normalized.body || "Быстрый ответ из библиотеки макросов.")}</span>
       <small>
@@ -1382,17 +1389,26 @@ function normalizeSummaryStatus(status) {
 
 function summaryStatusLabel(status) {
   return {
-    fresh: "Fresh",
-    stale: "Stale",
-    missing: "Missing",
+    fresh: "Свежая",
+    stale: "Нужно обновить",
+    missing: "Нет сводки",
   }[status];
 }
 
 function confidenceLabel(confidence) {
   return {
-    high: "high confidence",
-    medium: "medium confidence",
-    low: "low confidence",
-    none: "no confidence",
+    high: "высокая уверенность",
+    medium: "средняя уверенность",
+    low: "низкая уверенность",
+    none: "нет уверенности",
   }[confidence] ?? confidence;
+}
+
+function slaStatusLabel(status) {
+  return {
+    ok: "в норме",
+    at_risk: "риск",
+    breached: "нарушен",
+    missing: "нет данных",
+  }[status] ?? status;
 }
