@@ -9,6 +9,7 @@ from application.contracts.ai import (
     GeneratedTicketReplyDraftResult,
     GeneratedTicketSummaryResult,
     SuggestedMacrosResult,
+    SuggestMacrosCommand,
 )
 
 GENERIC_AI_REASON_TEXTS = {
@@ -152,6 +153,13 @@ def normalize_ai_reason(value: str | None) -> str | None:
 
 def has_prediction_signal(command: AIPredictTicketCategoryCommand) -> bool:
     return bool((command.text and command.text.strip()) or command.attachment is not None)
+
+
+def has_macro_suggestion_signal(command: SuggestMacrosCommand) -> bool:
+    return any(
+        (message.text and message.text.strip()) or message.attachment is not None
+        for message in command.message_history
+    )
 
 
 def unavailable_reply_draft_result(model_id: str | None) -> GeneratedTicketReplyDraftResult:

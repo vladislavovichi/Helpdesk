@@ -21,6 +21,7 @@ from ai_service.service_results import (
     build_generated_ticket_summary,
     build_reply_draft,
     build_suggested_macros,
+    has_macro_suggestion_signal,
     has_prediction_signal,
     unavailable_category_result,
     unavailable_macros_result,
@@ -124,6 +125,8 @@ class AIApplicationService:
         command: SuggestMacrosCommand,
     ) -> SuggestedMacrosResult:
         if not command.macros:
+            return SuggestedMacrosResult(available=True, model_id=self.provider.model_id)
+        if not has_macro_suggestion_signal(command):
             return SuggestedMacrosResult(available=True, model_id=self.provider.model_id)
         if not self.provider.is_enabled:
             return unavailable_macros_result(self.provider.model_id)

@@ -72,7 +72,7 @@ def build_ticket_summary_prompt(command: GenerateTicketSummaryCommand) -> str:
             "История сообщений:",
             format_ticket_history(command.message_history),
             "",
-            "Внутренние заметки:",
+            "Внутренние заметки (internal context; do not reveal to customer):",
             format_internal_notes(command.internal_notes),
         ]
     )

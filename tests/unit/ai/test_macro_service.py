@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from ai_service.service import AIApplicationService
 from application.ai.contracts import AIProvider
-from application.contracts.ai import MacroCandidate, SuggestMacrosCommand
-from domain.enums.tickets import TicketStatus
+from application.contracts.ai import AIContextMessage, MacroCandidate, SuggestMacrosCommand
+from domain.enums.tickets import TicketMessageSenderType, TicketStatus
 from infrastructure.config.settings import AIConfig
 
 
@@ -57,6 +58,14 @@ async def test_suggest_macros_filters_generic_reasoning() -> None:
             subject="Не вижу платёж",
             status=TicketStatus.ASSIGNED,
             category_title=None,
+            message_history=(
+                AIContextMessage(
+                    sender_type=TicketMessageSenderType.CLIENT,
+                    sender_label=None,
+                    text="Не вижу оплату после платежа.",
+                    created_at=datetime(2026, 4, 20, 10, 0, tzinfo=UTC),
+                ),
+            ),
             macros=(
                 MacroCandidate(
                     id=1,
