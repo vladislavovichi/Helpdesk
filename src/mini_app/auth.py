@@ -60,7 +60,7 @@ def validate_telegram_mini_app_init_data(
         )
     if not normalized_bot_token:
         raise TelegramMiniAppAuthError(
-            "Проверка Mini App временно недоступна.",
+            "Проверка рабочего места временно недоступна.",
             code="bot_token_missing",
         )
 
@@ -68,7 +68,7 @@ def validate_telegram_mini_app_init_data(
         pairs = parse_qsl(normalized_init_data, keep_blank_values=True, strict_parsing=True)
     except ValueError as exc:
         raise TelegramMiniAppAuthError(
-            "Не удалось прочитать данные запуска Mini App. Откройте рабочее место заново.",
+            "Не удалось прочитать данные запуска. Откройте рабочее место заново.",
             code="malformed_init_data",
         ) from exc
 
@@ -101,7 +101,7 @@ def validate_telegram_mini_app_init_data(
     ).hexdigest()
     if not hmac.compare_digest(expected_hash, provided_hash):
         raise TelegramMiniAppAuthError(
-            "Не удалось подтвердить запуск Mini App. Откройте рабочее место заново.",
+            "Не удалось подтвердить запуск. Откройте рабочее место заново.",
             code="invalid_signature",
         )
 
@@ -122,12 +122,12 @@ def validate_telegram_mini_app_init_data(
     current_time = now or datetime.now(UTC)
     if (auth_date - current_time).total_seconds() > 30:
         raise TelegramMiniAppAuthError(
-            "Время запуска Mini App выглядит некорректно. Откройте рабочее место заново.",
+            "Время запуска выглядит некорректно. Откройте рабочее место заново.",
             code="future_auth_date",
         )
     if max_age_seconds > 0 and (current_time - auth_date).total_seconds() > max_age_seconds:
         raise TelegramMiniAppAuthError(
-            "Сеанс Mini App устарел. Откройте рабочее место заново.",
+            "Сеанс рабочего места устарел. Откройте рабочее место заново.",
             code="expired_init_data",
         )
 

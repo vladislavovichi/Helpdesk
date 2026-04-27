@@ -453,20 +453,7 @@ export function renderAdmin(data, invite, aiSettingsDraft = null) {
           </div>
           <button class="action action-primary" data-action="create-invite">Создать инвайт</button>
         </div>
-        ${
-          invite
-            ? `
-              <div class="invite-card">
-                <div>
-                  <p class="eyebrow">Новый код</p>
-                  <h3>${escapeHtml(invite.code)}</h3>
-                  <p class="subtitle">Действует до ${formatDateTime(invite.expires_at)}.</p>
-                </div>
-                <button class="action" data-copy="${escapeAttribute(invite.code)}">Скопировать</button>
-              </div>
-            `
-            : ""
-        }
+        ${invite ? renderInviteCard(invite) : ""}
         <div class="operator-list">
           ${
             operators.length
@@ -502,6 +489,83 @@ export function renderAdmin(data, invite, aiSettingsDraft = null) {
         </div>
         ${renderAISettingsForm(aiSettings)}
       </article>
+    </section>
+  `;
+}
+
+function renderInviteCard(invite) {
+  const deepLink = typeof invite.telegram_deep_link === "string" ? invite.telegram_deep_link : "";
+  const code = typeof invite.code === "string" ? invite.code : "";
+  const maxUses = Number(invite.max_uses);
+  const maxUsesLabel = maxUses === 1 ? "Одноразовый доступ" : `Использований: ${maxUses || "—"}`;
+  return `
+    <section class="invite-card invite-share-card">
+      <div class="invite-share-head">
+        <div>
+          <p class="eyebrow">Новый доступ</p>
+          <h3>Инвайт для оператора</h3>
+          <p class="subtitle">Отправьте ссылку будущему оператору. После перехода он подтвердит имя в боте.</p>
+        </div>
+        <span class="soft-chip">${escapeHtml(maxUsesLabel)}</span>
+      </div>
+      ${
+        deepLink
+          ? `
+            <div class="invite-link-field">
+              <span>Ссылка Telegram</span>
+              <strong>${escapeHtml(deepLink)}</strong>
+            </div>
+          `
+          : `
+            <div class="invite-link-field is-unavailable">
+              <span>Ссылка Telegram</span>
+              <strong>Недоступна</strong>
+              <small>${invite.link_unavailable_reason === "bot_username_missing"
+                ? "Имя бота не настроено. Отправьте оператору код вручную."
+                : "Ссылку пока нельзя собрать автоматически."}</small>
+            </div>
+          `
+      }
+      <div class="invite-code-field">
+        <span>Код инвайта</span>
+        <strong>${escapeHtml(code)}</strong>
+      </div>
+      <div class="invite-meta-row">
+        <span>Действует до ${formatDateTime(invite.expires_at)}</span>
+        <span class="invite-security-note">Не пересылайте ссылку посторонним.</span>
+      </div>
+      <div class="invite-actions">
+        ${
+          deepLink
+            ? `
+              <button
+                class="action action-primary"
+                data-copy="${escapeAttribute(deepLink)}"
+                data-copy-success="Ссылка скопирована."
+                type="button"
+              >
+                Скопировать ссылку
+              </button>
+              <a
+                class="action action-subtle"
+                href="${escapeAttribute(deepLink)}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Открыть в Telegram
+              </a>
+            `
+            : ""
+        }
+        <button
+          class="action ${deepLink ? "action-subtle" : "action-primary"}"
+          data-copy="${escapeAttribute(code)}"
+          data-copy-success="Код скопирован."
+          type="button"
+        >
+          Скопировать код
+        </button>
+      </div>
     </section>
   `;
 }
@@ -1324,60 +1388,63 @@ function renderMacroList(macros, suggestions) {
     return item?.macro_id ? String(item.macro_id) : "";
   };
   const suggestedIds = new Set(safeSuggestions.map(suggestionId).filter(Boolean));
+  const macrosById = new Map(macros.map((macro) => [String(macro.id), macro]));
+  const suggestedMacros = safeSuggestions
+    .map((suggestion) => normalizeMacroSuggestion(suggestion, macrosById))
+    .filter((suggestion) => suggestion.macro_id);
   const remainingMacros = macros.filter((macro) => !suggestedIds.has(String(macro.id)));
-  if (!macros.length && !safeSuggestions.length) {
-    return renderInlineEmpty("Макросы ещё не созданы.");
+  const totalCount = suggestedMacros.length + remainingMacros.length;
+  if (!totalCount) {
+    return renderInlineEmpty("Макросы пока не настроены.");
   }
 
   return `
-    <section class="macro-section">
+    <section class="macro-section macro-quick-actions">
       <div class="macro-section-head">
-        <h5>AI рекомендует</h5>
-        <span class="soft-chip">${escapeHtml(String(safeSuggestions.length))}</span>
+        <h5>Быстрые действия</h5>
+        <span class="soft-chip">${escapeHtml(String(totalCount))}</span>
       </div>
-      ${
-        safeSuggestions.length
-          ? safeSuggestions.map(renderMacroSuggestion).join("")
-          : renderInlineEmpty("Точных AI-рекомендаций сейчас нет.")
-      }
-    </section>
-    <section class="macro-section">
-      <div class="macro-section-head">
-        <h5>Все макросы</h5>
-        <span class="soft-chip">${escapeHtml(String(remainingMacros.length))}</span>
+      <div class="macro-card-grid">
+        ${suggestedMacros.map(renderMacroSuggestion).join("")}
+        ${remainingMacros.map(renderMacroCard).join("")}
       </div>
-      ${
-        remainingMacros.length
-          ? remainingMacros
-              .slice(0, 8)
-              .map(
-                (macro) => `
-                  <button class="macro-button" data-apply-macro="${escapeAttribute(macro.id)}">
-                    <strong>${escapeHtml(macro.title)}</strong>
-                    <span>${escapeHtml(macro.body)}</span>
-                  </button>
-                `,
-              )
-              .join("")
-          : renderInlineEmpty("Все подходящие макросы уже показаны в рекомендациях.")
-      }
     </section>
   `;
 }
 
-function renderMacroSuggestion(suggestion) {
+function renderMacroCard(macro) {
+  return `
+    <button class="macro-button macro-card" data-apply-macro="${escapeAttribute(macro.id)}">
+      <strong>${escapeHtml(macro.title)}</strong>
+      <span>${escapeHtml(macro.body)}</span>
+    </button>
+  `;
+}
+
+function normalizeMacroSuggestion(suggestion, macrosById) {
   const normalized =
     typeof suggestion === "string" || typeof suggestion === "number"
       ? { macro_id: String(suggestion) }
       : (suggestion ?? {});
+  const macro = macrosById.get(String(normalized.macro_id));
+  return {
+    macro_id: normalized.macro_id ? String(normalized.macro_id) : "",
+    title: normalized.title || macro?.title || "",
+    body: normalized.body || macro?.body || "",
+    reason: normalized.reason || "",
+    confidence: normalized.confidence || "",
+  };
+}
+
+function renderMacroSuggestion(suggestion) {
   return `
-    <button class="macro-button macro-suggestion is-suggested" data-apply-macro="${escapeAttribute(normalized.macro_id)}">
-      <span class="macro-recommendation">Рекомендовано</span>
-      <strong>${escapeHtml(normalized.title || `Макрос ${normalized.macro_id}`)}</strong>
-      <span>${escapeHtml(normalized.body || "Быстрый ответ из библиотеки макросов.")}</span>
+    <button class="macro-button macro-card macro-suggestion is-recommended" data-apply-macro="${escapeAttribute(suggestion.macro_id)}">
+      <span class="macro-recommendation-badge">Рекомендовано</span>
+      <strong>${escapeHtml(suggestion.title || `Макрос ${suggestion.macro_id}`)}</strong>
+      <span>${escapeHtml(suggestion.body || "Быстрый ответ из библиотеки макросов.")}</span>
       <small>
-        ${normalized.reason ? escapeHtml(normalized.reason) : "AI-рекомендация"}
-        ${normalized.confidence ? ` · ${escapeHtml(confidenceLabel(normalized.confidence))}` : ""}
+        ${suggestion.reason ? escapeHtml(suggestion.reason) : "AI-рекомендация"}
+        ${suggestion.confidence ? ` · ${escapeHtml(confidenceLabel(suggestion.confidence))}` : ""}
       </small>
     </button>
   `;

@@ -435,11 +435,25 @@ def serialize_operator(operator: OperatorSummary) -> dict[str, Any]:
     }
 
 
-def serialize_operator_invite(invite: OperatorInviteCodeSummary) -> dict[str, Any]:
+def serialize_operator_invite(
+    invite: OperatorInviteCodeSummary,
+    *,
+    bot_username: str | None = None,
+) -> dict[str, Any]:
+    normalized_bot_username = _normalize_bot_username(bot_username)
+    telegram_deep_link = (
+        f"https://t.me/{normalized_bot_username}?start={invite.code}"
+        if normalized_bot_username
+        else None
+    )
     return {
         "code": invite.code,
         "expires_at": _serialize_datetime(invite.expires_at),
         "max_uses": invite.max_uses,
+        "bot_username": normalized_bot_username,
+        "telegram_deep_link": telegram_deep_link,
+        "link_available": telegram_deep_link is not None,
+        "link_unavailable_reason": None if telegram_deep_link else "bot_username_missing",
     }
 
 
@@ -560,6 +574,13 @@ def _serialize_datetime(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.isoformat()
+
+
+def _normalize_bot_username(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().removeprefix("@").strip()
+    return normalized or None
 
 
 def _resolve_ticket_last_activity(

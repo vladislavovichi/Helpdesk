@@ -55,6 +55,7 @@ def main() -> None:
             auth_config=settings.backend_auth,
             resilience_config=settings.resilience,
         ),
+        bot_username=settings.bot.username,
         ai_settings_repository=JsonAISettingsRepository(
             path=settings.ai_runtime_settings.path,
             defaults=build_runtime_ai_settings_defaults(settings.ai.model_id),

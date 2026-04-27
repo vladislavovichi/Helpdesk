@@ -98,6 +98,7 @@ class BinaryPayload:
 @dataclass(slots=True)
 class MiniAppGateway:
     backend_client_factory: HelpdeskBackendClientFactory
+    bot_username: str | None = None
     ai_settings_repository: AISettingsRepository = field(
         default_factory=InMemoryAISettingsRepository
     )
@@ -497,7 +498,7 @@ class MiniAppGateway:
         actor = RequestActor(telegram_user_id=user.telegram_user_id)
         async with self.backend_client_factory() as client:
             invite = await client.create_operator_invite(actor=actor)
-        return {"invite": serialize_operator_invite(invite)}
+        return {"invite": serialize_operator_invite(invite, bot_username=self.bot_username)}
 
     async def get_ai_settings(self, *, user: TelegramMiniAppUser) -> dict[str, Any]:
         del user
@@ -663,9 +664,9 @@ class MiniAppGateway:
                 tickets=[],
                 route="queue",
                 severity="critical",
-                empty_label="Live SLA пока недоступен в Mini App.",
+                empty_label="Живой SLA пока недоступен.",
                 unavailable_reason=(
-                    "Live SLA state is not available in the Mini App backend client."
+                    "Живой SLA пока не передаётся в рабочее место."
                 ),
             ),
             "sla_at_risk_tickets": serialize_dashboard_bucket(
@@ -674,9 +675,9 @@ class MiniAppGateway:
                 tickets=[],
                 route="queue",
                 severity="warning",
-                empty_label="Live SLA пока недоступен в Mini App.",
+                empty_label="Живой SLA пока недоступен.",
                 unavailable_reason=(
-                    "Live SLA state is not available in the Mini App backend client."
+                    "Живой SLA пока не передаётся в рабочее место."
                 ),
             ),
             "negative_sentiment_tickets": serialize_dashboard_bucket(

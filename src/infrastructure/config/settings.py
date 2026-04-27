@@ -84,6 +84,15 @@ class AppConfig(BaseModel):
 
 class BotConfig(BaseModel):
     token: str = ""
+    username: str | None = None
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def validate_username(cls, value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().removeprefix("@").strip()
+        return normalized or None
 
 
 class AuthorizationConfig(BaseModel):
@@ -395,6 +404,7 @@ class Settings(BaseSettings):
 
     app: AppConfig = Field(default_factory=AppConfig)
     bot: BotConfig = Field(default_factory=BotConfig)
+    bot_username: str | None = Field(default=None, validation_alias="BOT_USERNAME")
     authorization: AuthorizationConfig
     postgres_expose_port: int | None = Field(default=None, validation_alias="POSTGRES_EXPOSE_PORT")
     redis_expose_port: int | None = Field(default=None, validation_alias="REDIS_EXPOSE_PORT")
@@ -422,6 +432,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def apply_runtime_service_targets(self) -> Settings:
+        if not self.bot.username and self.bot_username:
+            self.bot.username = self.bot_username.strip().removeprefix("@").strip() or None
         self.database.expose_port = self.postgres_expose_port
         self.redis.expose_port = self.redis_expose_port
         self.backend_service.expose_port = self.backend_expose_port

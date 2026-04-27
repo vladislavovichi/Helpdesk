@@ -303,7 +303,7 @@ function bindGlobalEvents() {
 
     const copyButton = event.target.closest("[data-copy]");
     if (copyButton) {
-      await handleCopy(copyButton.dataset.copy ?? "");
+      await handleCopy(copyButton.dataset.copy ?? "", copyButton.dataset.copySuccess);
       return;
     }
 
@@ -493,15 +493,15 @@ async function runMutation(work) {
   }
 }
 
-async function handleCopy(value, successMessage = "Код приглашения скопирован.") {
+async function handleCopy(value, successMessage = "Скопировано.") {
   try {
     await navigator.clipboard.writeText(value);
-    showNotice(successMessage, "success");
+    showNotice(successMessage || "Скопировано.", "success");
     if (telegram?.HapticFeedback) {
       telegram.HapticFeedback.notificationOccurred("success");
     }
   } catch (_error) {
-    showNotice("Не удалось скопировать код.", "danger");
+    showNotice("Не удалось скопировать. Скопируйте вручную.", "danger");
   }
 }
 
