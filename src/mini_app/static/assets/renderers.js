@@ -38,6 +38,7 @@ export function buildNavigation(role, currentRoute) {
     .map(
       (route) => `
         <button class="nav-pill ${currentRoute === route ? "is-active" : ""}" data-route="${route}">
+          <span class="nav-dot" aria-hidden="true"></span>
           <span>${ROUTE_LABELS[route]}</span>
         </button>
       `,
@@ -47,7 +48,8 @@ export function buildNavigation(role, currentRoute) {
 
 export function renderAccessDenied(message) {
   return `
-    <section class="state-panel">
+    <section class="state-panel premium-state">
+      <div class="state-orb" aria-hidden="true"></div>
       <p class="eyebrow">Mini App</p>
       <h2>Доступ закрыт</h2>
       <p class="subtitle">${escapeHtml(message)}</p>
@@ -57,7 +59,8 @@ export function renderAccessDenied(message) {
 
 export function renderInitDataMissing(copy) {
   return `
-    <section class="state-panel">
+    <section class="state-panel premium-state">
+      <div class="state-orb" aria-hidden="true"></div>
       <div class="state-badge-row">
         <p class="eyebrow">Mini App</p>
         <span class="soft-chip">Безопасный вход</span>
@@ -92,7 +95,7 @@ export function renderDashboard(data) {
   };
 
   return `
-    <section class="hero-grid">
+    <section class="hero-grid dashboard-hero-grid">
       <article class="hero-card hero-card-primary">
         <div class="section-caption">
           <p class="eyebrow">Текущий срез</p>
@@ -103,12 +106,17 @@ export function renderDashboard(data) {
           Открытых заявок сейчас. В очереди ${escapeHtml(String(snapshot.queued_tickets_count))},
           эскалаций ${escapeHtml(String(snapshot.escalated_tickets_count))}.
         </p>
+        <div class="hero-signal-strip">
+          <span>Очередь <strong>${escapeHtml(String(snapshot.queued_tickets_count))}</strong></span>
+          <span>Назначено <strong>${escapeHtml(String(snapshot.assigned_tickets_count))}</strong></span>
+          <span>SLA риск <strong>${escapeHtml(String(snapshot.first_response_breach_count + snapshot.resolution_breach_count))}</strong></span>
+        </div>
         <div class="inline-actions">
           <button class="action action-primary" data-action="take-next">Взять следующую</button>
         </div>
         <p class="hero-note">Если нужен конкретный кейс, откройте очередь или свои заявки через навигацию.</p>
       </article>
-      <article class="hero-card hero-card-secondary">
+      <article class="hero-card hero-card-secondary executive-card">
         <div class="section-caption">
           <p class="eyebrow">Ритм команды</p>
           <span class="soft-chip">Живой контур</span>
@@ -131,9 +139,9 @@ export function renderDashboard(data) {
         </div>
       </div>
       <div class="dashboard-grid">
-        ${renderDashboardBucketSection("Needs attention", sections.needs_attention, buckets)}
-        ${renderDashboardBucketSection("My work", sections.my_work, buckets)}
-        ${renderDashboardBucketSection("Queue", sections.queue, buckets)}
+        ${renderDashboardBucketSection("Требует внимания", sections.needs_attention, buckets)}
+        ${renderDashboardBucketSection("Моя работа", sections.my_work, buckets)}
+        ${renderDashboardBucketSection("Очередь", sections.queue, buckets)}
       </div>
     </section>
 
@@ -198,7 +206,7 @@ export function renderQueue(data, filters) {
         </div>
       </div>
       ${renderSearchRow("queue-search", "Поиск по номеру или теме", filters.search ?? "")}
-      ${renderTicketTable(items, { showTake: true, emptyTitle: "Очередь сейчас спокойна." })}
+      ${renderTicketTable(items, { showTake: true, emptyTitle: "Очередь сейчас спокойна.", mode: "queue" })}
     </section>
   `;
 }
@@ -217,7 +225,7 @@ export function renderMyTickets(data, filters) {
         <span class="soft-chip">${escapeHtml(String(items.length))} в работе</span>
       </div>
       ${renderSearchRow("mine-search", "Поиск по номеру или теме", filters.search ?? "")}
-      ${renderTicketTable(items, { showTake: false, emptyTitle: "Активных заявок пока нет." })}
+      ${renderTicketTable(items, { showTake: false, emptyTitle: "Активных заявок пока нет.", mode: "mine" })}
     </section>
   `;
 }
@@ -593,38 +601,48 @@ export function renderTicketWorkspace(data, replyDraftState = null) {
   const ticket = data.ticket;
   const ai = data.ai;
   const canReassign = data.operators.length > 0;
+  const lastMessageLabel = ticket.last_message_sender_type
+    ? senderLabel(ticket.last_message_sender_type, ticket.assigned_operator_name)
+    : "Нет сообщений";
 
   return `
-    <section class="surface surface-roomy">
-      <div class="surface-head surface-head-tight">
+    <section class="ticket-hero premium-panel">
+      <div class="ticket-hero-main">
         <div>
           <p class="eyebrow">${escapeHtml(ticket.public_number)}</p>
           <h2>${escapeHtml(ticket.subject)}</h2>
-          <div class="meta-row meta-row-wrap">
-            <span class="soft-chip">${statusLabel(ticket.status)}</span>
-            <span class="soft-chip">${priorityLabel(ticket.priority)}</span>
-            <span class="soft-chip">${ticket.category_title ? escapeHtml(ticket.category_title) : "Без темы"}</span>
-          </div>
+          <p class="subtitle">
+            ${ticket.category_title ? escapeHtml(ticket.category_title) : "Без темы"} ·
+            ${escapeHtml(ticket.assigned_operator_name ?? "Свободная заявка")}
+          </p>
         </div>
-        <div class="detail-actions ticket-action-bar">
-          <div class="inline-actions wrap-actions">
-            <button class="action action-subtle" data-ticket-action="take">Взять</button>
-            <button class="action action-subtle" data-ticket-action="escalate">Эскалировать</button>
-            <button class="action action-primary" data-ticket-action="close">Закрыть</button>
-          </div>
-          <div class="utility-actions utility-actions-end">
-            <span class="utility-label">Экспорт</span>
-            <button class="action action-subtle" data-ticket-export="html">HTML</button>
-            <button class="action action-subtle" data-ticket-export="csv">CSV</button>
-          </div>
+        <div class="ticket-meta-strip">
+          <span class="ticket-status-chip status-${escapeAttribute(ticket.status)}">${statusLabel(ticket.status)}</span>
+          <span class="ticket-priority-chip priority-${escapeAttribute(ticket.priority)}">${priorityLabel(ticket.priority)}</span>
+          <span class="soft-chip">Создана ${formatDateTime(ticket.created_at)}</span>
+          <span class="soft-chip">${ticket.closed_at ? `Закрыта ${formatDateTime(ticket.closed_at)}` : "Открыта"}</span>
         </div>
       </div>
+      <div class="ticket-action-bar">
+        <div class="inline-actions wrap-actions">
+          <button class="action action-subtle" data-ticket-action="take">Взять</button>
+          <button class="action action-subtle" data-ticket-action="escalate">Эскалировать</button>
+          <button class="action action-primary" data-ticket-action="close">Закрыть</button>
+        </div>
+        <div class="utility-actions utility-actions-end">
+          <span class="utility-label">Экспорт</span>
+          <button class="action action-subtle" data-ticket-export="html">HTML</button>
+          <button class="action action-subtle" data-ticket-export="csv">CSV</button>
+        </div>
+      </div>
+    </section>
 
-      <div class="ticket-workspace-grid">
-        <article class="subsurface">
+    <section class="ticket-workspace-grid">
+      <div class="ticket-primary-column">
+        <article class="ticket-section premium-panel">
           <div class="subsurface-head">
-            <h3>Карточка</h3>
-            <span class="soft-chip">Карточка</span>
+            <h3>Обзор заявки</h3>
+            <span class="soft-chip">${escapeHtml(lastMessageLabel)}</span>
           </div>
           <div class="facts">
             ${renderFact("Статус", statusLabel(ticket.status))}
@@ -649,10 +667,12 @@ export function renderTicketWorkspace(data, replyDraftState = null) {
         ${renderTicketAiCard(ai)}
 
         ${renderAiReplyCard(replyDraftState)}
+      </div>
 
-        <article class="subsurface">
+      <aside class="ticket-side-column">
+        <article class="ticket-section premium-panel operator-panel">
           <div class="subsurface-head">
-            <h3>Действия</h3>
+            <h3>Действия оператора</h3>
             <span class="soft-chip">Операции</span>
           </div>
           <form class="note-form" id="note-form">
@@ -689,26 +709,29 @@ export function renderTicketWorkspace(data, replyDraftState = null) {
               `
               : ""
           }
+        </article>
+
+        <article class="ticket-section premium-panel macro-panel">
+          <div class="subsurface-head">
+            <h3>Макросы</h3>
+            <span class="soft-chip">Быстрый ответ</span>
+          </div>
           <div class="macro-stack">
-            <div class="subsurface-head">
-              <h4>Макросы</h4>
-              <span class="soft-chip">Быстрый ответ</span>
-            </div>
             ${renderMacroList(data.macros, ai?.macro_suggestions ?? [])}
           </div>
         </article>
-      </div>
+      </aside>
     </section>
 
-    <section class="surface-grid">
-      <article class="surface">
+    <section class="surface-grid ticket-history-grid">
+      <article class="surface ticket-section">
         <div class="surface-head">
           <div>
             <p class="eyebrow">Хронология</p>
             <h3>Сообщения</h3>
           </div>
         </div>
-        <div class="timeline">
+        <div class="timeline timeline-premium">
           ${
             ticket.message_history.length
               ? ticket.message_history.map(renderMessage).join("")
@@ -716,14 +739,14 @@ export function renderTicketWorkspace(data, replyDraftState = null) {
           }
         </div>
       </article>
-      <article class="surface">
+      <article class="surface ticket-section">
         <div class="surface-head">
           <div>
             <p class="eyebrow">Контекст</p>
             <h3>Внутренние заметки</h3>
           </div>
         </div>
-        <div class="timeline">
+        <div class="timeline timeline-premium note-timeline">
           ${
             ticket.internal_notes.length
               ? ticket.internal_notes.map(renderNote).join("")
@@ -737,7 +760,8 @@ export function renderTicketWorkspace(data, replyDraftState = null) {
 
 export function renderError(message) {
   return `
-    <section class="state-panel">
+    <section class="state-panel premium-state state-error">
+      <div class="state-orb" aria-hidden="true"></div>
       <p class="eyebrow">Ошибка</p>
       <h2>Не удалось загрузить данные</h2>
       <p class="subtitle">${escapeHtml(message)}</p>
@@ -747,8 +771,9 @@ export function renderError(message) {
 
 export function renderLoading() {
   return `
-    <section class="loading-state">
+    <section class="loading-state premium-loading">
       <div class="loading-stack">
+        <div class="loading-kicker"></div>
         <div class="loading-line loading-line-wide"></div>
         <div class="loading-line"></div>
       </div>
@@ -825,12 +850,13 @@ function renderTicketPreviewCard(item) {
   const slaState = item.sla_state?.status ? `SLA: ${item.sla_state.status}` : "";
   const assignedOperator = item.assigned_operator?.name || "";
   return `
-    <article class="ticket-preview-card" data-open-ticket="${escapeAttribute(item.public_id)}">
+    <article class="ticket-preview-card priority-${escapeAttribute(item.priority || "normal")}" data-open-ticket="${escapeAttribute(item.public_id)}">
       <div class="ticket-preview-main">
         <p class="ticket-number">${escapeHtml(item.public_number || item.public_id)}</p>
         <h4>${escapeHtml(item.subject || "Без темы")}</h4>
         <div class="meta-row meta-row-wrap">
-          <span class="status-chip">${statusLabel(item.status)}</span>
+          <span class="status-chip status-${escapeAttribute(item.status)}">${statusLabel(item.status)}</span>
+          ${item.priority ? `<span class="priority-pill priority-${escapeAttribute(item.priority)}">${priorityLabel(item.priority)}</span>` : ""}
           <span class="soft-chip">${item.category || item.category_title ? escapeHtml(item.category || item.category_title) : "Без темы"}</span>
           ${slaState ? `<span class="soft-chip">${escapeHtml(slaState)}</span>` : ""}
           ${sentiment ? `<span class="soft-chip">${escapeHtml(sentiment)}</span>` : ""}
@@ -879,17 +905,21 @@ function renderTicketTable(items, options) {
       ${items
         .map(
           (item) => `
-            <article class="ticket-row" data-open-ticket="${item.public_id}">
+            <article class="ticket-row priority-${escapeAttribute(item.priority)} status-${escapeAttribute(item.status)}" data-open-ticket="${escapeAttribute(item.public_id)}">
               <div class="ticket-copy">
-                <p class="ticket-number">${escapeHtml(item.public_number)}</p>
+                <div class="ticket-row-kicker">
+                  <p class="ticket-number">${escapeHtml(item.public_number)}</p>
+                  <span class="row-hint">${options.mode === "queue" ? "Свободная" : "Назначенная"}</span>
+                </div>
                 <h3>${escapeHtml(item.subject)}</h3>
-                <p class="subtitle">
-                  ${item.category_title ? escapeHtml(item.category_title) : "Без темы"} ·
-                  ${statusLabel(item.status)} · ${priorityLabel(item.priority)}
-                </p>
+                <div class="meta-row meta-row-wrap ticket-row-meta">
+                  <span class="status-chip status-${escapeAttribute(item.status)}">${statusLabel(item.status)}</span>
+                  <span class="priority-pill priority-${escapeAttribute(item.priority)}">${priorityLabel(item.priority)}</span>
+                  <span class="soft-chip">${item.category_title ? escapeHtml(item.category_title) : "Без темы"}</span>
+                </div>
               </div>
               <div class="row-actions">
-                ${options.showTake ? `<button class="action" data-take-ticket="${item.public_id}">Взять</button>` : ""}
+                ${options.showTake ? `<button class="action" data-take-ticket="${escapeAttribute(item.public_id)}">Взять</button>` : ""}
                 <span class="row-hint">Открыть</span>
               </div>
             </article>
@@ -999,14 +1029,14 @@ function buildArchivePreview(item) {
 
 function renderTicketRow(item) {
   return `
-    <article class="ticket-row compact-row" data-open-ticket="${item.public_id}">
+    <article class="ticket-row compact-row priority-${escapeAttribute(item.priority)} status-${escapeAttribute(item.status)}" data-open-ticket="${escapeAttribute(item.public_id)}">
       <div class="ticket-copy">
         <p class="ticket-number">${escapeHtml(item.public_number)}</p>
         <h3>${escapeHtml(item.subject)}</h3>
-        <p class="subtitle">
-          ${item.category_title ? escapeHtml(item.category_title) : "Без темы"} ·
-          ${statusLabel(item.status)}
-        </p>
+        <div class="meta-row meta-row-wrap ticket-row-meta">
+          <span class="status-chip status-${escapeAttribute(item.status)}">${statusLabel(item.status)}</span>
+          <span class="soft-chip">${item.category_title ? escapeHtml(item.category_title) : "Без темы"}</span>
+        </div>
       </div>
       <span class="priority-pill priority-${escapeAttribute(item.priority)}">${priorityLabel(item.priority)}</span>
     </article>
@@ -1014,13 +1044,14 @@ function renderTicketRow(item) {
 }
 
 function renderMessage(message) {
+  const messageClass = messageClassForSender(message.sender_type);
   return `
-    <article class="timeline-item">
+    <article class="timeline-item ${messageClass}">
       <div class="timeline-head">
         <strong>${senderLabel(message.sender_type, message.sender_operator_name)}</strong>
         <span>${formatDateTime(message.created_at)}</span>
       </div>
-      ${message.text ? `<p>${escapeHtml(message.text)}</p>` : ""}
+      ${message.text ? `<div class="timeline-body"><p>${escapeHtml(message.text)}</p></div>` : ""}
       ${message.attachment ? renderAttachment(message.attachment) : ""}
       ${message.duplicate_count > 0 ? `<p class="muted">Повтор: ${message.duplicate_count}</p>` : ""}
     </article>
@@ -1029,12 +1060,12 @@ function renderMessage(message) {
 
 function renderNote(note) {
   return `
-    <article class="timeline-item tone-note">
+    <article class="timeline-item note-internal tone-note">
       <div class="timeline-head">
         <strong>${escapeHtml(note.author_operator_name ?? "Оператор")}</strong>
         <span>${formatDateTime(note.created_at)}</span>
       </div>
-      <p>${escapeHtml(note.text)}</p>
+      <div class="timeline-body"><p>${escapeHtml(note.text)}</p></div>
     </article>
   `;
 }
@@ -1046,6 +1077,19 @@ function renderAttachment(attachment) {
       <span>${attachment.mime_type ? escapeHtml(attachment.mime_type) : "Вложение без mime"}</span>
     </div>
   `;
+}
+
+function messageClassForSender(senderType) {
+  if (senderType === "operator") {
+    return "message-operator";
+  }
+  if (senderType === "system") {
+    return "message-system";
+  }
+  if (senderType === "internal") {
+    return "note-internal";
+  }
+  return "message-customer";
 }
 
 function renderTicketTimeline(timeline) {
@@ -1115,7 +1159,7 @@ function renderTicketAiCard(ai) {
 
   if (!ai) {
     return `
-      <article class="subsurface ai-card is-missing">
+      <article class="ticket-section premium-panel ai-card is-missing">
         <div class="subsurface-head">
           <div>
             <h3>AI-сводка</h3>
@@ -1133,7 +1177,7 @@ function renderTicketAiCard(ai) {
 
   const unavailable = ai.available === false;
   return `
-    <article class="subsurface ai-card is-${status}">
+    <article class="ticket-section premium-panel ai-card is-${status}">
       <div class="subsurface-head">
         <div>
           <h3>AI-сводка</h3>
@@ -1172,7 +1216,7 @@ function renderAiReplyCard(replyDraftState) {
   const payload = replyDraftState?.payload ?? null;
   const isLoading = Boolean(replyDraftState?.loading);
   return `
-    <article class="subsurface ai-reply-card">
+    <article class="ticket-section premium-panel ai-reply-card">
       <div class="subsurface-head">
         <div>
           <h3>AI reply draft</h3>
@@ -1265,27 +1309,34 @@ function formatConfidence(value) {
 }
 
 function renderMacroList(macros, suggestions) {
-  const suggestedIds = new Set(suggestions.map((item) => item.macro_id).filter(Boolean));
-  const remainingMacros = macros.filter((macro) => !suggestedIds.has(macro.id));
-  if (!macros.length && !suggestions.length) {
+  const safeSuggestions = Array.isArray(suggestions) ? suggestions : [];
+  const suggestionId = (item) => {
+    if (typeof item === "string" || typeof item === "number") {
+      return String(item);
+    }
+    return item?.macro_id ? String(item.macro_id) : "";
+  };
+  const suggestedIds = new Set(safeSuggestions.map(suggestionId).filter(Boolean));
+  const remainingMacros = macros.filter((macro) => !suggestedIds.has(String(macro.id)));
+  if (!macros.length && !safeSuggestions.length) {
     return renderInlineEmpty("Макросы ещё не созданы.");
   }
 
   return `
     <section class="macro-section">
       <div class="macro-section-head">
-        <h5>AI recommends</h5>
-        <span class="soft-chip">${escapeHtml(String(suggestions.length))}</span>
+        <h5>AI рекомендует</h5>
+        <span class="soft-chip">${escapeHtml(String(safeSuggestions.length))}</span>
       </div>
       ${
-        suggestions.length
-          ? suggestions.map(renderMacroSuggestion).join("")
+        safeSuggestions.length
+          ? safeSuggestions.map(renderMacroSuggestion).join("")
           : renderInlineEmpty("Точных AI-рекомендаций сейчас нет.")
       }
     </section>
     <section class="macro-section">
       <div class="macro-section-head">
-        <h5>All macros</h5>
+        <h5>Все макросы</h5>
         <span class="soft-chip">${escapeHtml(String(remainingMacros.length))}</span>
       </div>
       ${
@@ -1294,7 +1345,7 @@ function renderMacroList(macros, suggestions) {
               .slice(0, 8)
               .map(
                 (macro) => `
-                  <button class="macro-button" data-apply-macro="${macro.id}">
+                  <button class="macro-button" data-apply-macro="${escapeAttribute(macro.id)}">
                     <strong>${escapeHtml(macro.title)}</strong>
                     <span>${escapeHtml(macro.body)}</span>
                   </button>
@@ -1308,13 +1359,18 @@ function renderMacroList(macros, suggestions) {
 }
 
 function renderMacroSuggestion(suggestion) {
+  const normalized =
+    typeof suggestion === "string" || typeof suggestion === "number"
+      ? { macro_id: String(suggestion) }
+      : (suggestion ?? {});
   return `
-    <button class="macro-button macro-suggestion is-suggested" data-apply-macro="${suggestion.macro_id}">
-      <strong>${escapeHtml(suggestion.title || `Макрос ${suggestion.macro_id}`)}</strong>
-      <span>${escapeHtml(suggestion.body || "Быстрый ответ из библиотеки макросов.")}</span>
+    <button class="macro-button macro-suggestion is-suggested" data-apply-macro="${escapeAttribute(normalized.macro_id)}">
+      <span class="macro-recommendation">Recommended</span>
+      <strong>${escapeHtml(normalized.title || `Макрос ${normalized.macro_id}`)}</strong>
+      <span>${escapeHtml(normalized.body || "Быстрый ответ из библиотеки макросов.")}</span>
       <small>
-        ${suggestion.reason ? escapeHtml(suggestion.reason) : "AI-рекомендация"}
-        ${suggestion.confidence ? ` · ${escapeHtml(confidenceLabel(suggestion.confidence))}` : ""}
+        ${normalized.reason ? escapeHtml(normalized.reason) : "AI-рекомендация"}
+        ${normalized.confidence ? ` · ${escapeHtml(confidenceLabel(normalized.confidence))}` : ""}
       </small>
     </button>
   `;
