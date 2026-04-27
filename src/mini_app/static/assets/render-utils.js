@@ -137,6 +137,9 @@ export function priorityLabel(priority) {
 
 export function sentimentLabel(sentiment) {
   return {
+    calm: "Спокойный тон",
+    frustrated: "Недовольство",
+    escalation_risk: "Риск эскалации",
     positive: "Позитивный сигнал",
     neutral: "Нейтральный сигнал",
     negative: "Негативный сигнал",

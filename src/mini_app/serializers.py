@@ -16,6 +16,7 @@ from application.use_cases.tickets.summaries import (
     TicketAttachmentSummary,
     TicketDetailsSummary,
 )
+from domain.enums.tickets import TicketMessageSenderType, TicketSentiment
 
 
 def serialize_access_context(access_context: AccessContextSummary) -> dict[str, Any]:
@@ -45,6 +46,73 @@ def serialize_operator_ticket(ticket: OperatorTicketSummary) -> dict[str, Any]:
         "status": ticket.status.value,
         "category_title": ticket.category_title,
     }
+
+
+def serialize_dashboard_ticket_preview(
+    ticket: TicketDetailsSummary | QueuedTicketSummary | OperatorTicketSummary,
+) -> dict[str, Any]:
+    return {
+        "public_id": str(ticket.public_id),
+        "public_number": ticket.public_number,
+        "subject": ticket.subject,
+        "status": ticket.status.value,
+        "priority": getattr(ticket, "priority", None),
+        "category": getattr(ticket, "category_title", None),
+        "category_title": getattr(ticket, "category_title", None),
+        "assigned_operator": _serialize_assigned_operator(ticket),
+        "last_activity_at": _serialize_datetime(_resolve_ticket_last_activity(ticket)),
+        "sla_state": _serialize_sla_state(ticket),
+        "sentiment": _serialize_ticket_sentiment(ticket),
+        "last_message_sender_type": (
+            ticket.last_message_sender_type.value
+            if isinstance(ticket, TicketDetailsSummary) and ticket.last_message_sender_type
+            else None
+        ),
+    }
+
+
+def serialize_dashboard_bucket(
+    *,
+    key: str,
+    label: str,
+    tickets: list[TicketDetailsSummary | QueuedTicketSummary | OperatorTicketSummary],
+    route: str,
+    severity: str = "neutral",
+    empty_label: str = "Сейчас пусто.",
+    unavailable_reason: str | None = None,
+    preview_limit: int = 5,
+) -> dict[str, Any]:
+    sorted_tickets = sorted(tickets, key=_ticket_activity_sort_value, reverse=True)
+    return {
+        "key": key,
+        "label": label,
+        "count": len(tickets),
+        "tickets": [
+            serialize_dashboard_ticket_preview(ticket) for ticket in sorted_tickets[:preview_limit]
+        ],
+        "route": route,
+        "severity": severity,
+        "empty_label": empty_label,
+        "unavailable_reason": unavailable_reason,
+    }
+
+
+def is_negative_dashboard_sentiment(ticket: TicketDetailsSummary | object) -> bool:
+    return getattr(ticket, "sentiment", None) in {
+        TicketSentiment.FRUSTRATED,
+        TicketSentiment.ESCALATION_RISK,
+    }
+
+
+def needs_operator_reply(ticket: TicketDetailsSummary | object) -> bool:
+    if not isinstance(ticket, TicketDetailsSummary):
+        return False
+    if ticket.last_message_sender_type == TicketMessageSenderType.CLIENT:
+        return True
+    return not any(
+        message.sender_type == TicketMessageSenderType.OPERATOR
+        for message in ticket.message_history
+    )
 
 
 def serialize_archived_ticket(ticket: HistoricalTicketSummary) -> dict[str, Any]:
@@ -478,3 +546,62 @@ def _serialize_datetime(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.isoformat()
+
+
+def _resolve_ticket_last_activity(
+    ticket: TicketDetailsSummary | QueuedTicketSummary | OperatorTicketSummary,
+) -> datetime | None:
+    if not isinstance(ticket, TicketDetailsSummary):
+        return None
+    candidates = [ticket.created_at, ticket.closed_at, ticket.sentiment_detected_at]
+    candidates.extend(message.created_at for message in ticket.message_history)
+    candidates.extend(note.created_at for note in ticket.internal_notes)
+    return max((item for item in candidates if item is not None), default=None)
+
+
+def _ticket_activity_sort_value(
+    ticket: TicketDetailsSummary | QueuedTicketSummary | OperatorTicketSummary,
+) -> float:
+    last_activity = _resolve_ticket_last_activity(ticket)
+    if last_activity is None:
+        return 0.0
+    return last_activity.timestamp()
+
+
+def _serialize_assigned_operator(
+    ticket: TicketDetailsSummary | QueuedTicketSummary | OperatorTicketSummary,
+) -> dict[str, Any] | None:
+    if not isinstance(ticket, TicketDetailsSummary):
+        return None
+    if ticket.assigned_operator_id is None and ticket.assigned_operator_name is None:
+        return None
+    return {
+        "id": ticket.assigned_operator_id,
+        "name": ticket.assigned_operator_name,
+        "telegram_user_id": ticket.assigned_operator_telegram_user_id,
+        "username": ticket.assigned_operator_username,
+    }
+
+
+def _serialize_ticket_sentiment(
+    ticket: TicketDetailsSummary | QueuedTicketSummary | OperatorTicketSummary,
+) -> dict[str, Any] | None:
+    if not isinstance(ticket, TicketDetailsSummary) or ticket.sentiment is None:
+        return None
+    return {
+        "value": ticket.sentiment.value,
+        "confidence": (
+            ticket.sentiment_confidence.value if ticket.sentiment_confidence is not None else None
+        ),
+        "reason": ticket.sentiment_reason,
+        "detected_at": _serialize_datetime(ticket.sentiment_detected_at),
+    }
+
+
+def _serialize_sla_state(ticket: object) -> dict[str, Any] | None:
+    state = getattr(ticket, "sla_state", None)
+    if isinstance(state, dict):
+        return state
+    if isinstance(state, str):
+        return {"status": state}
+    return None

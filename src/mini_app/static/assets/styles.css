@@ -267,9 +267,11 @@ select:focus-visible {
 .surface-grid,
 .workspace-grid,
 .ticket-workspace-grid,
+.dashboard-grid,
 .metric-board,
 .stats-stack,
 .ticket-table,
+.ticket-preview-list,
 .archive-list,
 .operator-list,
 .timeline,
@@ -292,6 +294,11 @@ select:focus-visible {
 
 .surface-grid-three {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+
+.dashboard-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
 }
 
 .workspace-grid {
@@ -659,6 +666,8 @@ select:focus-visible {
 .ticket-row,
 .archive-row,
 .operator-row,
+.attention-bucket,
+.ticket-preview-card,
 .timeline-item,
 .signal-card,
 .attachment-card,
@@ -673,6 +682,122 @@ select:focus-visible {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
   min-width: 0;
+}
+
+.dashboard-section,
+.dashboard-bucket-stack,
+.ticket-preview-main,
+.ticket-preview-meta {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dashboard-section-head h3 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.035em;
+}
+
+.attention-bucket {
+  flex-direction: column;
+  cursor: pointer;
+  padding: 18px;
+  border-color: rgba(30, 38, 46, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 244, 238, 0.72));
+  box-shadow: 0 10px 24px rgba(26, 33, 41, 0.035);
+}
+
+.attention-bucket:hover,
+.ticket-preview-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.attention-bucket.is-critical {
+  border-color: rgba(140, 63, 63, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(253, 238, 235, 0.8));
+}
+
+.attention-bucket.is-warning {
+  border-color: rgba(146, 103, 44, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 246, 230, 0.82));
+}
+
+.attention-bucket-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.attention-bucket-head h4 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  letter-spacing: -0.025em;
+}
+
+.attention-count {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+}
+
+.dashboard-bucket-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ticket-preview-list {
+  gap: 10px;
+}
+
+.ticket-preview-card {
+  align-items: stretch;
+  gap: 14px;
+  padding: 14px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: none;
+}
+
+.ticket-preview-card h4 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.ticket-preview-card .soft-chip,
+.ticket-preview-card .status-chip {
+  min-height: 28px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.ticket-preview-meta {
+  align-content: start;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dashboard-empty-state {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px dashed rgba(30, 38, 46, 0.12);
+  background: rgba(255, 255, 255, 0.46);
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .ticket-row,
@@ -1225,6 +1350,7 @@ select:focus-visible {
     align-items: stretch;
   }
 
+  .dashboard-grid,
   .ticket-workspace-grid {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   }
@@ -1236,6 +1362,7 @@ select:focus-visible {
   .ticket-row,
   .archive-row,
   .operator-row,
+  .ticket-preview-card,
   .invite-card,
   .section-caption,
   .subsurface-head {
@@ -1270,7 +1397,8 @@ select:focus-visible {
 
   .archive-meta,
   .archive-meta-row,
-  .archive-summary {
+  .archive-summary,
+  .ticket-preview-meta {
     justify-items: start;
     justify-content: flex-start;
   }

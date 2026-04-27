@@ -196,15 +196,15 @@ function bindGlobalEvents() {
   });
 
   content.addEventListener("click", async (event) => {
-    const routeButton = event.target.closest("[data-route]");
-    if (routeButton) {
-      window.location.hash = routeButton.dataset.route;
-      return;
-    }
-
     const openButton = event.target.closest("[data-open-ticket]");
     if (openButton) {
       window.location.hash = `ticket/${openButton.dataset.openTicket}`;
+      return;
+    }
+
+    const routeButton = event.target.closest("[data-route]");
+    if (routeButton) {
+      window.location.hash = routeButton.dataset.route;
       return;
     }
 
@@ -494,7 +494,7 @@ async function loadDashboard() {
   if (state.cache.dashboard) {
     return state.cache.dashboard;
   }
-  state.cache.dashboard = await state.api.getDashboard();
+  state.cache.dashboard = await state.api.getOperatorDashboard();
   return state.cache.dashboard;
 }
 

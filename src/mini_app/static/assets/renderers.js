@@ -79,6 +79,17 @@ export function renderInitDataMissing(copy) {
 
 export function renderDashboard(data) {
   const snapshot = data.snapshot;
+  const buckets = data.operator_dashboard?.buckets ?? data.buckets ?? {};
+  const sections = data.operator_dashboard?.sections ?? data.sections ?? {
+    needs_attention: [
+      "sla_breached_tickets",
+      "sla_at_risk_tickets",
+      "escalated_tickets",
+      "negative_sentiment_tickets",
+    ],
+    my_work: ["my_active_tickets", "tickets_without_operator_reply"],
+    queue: ["unassigned_open_tickets", "tickets_without_category"],
+  };
 
   return `
     <section class="hero-grid">
@@ -111,21 +122,19 @@ export function renderDashboard(data) {
       </article>
     </section>
 
-    <section class="surface-grid surface-grid-three">
-      ${renderTicketPreviewCard("Очередь", "Самое срочное сейчас", data.queue_preview, "queue")}
-      ${renderTicketPreviewCard("Мои заявки", "Текущая нагрузка", data.my_tickets_preview, "mine")}
-      ${renderTicketPreviewCard("Риск SLA", "Кейсы с повышенным вниманием", data.escalations, "queue")}
-    </section>
-
-    <section class="surface">
+    <section class="surface surface-roomy">
       <div class="surface-head">
         <div>
-          <p class="eyebrow">Oldest first</p>
-          <h3>Ticket history</h3>
-          <p class="subtitle">Chronological view of important ticket events.</p>
+          <p class="eyebrow">Операторская очередь</p>
+          <h2>Что обработать сейчас</h2>
+          <p class="subtitle">Сначала риски SLA, эскалации и диалоги, где нужен ваш ответ.</p>
         </div>
       </div>
-      ${renderTicketTimeline(data.timeline)}
+      <div class="dashboard-grid">
+        ${renderDashboardBucketSection("Needs attention", sections.needs_attention, buckets)}
+        ${renderDashboardBucketSection("My work", sections.my_work, buckets)}
+        ${renderDashboardBucketSection("Queue", sections.queue, buckets)}
+      </div>
     </section>
 
     <section class="surface-grid">
@@ -655,7 +664,94 @@ export function renderLoading() {
   `;
 }
 
-function renderTicketPreviewCard(title, subtitle, items, route) {
+function renderDashboardBucketSection(title, bucketKeys, buckets) {
+  const keys = Array.isArray(bucketKeys) ? bucketKeys : [];
+  return `
+    <article class="dashboard-section">
+      <div class="dashboard-section-head">
+        <h3>${escapeHtml(title)}</h3>
+      </div>
+      <div class="dashboard-bucket-stack">
+        ${
+          keys
+            .map((key) => buckets[key])
+            .filter(Boolean)
+            .map(renderAttentionBucket)
+            .join("") || renderDashboardEmptyState("Нет данных для этого блока.")
+        }
+      </div>
+    </article>
+  `;
+}
+
+function renderAttentionBucket(bucket) {
+  const route = bucket.route || "queue";
+  const severity = bucket.severity === "critical" || bucket.severity === "warning"
+    ? bucket.severity
+    : "neutral";
+  return `
+    <article
+      class="attention-bucket ${severity === "critical" ? "is-critical" : ""} ${severity === "warning" ? "is-warning" : ""}"
+      data-route="${escapeAttribute(route)}"
+    >
+      <div class="attention-bucket-head">
+        <div>
+          <span class="attention-count">${escapeHtml(String(bucket.count ?? 0))}</span>
+          <h4>${escapeHtml(bucket.label || bucket.key || "Bucket")}</h4>
+        </div>
+        <span class="row-hint">Открыть</span>
+      </div>
+      ${
+        bucket.unavailable_reason
+          ? `<p class="dashboard-bucket-note">${escapeHtml(bucket.unavailable_reason)}</p>`
+          : ""
+      }
+      ${
+        Array.isArray(bucket.tickets) && bucket.tickets.length
+          ? renderTicketPreviewList(bucket.tickets)
+          : renderDashboardEmptyState(bucket.empty_label || "Сейчас пусто.")
+      }
+    </article>
+  `;
+}
+
+function renderTicketPreviewList(items) {
+  return `
+    <div class="ticket-preview-list">
+      ${items.map(renderTicketPreviewCard).join("")}
+    </div>
+  `;
+}
+
+function renderTicketPreviewCard(item) {
+  const sentiment = item.sentiment?.value ? sentimentLabel(item.sentiment.value) : "";
+  const slaState = item.sla_state?.status ? `SLA: ${item.sla_state.status}` : "";
+  const assignedOperator = item.assigned_operator?.name || "";
+  return `
+    <article class="ticket-preview-card" data-open-ticket="${escapeAttribute(item.public_id)}">
+      <div class="ticket-preview-main">
+        <p class="ticket-number">${escapeHtml(item.public_number || item.public_id)}</p>
+        <h4>${escapeHtml(item.subject || "Без темы")}</h4>
+        <div class="meta-row meta-row-wrap">
+          <span class="status-chip">${statusLabel(item.status)}</span>
+          <span class="soft-chip">${item.category || item.category_title ? escapeHtml(item.category || item.category_title) : "Без темы"}</span>
+          ${slaState ? `<span class="soft-chip">${escapeHtml(slaState)}</span>` : ""}
+          ${sentiment ? `<span class="soft-chip">${escapeHtml(sentiment)}</span>` : ""}
+        </div>
+      </div>
+      <div class="ticket-preview-meta">
+        <span>${formatDateTime(item.last_activity_at)}</span>
+        ${assignedOperator ? `<span>${escapeHtml(assignedOperator)}</span>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderDashboardEmptyState(text) {
+  return `<div class="dashboard-empty-state">${escapeHtml(text)}</div>`;
+}
+
+function renderTicketPreviewColumn(title, subtitle, items, route) {
   return `
     <article class="surface surface-compact">
       <div class="surface-head">

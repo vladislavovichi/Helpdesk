@@ -91,6 +91,9 @@ export function createMiniAppApi(launchContext) {
     getDashboard() {
       return request("/api/dashboard");
     },
+    getOperatorDashboard() {
+      return request("/api/dashboard/operator");
+    },
     getQueue() {
       return request("/api/queue");
     },

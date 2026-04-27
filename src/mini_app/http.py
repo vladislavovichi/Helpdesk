@@ -234,6 +234,9 @@ def build_handler_class(
             if method == "GET" and path == "/api/dashboard":
                 self._write_async_json(self.gateway.get_dashboard(user=user))
                 return
+            if method == "GET" and path == "/api/dashboard/operator":
+                self._write_async_json(self.gateway.get_operator_dashboard(user=user))
+                return
             if method == "GET" and path == "/api/queue":
                 self._write_async_json(self.gateway.list_queue(user=user))
                 return
