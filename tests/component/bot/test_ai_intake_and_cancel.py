@@ -14,6 +14,7 @@ from application.use_cases.tickets.summaries import TicketCategorySummary
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from bot.handlers.user.cancellation import handle_user_cancel
 from bot.handlers.user.client import handle_client_text
+from bot.handlers.user.intake_context import ClientIntakeContext, TicketRuntimeContext
 from bot.handlers.user.states import UserFeedbackStates
 from bot.texts.feedback import TICKET_FEEDBACK_COMMENT_CANCELLED_TEXT
 
@@ -36,6 +37,20 @@ def build_message(*, text: str, chat_id: int = 2002, message_id: int = 15) -> Me
     )
     object.__setattr__(message, "answer", AsyncMock())
     return message
+
+
+def build_client_intake_context(service: object) -> ClientIntakeContext:
+    return ClientIntakeContext(
+        ticket_runtime=TicketRuntimeContext(
+            helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
+            operator_active_ticket_store=SimpleNamespace(get_active_ticket=AsyncMock()),
+            ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
+            ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
+            logger=Mock(),
+        ),
+        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
+        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
+    )
 
 
 async def test_client_intake_uses_category_prediction_when_available() -> None:
@@ -78,12 +93,7 @@ async def test_client_intake_uses_category_prediction_when_available() -> None:
         message=message,
         state=state,
         bot=Mock(),
-        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
-        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(get_active_ticket=AsyncMock()),
-        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
-        ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
+        client_intake_context=build_client_intake_context(service),
     )
 
     service.predict_ticket_category.assert_awaited_once()

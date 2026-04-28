@@ -16,6 +16,7 @@ from bot.handlers.common.ticket_attachments import AttachmentRejectedError, extr
 from bot.handlers.operator.active_context import delete_live_session_for_ticket
 from bot.handlers.operator.parsers import parse_ticket_public_id
 from bot.handlers.user.intake import start_client_intake
+from bot.handlers.user.intake_context import ClientIntakeContext
 from bot.handlers.user.workflow import process_client_ticket_message
 from bot.keyboards.inline.client_actions import (
     build_client_ticket_finish_confirmation_markup,
@@ -41,12 +42,10 @@ from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketStatus
 from domain.tickets import InvalidTicketTransitionError
 from infrastructure.redis.contracts import (
-    ChatRateLimiter,
     GlobalRateLimiter,
     OperatorActiveTicketStore,
     TicketLiveSessionStore,
     TicketLockManager,
-    TicketStreamPublisher,
 )
 
 router = Router(name="client")
@@ -68,18 +67,13 @@ async def handle_client_text(
     message: Message,
     state: FSMContext,
     bot: Bot,
-    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
-    global_rate_limiter: GlobalRateLimiter,
-    chat_rate_limiter: ChatRateLimiter,
-    operator_active_ticket_store: OperatorActiveTicketStore,
-    ticket_live_session_store: TicketLiveSessionStore,
-    ticket_stream_publisher: TicketStreamPublisher,
+    client_intake_context: ClientIntakeContext,
 ) -> None:
-    if not await global_rate_limiter.allow():
+    if not await client_intake_context.global_rate_limiter.allow():
         await message.answer(SERVICE_UNAVAILABLE_TEXT)
         return
 
-    if not await chat_rate_limiter.allow(chat_id=message.chat.id):
+    if not await client_intake_context.chat_rate_limiter.allow(chat_id=message.chat.id):
         await message.answer(CHAT_RATE_LIMIT_TEXT)
         return
 
@@ -91,7 +85,7 @@ async def handle_client_text(
     if content is None:
         return
 
-    async with helpdesk_backend_client_factory() as helpdesk_backend:
+    async with client_intake_context.helpdesk_backend_client_factory() as helpdesk_backend:
         active_ticket = await helpdesk_backend.get_client_active_ticket(
             client_chat_id=message.chat.id
         )
@@ -114,11 +108,7 @@ async def handle_client_text(
     await process_client_ticket_message(
         message=message,
         bot=bot,
-        helpdesk_backend_client_factory=helpdesk_backend_client_factory,
-        operator_active_ticket_store=operator_active_ticket_store,
-        ticket_live_session_store=ticket_live_session_store,
-        ticket_stream_publisher=ticket_stream_publisher,
-        logger=logger,
+        context=client_intake_context.ticket_runtime,
         content=content,
     )
 

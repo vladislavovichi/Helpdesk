@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Protocol, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import pytest
@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, Chat, Message, User
 
 from application.use_cases.tickets.summaries import TicketDetailsSummary, TicketSummary
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
+from bot.handlers.user.intake_context import ClientIntakeContext, TicketRuntimeContext
 from domain.enums.tickets import TicketStatus
 
 
@@ -57,6 +58,7 @@ class TicketDetailsBuilder(Protocol):
 
 BackendClientFactoryBuilder = Callable[[object], HelpdeskBackendClientFactory]
 TicketSummaryBuilder = Callable[[UUID], TicketSummary]
+ClientIntakeContextBuilder = Callable[[object, SimpleNamespace | None], ClientIntakeContext]
 
 
 def build_helpdesk_backend_client_factory(
@@ -143,6 +145,25 @@ def build_ticket_details(
     )
 
 
+def build_client_intake_context(
+    service: object,
+    publisher: SimpleNamespace | None = None,
+) -> ClientIntakeContext:
+    return ClientIntakeContext(
+        ticket_runtime=TicketRuntimeContext(
+            helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
+            operator_active_ticket_store=SimpleNamespace(
+                get_active_ticket=AsyncMock(return_value=None)
+            ),
+            ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
+            ticket_stream_publisher=(publisher or SimpleNamespace(publish_new_ticket=AsyncMock())),
+            logger=Mock(),
+        ),
+        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
+        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
+    )
+
+
 @pytest.fixture
 def backend_client_factory_builder() -> BackendClientFactoryBuilder:
     return build_helpdesk_backend_client_factory
@@ -166,6 +187,11 @@ def ticket_summary_builder() -> TicketSummaryBuilder:
 @pytest.fixture
 def ticket_details_builder() -> TicketDetailsBuilder:
     return build_ticket_details
+
+
+@pytest.fixture
+def client_intake_context_builder() -> ClientIntakeContextBuilder:
+    return build_client_intake_context
 
 
 @pytest.fixture

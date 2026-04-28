@@ -41,6 +41,45 @@ from domain.contracts.repositories import (
 HelpdeskServiceFactory = Callable[[], AbstractAsyncContextManager["HelpdeskService"]]
 
 
+@dataclass(slots=True, frozen=True)
+class TicketDeps:
+    ticket_repository: TicketRepository
+    ticket_analytics_repository: TicketAnalyticsRepository
+    ticket_feedback_repository: TicketFeedbackRepository
+    ticket_ai_summary_repository: TicketAISummaryRepository
+    ticket_message_repository: TicketMessageRepository
+    ticket_internal_note_repository: TicketInternalNoteRepository
+    ticket_event_repository: TicketEventRepository
+    ticket_tag_repository: TicketTagRepository
+
+
+@dataclass(slots=True, frozen=True)
+class CatalogDeps:
+    macro_repository: MacroRepository
+    tag_repository: TagRepository
+    ticket_category_repository: TicketCategoryRepository
+
+
+@dataclass(slots=True, frozen=True)
+class OperatorDeps:
+    operator_repository: OperatorRepository
+    operator_invite_repository: OperatorInviteCodeRepository
+    super_admin_telegram_user_ids: frozenset[int]
+
+
+@dataclass(slots=True, frozen=True)
+class AIDeps:
+    ai_client_factory: AIServiceClientFactory
+    ai_settings_provider: AISettingsProvider
+    ticket_ai_summary_repository: TicketAISummaryRepository
+
+
+@dataclass(slots=True, frozen=True)
+class ExportDeps:
+    renderers: HelpdeskExportRenderers
+    include_internal_notes_in_ticket_reports: bool
+
+
 @dataclass(slots=True)
 class HelpdeskService(
     HelpdeskTicketOperations,
@@ -71,6 +110,11 @@ class HelpdeskService(
     ai_settings_provider: AISettingsProvider = field(default_factory=InMemoryAISettingsRepository)
     sla_deadline_scheduler: SLADeadlineScheduler | None = None
     correlation_id_provider: CorrelationIdProvider | None = None
+    _ticket_deps: TicketDeps = field(init=False, repr=False)
+    _catalog_deps: CatalogDeps = field(init=False, repr=False)
+    _operator_deps: OperatorDeps = field(init=False, repr=False)
+    _ai_deps: AIDeps = field(init=False, repr=False)
+    _export_deps: ExportDeps = field(init=False, repr=False)
     _components: HelpdeskComponents = field(init=False, repr=False)
     _audit: AuditTrail = field(init=False, repr=False)
 
@@ -78,6 +122,37 @@ class HelpdeskService(
         if not self.super_admin_telegram_user_ids:
             raise RuntimeError("Не настроены Telegram user id супер администраторов.")
 
+        self._ticket_deps = TicketDeps(
+            ticket_repository=self.ticket_repository,
+            ticket_analytics_repository=self.ticket_analytics_repository,
+            ticket_feedback_repository=self.ticket_feedback_repository,
+            ticket_ai_summary_repository=self.ticket_ai_summary_repository,
+            ticket_message_repository=self.ticket_message_repository,
+            ticket_internal_note_repository=self.ticket_internal_note_repository,
+            ticket_event_repository=self.ticket_event_repository,
+            ticket_tag_repository=self.ticket_tag_repository,
+        )
+        self._catalog_deps = CatalogDeps(
+            macro_repository=self.macro_repository,
+            tag_repository=self.tag_repository,
+            ticket_category_repository=self.ticket_category_repository,
+        )
+        self._operator_deps = OperatorDeps(
+            operator_repository=self.operator_repository,
+            operator_invite_repository=self.operator_invite_repository,
+            super_admin_telegram_user_ids=self.super_admin_telegram_user_ids,
+        )
+        self._ai_deps = AIDeps(
+            ai_client_factory=self.ai_client_factory,
+            ai_settings_provider=self.ai_settings_provider,
+            ticket_ai_summary_repository=self.ticket_ai_summary_repository,
+        )
+        self._export_deps = ExportDeps(
+            renderers=self.export_renderers,
+            include_internal_notes_in_ticket_reports=(
+                self.include_internal_notes_in_ticket_reports
+            ),
+        )
         self._components = build_helpdesk_components(
             ticket_repository=self.ticket_repository,
             ticket_analytics_repository=self.ticket_analytics_repository,

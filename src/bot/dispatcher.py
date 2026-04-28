@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from bot.middlewares.authorization import AuthorizationMiddleware
 from bot.middlewares.context import UpdateContextMiddleware
+from bot.middlewares.workflow_contexts import WorkflowContextMiddleware
 from bot.routers import build_root_router
 from bot.texts.buttons import WORKSPACE_BUTTON_TEXT
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
@@ -44,8 +45,11 @@ def build_dispatcher(*, storage: BaseStorage, **workflow_data: Any) -> Dispatche
 def _register_middlewares(dispatcher: Dispatcher) -> None:
     update_context_middleware = UpdateContextMiddleware()
     authorization_middleware = AuthorizationMiddleware()
+    workflow_context_middleware = WorkflowContextMiddleware()
     dispatcher.message.outer_middleware(update_context_middleware)
     dispatcher.callback_query.outer_middleware(update_context_middleware)
+    dispatcher.message.outer_middleware(workflow_context_middleware)
+    dispatcher.callback_query.outer_middleware(workflow_context_middleware)
     dispatcher.message.outer_middleware(authorization_middleware)
     dispatcher.callback_query.outer_middleware(authorization_middleware)
 

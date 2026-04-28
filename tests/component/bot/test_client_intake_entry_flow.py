@@ -18,6 +18,7 @@ from application.use_cases.tickets.summaries import (
 )
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from bot.handlers.user.client import handle_client_text
+from bot.handlers.user.intake_context import ClientIntakeContext, TicketRuntimeContext
 from bot.handlers.user.states import UserIntakeStates
 from bot.texts.categories import INTAKE_CATEGORY_PROMPT_TEXT
 from bot.texts.client import (
@@ -47,6 +48,22 @@ def build_message(*, text: str, chat_id: int = 2002, message_id: int = 15) -> Me
     return message
 
 
+def build_client_intake_context(service: object) -> ClientIntakeContext:
+    return ClientIntakeContext(
+        ticket_runtime=TicketRuntimeContext(
+            helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
+            operator_active_ticket_store=SimpleNamespace(
+                get_active_ticket=AsyncMock(return_value=None)
+            ),
+            ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
+            ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
+            logger=Mock(),
+        ),
+        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
+        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
+    )
+
+
 async def test_client_first_message_without_active_ticket_starts_intake_flow() -> None:
     message = build_message(text="Помогите с доступом")
     state = SimpleNamespace(set_state=AsyncMock(), set_data=AsyncMock())
@@ -70,12 +87,7 @@ async def test_client_first_message_without_active_ticket_starts_intake_flow() -
         message=message,
         state=state,
         bot=Mock(),
-        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
-        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(get_active_ticket=AsyncMock()),
-        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
-        ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
+        client_intake_context=build_client_intake_context(service),
     )
 
     state.set_state.assert_awaited_once_with(UserIntakeStates.choosing_category)
@@ -117,14 +129,7 @@ async def test_client_message_with_active_ticket_keeps_live_dialogue_path() -> N
         message=message,
         state=state,
         bot=Mock(),
-        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
-        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(
-            get_active_ticket=AsyncMock(return_value=None)
-        ),
-        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
-        ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
+        client_intake_context=build_client_intake_context(service),
     )
 
     service.create_ticket_from_client_message.assert_awaited_once()
@@ -170,14 +175,7 @@ async def test_client_duplicate_burst_is_not_forwarded_to_operator_again() -> No
         message=message,
         state=state,
         bot=bot,
-        helpdesk_backend_client_factory=build_helpdesk_backend_client_factory(service),
-        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(
-            get_active_ticket=AsyncMock(return_value=None)
-        ),
-        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
-        ticket_stream_publisher=SimpleNamespace(publish_new_ticket=AsyncMock()),
+        client_intake_context=build_client_intake_context(service),
     )
 
     bot.send_message.assert_not_awaited()

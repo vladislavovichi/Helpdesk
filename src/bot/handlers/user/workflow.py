@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import logging
-
 from aiogram import Bot
 from aiogram.types import Message
 
 from application.contracts.tickets import ClientTicketMessageCommand
 from application.use_cases.tickets.summaries import build_ticket_attachment_summary
-from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.adapters.helpdesk import build_client_ticket_message_command
 from bot.delivery import deliver_client_message_to_operator
 from bot.handlers.common.ticket_attachments import (
@@ -15,6 +12,7 @@ from bot.handlers.common.ticket_attachments import (
     IncomingTicketContent,
     extract_ticket_content,
 )
+from bot.handlers.user.intake_context import TicketRuntimeContext
 from bot.keyboards.inline.client_actions import build_client_ticket_markup
 from bot.keyboards.inline.operator_actions import (
     build_ticket_actions_markup,
@@ -30,22 +28,13 @@ from bot.texts.client import (
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
 from domain.enums.tickets import TicketEventType
 from domain.tickets import InvalidTicketTransitionError
-from infrastructure.redis.contracts import (
-    OperatorActiveTicketStore,
-    TicketLiveSessionStore,
-    TicketStreamPublisher,
-)
 
 
 async def process_client_ticket_message(
     *,
     message: Message,
     bot: Bot,
-    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
-    operator_active_ticket_store: OperatorActiveTicketStore,
-    ticket_live_session_store: TicketLiveSessionStore,
-    ticket_stream_publisher: TicketStreamPublisher,
-    logger: logging.Logger,
+    context: TicketRuntimeContext,
     category_id: int | None = None,
     content: IncomingTicketContent | None = None,
 ) -> None:
@@ -67,11 +56,7 @@ async def process_client_ticket_message(
     await process_client_ticket_command(
         response_message=message,
         bot=bot,
-        helpdesk_backend_client_factory=helpdesk_backend_client_factory,
-        operator_active_ticket_store=operator_active_ticket_store,
-        ticket_live_session_store=ticket_live_session_store,
-        ticket_stream_publisher=ticket_stream_publisher,
-        logger=logger,
+        context=context,
         command=command,
         content=effective_content,
         category_id=category_id,
@@ -82,11 +67,7 @@ async def process_client_ticket_command(
     *,
     response_message: Message,
     bot: Bot,
-    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
-    operator_active_ticket_store: OperatorActiveTicketStore,
-    ticket_live_session_store: TicketLiveSessionStore,
-    ticket_stream_publisher: TicketStreamPublisher,
-    logger: logging.Logger,
+    context: TicketRuntimeContext,
     command: ClientTicketMessageCommand,
     content: IncomingTicketContent,
     category_id: int | None = None,
@@ -95,7 +76,7 @@ async def process_client_ticket_command(
     attachment = content.attachment
 
     try:
-        async with helpdesk_backend_client_factory() as helpdesk_backend:
+        async with context.helpdesk_backend_client_factory() as helpdesk_backend:
             ticket = (
                 await helpdesk_backend.create_ticket_from_client_message(command)
                 if category_id is None
@@ -112,13 +93,13 @@ async def process_client_ticket_command(
         await response_message.answer(SERVICE_UNAVAILABLE_TEXT)
         return
 
-    await ticket_live_session_store.refresh_session(
+    await context.ticket_live_session_store.refresh_session(
         ticket_public_id=str(ticket.public_id),
         client_chat_id=command.client_chat_id,
         operator_telegram_user_id=ticket_details.assigned_operator_telegram_user_id,
     )
 
-    logger.info(
+    context.logger.info(
         "Client ticket message processed client_chat_id=%s ticket=%s created=%s",
         command.client_chat_id,
         ticket.public_number,
@@ -126,7 +107,7 @@ async def process_client_ticket_command(
     )
 
     if ticket.created:
-        await ticket_stream_publisher.publish_new_ticket(
+        await context.ticket_stream_publisher.publish_new_ticket(
             ticket_id=str(ticket.public_id),
             client_chat_id=command.client_chat_id,
             subject=ticket_details.subject,
@@ -143,7 +124,7 @@ async def process_client_ticket_command(
         operator_chat_id is not None
         and ticket.event_type != TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED
     ):
-        active_ticket_public_id = await operator_active_ticket_store.get_active_ticket(
+        active_ticket_public_id = await context.operator_active_ticket_store.get_active_ticket(
             operator_id=operator_chat_id
         )
         is_active_context = active_ticket_public_id == str(ticket.public_id)
@@ -164,10 +145,10 @@ async def process_client_ticket_command(
                 else build_ticket_switch_markup(ticket_public_id=ticket.public_id)
             ),
             active_context=is_active_context,
-            logger=logger,
+            logger=context.logger,
         )
         if delivery_error is not None:
-            logger.warning(
+            context.logger.warning(
                 "Failed to forward client message to operator "
                 "ticket=%s operator_chat_id=%s error=%s",
                 ticket.public_number,
@@ -192,33 +173,29 @@ async def process_client_intake_submission(
     *,
     response_message: Message,
     bot: Bot,
-    helpdesk_backend_client_factory: HelpdeskBackendClientFactory,
-    operator_active_ticket_store: OperatorActiveTicketStore,
-    ticket_live_session_store: TicketLiveSessionStore,
-    ticket_stream_publisher: TicketStreamPublisher,
-    logger: logging.Logger,
+    context: TicketRuntimeContext,
     initial_command: ClientTicketMessageCommand,
     follow_up_command: ClientTicketMessageCommand | None = None,
 ) -> None:
-    del bot, operator_active_ticket_store
+    del bot
 
     follow_up_recorded = follow_up_command is None
     try:
-        async with helpdesk_backend_client_factory() as helpdesk_backend:
+        async with context.helpdesk_backend_client_factory() as helpdesk_backend:
             ticket = await helpdesk_backend.create_ticket_from_client_intake(initial_command)
             if follow_up_command is not None:
                 try:
                     await helpdesk_backend.create_ticket_from_client_message(follow_up_command)
                     follow_up_recorded = True
                 except InvalidTicketTransitionError as exc:
-                    logger.warning(
+                    context.logger.warning(
                         "Client intake follow-up rejected ticket=%s client_chat_id=%s error=%s",
                         ticket.public_number,
                         initial_command.client_chat_id,
                         exc,
                     )
                 except RuntimeError as exc:
-                    logger.warning(
+                    context.logger.warning(
                         "Client intake follow-up failed ticket=%s client_chat_id=%s error=%s",
                         ticket.public_number,
                         initial_command.client_chat_id,
@@ -238,13 +215,13 @@ async def process_client_intake_submission(
         await response_message.answer(SERVICE_UNAVAILABLE_TEXT)
         return
 
-    await ticket_live_session_store.refresh_session(
+    await context.ticket_live_session_store.refresh_session(
         ticket_public_id=str(ticket.public_id),
         client_chat_id=initial_command.client_chat_id,
         operator_telegram_user_id=ticket_details.assigned_operator_telegram_user_id,
     )
 
-    logger.info(
+    context.logger.info(
         (
             "Client intake submission processed "
             "client_chat_id=%s ticket=%s created=%s has_follow_up=%s follow_up_recorded=%s"
@@ -257,7 +234,7 @@ async def process_client_intake_submission(
     )
 
     if ticket.created:
-        await ticket_stream_publisher.publish_new_ticket(
+        await context.ticket_stream_publisher.publish_new_ticket(
             ticket_id=str(ticket.public_id),
             client_chat_id=initial_command.client_chat_id,
             subject=ticket_details.subject,

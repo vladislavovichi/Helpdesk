@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from time import perf_counter
 from typing import Any, TypeVar
@@ -18,6 +18,7 @@ from infrastructure.runtime_context import bind_correlation_id, reset_correlatio
 
 logger = logging.getLogger(__name__)
 _ServiceResultT = TypeVar("_ServiceResultT")
+_ResponseT = TypeVar("_ResponseT")
 
 
 class HelpdeskBackendGrpcServiceBase:
@@ -74,6 +75,83 @@ class HelpdeskBackendGrpcServiceBase:
         except Exception as exc:
             await abort_for_exception(context, exc, method=method)
         raise RuntimeError("unreachable")
+
+    async def _unary_rpc(
+        self,
+        context: grpc.aio.ServicerContext,
+        *,
+        method: str,
+        call: Callable[
+            [HelpdeskService, BackendRequestContext],
+            Awaitable[_ServiceResultT],
+        ],
+        serialize: Callable[[_ServiceResultT], _ResponseT],
+        fallback_actor: RequestActor | None = None,
+    ) -> _ResponseT:
+        async with self._rpc_scope(
+            context,
+            method=method,
+            fallback_actor=fallback_actor,
+        ) as request_context:
+            result = await self._invoke_helpdesk(
+                context,
+                method=method,
+                call=lambda helpdesk_service: call(helpdesk_service, request_context),
+            )
+            return serialize(result)
+
+    async def _optional_unary_rpc(
+        self,
+        context: grpc.aio.ServicerContext,
+        *,
+        method: str,
+        call: Callable[
+            [HelpdeskService, BackendRequestContext],
+            Awaitable[_ServiceResultT | None],
+        ],
+        serialize: Callable[[_ServiceResultT], _ResponseT],
+        not_found_message: str,
+        fallback_actor: RequestActor | None = None,
+    ) -> _ResponseT:
+        async with self._rpc_scope(
+            context,
+            method=method,
+            fallback_actor=fallback_actor,
+        ) as request_context:
+            result = await self._invoke_helpdesk(
+                context,
+                method=method,
+                call=lambda helpdesk_service: call(helpdesk_service, request_context),
+            )
+            if result is None:
+                await context.abort(grpc.StatusCode.NOT_FOUND, not_found_message)
+            assert result is not None
+            return serialize(result)
+
+    async def _stream_rpc(
+        self,
+        context: grpc.aio.ServicerContext,
+        *,
+        method: str,
+        call: Callable[
+            [HelpdeskService, BackendRequestContext],
+            Awaitable[Iterable[_ServiceResultT]],
+        ],
+        serialize: Callable[[_ServiceResultT], _ResponseT],
+        fallback_actor: RequestActor | None = None,
+    ) -> AsyncIterator[_ResponseT]:
+        async with self._rpc_scope(
+            context,
+            method=method,
+            fallback_actor=fallback_actor,
+        ) as request_context:
+            result = await self._invoke_helpdesk(
+                context,
+                method=method,
+                call=lambda helpdesk_service: call(helpdesk_service, request_context),
+            )
+            for item in result:
+                yield serialize(item)
 
     def _request_actor(self, request: Any) -> RequestActor | None:
         if hasattr(request, "HasField") and request.HasField("actor"):

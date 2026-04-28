@@ -9,8 +9,8 @@ from uuid import uuid4
 from aiogram.types import Message
 
 from application.use_cases.tickets.summaries import TicketDetailsSummary, TicketSummary
-from backend.grpc.contracts import HelpdeskBackendClientFactory
 from bot.handlers.user.intake import handle_client_intake_message
+from bot.handlers.user.intake_context import ClientIntakeContext
 from bot.handlers.user.intake_draft import (
     PendingClientIntakeDraft,
     serialize_pending_client_intake_draft,
@@ -49,15 +49,15 @@ class TicketDetailsBuilder(Protocol):
     ) -> TicketDetailsSummary: ...
 
 
-BackendClientFactoryBuilder = Callable[[object], HelpdeskBackendClientFactory]
 TicketSummaryBuilder = Callable[[object], TicketSummary]
+ClientIntakeContextBuilder = Callable[[object, SimpleNamespace | None], ClientIntakeContext]
 
 
 async def test_intake_message_creates_ticket_with_selected_category(
-    backend_client_factory_builder: BackendClientFactoryBuilder,
     message_harness_builder: MessageHarnessBuilder,
     ticket_summary_builder: TicketSummaryBuilder,
     ticket_details_builder: TicketDetailsBuilder,
+    client_intake_context_builder: ClientIntakeContextBuilder,
     publisher: SimpleNamespace,
 ) -> None:
     ticket_public_id = uuid4()
@@ -83,14 +83,7 @@ async def test_intake_message_creates_ticket_with_selected_category(
         message=harness.message,
         state=state,
         bot=Mock(),
-        helpdesk_backend_client_factory=backend_client_factory_builder(service),
-        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(
-            get_active_ticket=AsyncMock(return_value=None)
-        ),
-        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
-        ticket_stream_publisher=publisher,
+        client_intake_context=client_intake_context_builder(service, publisher),
     )
 
     state.clear.assert_awaited_once_with()
@@ -107,10 +100,10 @@ async def test_intake_message_creates_ticket_with_selected_category(
 
 
 async def test_intake_with_initial_attachment_keeps_first_media_and_saves_follow_up_text(
-    backend_client_factory_builder: BackendClientFactoryBuilder,
     message_harness_builder: MessageHarnessBuilder,
     ticket_summary_builder: TicketSummaryBuilder,
     ticket_details_builder: TicketDetailsBuilder,
+    client_intake_context_builder: ClientIntakeContextBuilder,
     publisher: SimpleNamespace,
 ) -> None:
     ticket_public_id = uuid4()
@@ -156,14 +149,7 @@ async def test_intake_with_initial_attachment_keeps_first_media_and_saves_follow
         message=harness.message,
         state=state,
         bot=Mock(),
-        helpdesk_backend_client_factory=backend_client_factory_builder(service),
-        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(
-            get_active_ticket=AsyncMock(return_value=None)
-        ),
-        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
-        ticket_stream_publisher=publisher,
+        client_intake_context=client_intake_context_builder(service, publisher),
     )
 
     intake_command = service.create_ticket_from_client_intake.await_args.args[0]
@@ -188,10 +174,10 @@ async def test_intake_with_initial_attachment_keeps_first_media_and_saves_follow
 
 
 async def test_intake_preserves_first_media_when_follow_up_text_save_fails(
-    backend_client_factory_builder: BackendClientFactoryBuilder,
     message_harness_builder: MessageHarnessBuilder,
     ticket_summary_builder: TicketSummaryBuilder,
     ticket_details_builder: TicketDetailsBuilder,
+    client_intake_context_builder: ClientIntakeContextBuilder,
     publisher: SimpleNamespace,
 ) -> None:
     ticket_public_id = uuid4()
@@ -238,14 +224,7 @@ async def test_intake_preserves_first_media_when_follow_up_text_save_fails(
         message=harness.message,
         state=state,
         bot=Mock(),
-        helpdesk_backend_client_factory=backend_client_factory_builder(service),
-        global_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        chat_rate_limiter=SimpleNamespace(allow=AsyncMock(return_value=True)),
-        operator_active_ticket_store=SimpleNamespace(
-            get_active_ticket=AsyncMock(return_value=None)
-        ),
-        ticket_live_session_store=SimpleNamespace(refresh_session=AsyncMock()),
-        ticket_stream_publisher=publisher,
+        client_intake_context=client_intake_context_builder(service, publisher),
     )
 
     intake_command = service.create_ticket_from_client_intake.await_args.args[0]

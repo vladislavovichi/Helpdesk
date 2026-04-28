@@ -18,6 +18,7 @@ from bot.dispatcher import (
 )
 from bot.middlewares.authorization import AuthorizationMiddleware
 from bot.middlewares.context import UpdateContextMiddleware
+from bot.middlewares.workflow_contexts import WorkflowContextMiddleware
 from infrastructure.config.settings import Settings
 from infrastructure.redis.fsm import build_fsm_storage
 
@@ -52,6 +53,7 @@ def test_build_dispatcher_registers_role_context_before_filter_stage() -> None:
 
     assert [type(middleware) for middleware in outer_middlewares] == [
         UpdateContextMiddleware,
+        WorkflowContextMiddleware,
         AuthorizationMiddleware,
     ]
     assert inner_middlewares == []

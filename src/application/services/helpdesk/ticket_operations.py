@@ -50,11 +50,15 @@ class HelpdeskTicketOperations(HelpdeskSLASync):
         self,
         command: ClientTicketMessageCommand,
     ) -> TicketSummary:
-        result = await self._components.tickets.create_from_client_message(command)
-        await self._sync_sla_deadline(ticket_public_id=result.public_id)
-        return result
+        return await self._create_ticket_from_client_command(command)
 
     async def create_ticket_from_client_intake(
+        self,
+        command: ClientTicketMessageCommand,
+    ) -> TicketSummary:
+        return await self._create_ticket_from_client_command(command)
+
+    async def _create_ticket_from_client_command(
         self,
         command: ClientTicketMessageCommand,
     ) -> TicketSummary:

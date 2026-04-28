@@ -27,12 +27,15 @@ ops/env/*.local
 .coverage.*
 htmlcov/
 coverage.xml
+coverage/
 
 # Packaging
 build/
 dist/
 .eggs/
 *.egg-info/
+pip-wheel-metadata/
+*.whl
 
 # Editors and local workspaces
 .idea/
