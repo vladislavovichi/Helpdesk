@@ -15,23 +15,70 @@ class Permission(StrEnum):
     ACCESS_OPERATOR = "access_operator"
     MANAGE_OPERATORS = "manage_operators"
     ACCESS_ADMIN = "access_admin"
+    VIEW_TICKET = "view_ticket"
+    CREATE_TICKET = "create_ticket"
+    CLIENT_REPLY = "client_reply"
+    OPERATOR_REPLY = "operator_reply"
+    CLOSE_TICKET = "close_ticket"
+    ASSIGN_TICKET = "assign_ticket"
+    ADD_INTERNAL_NOTE = "add_internal_note"
+    USE_AI_ASSIST = "use_ai_assist"
+    MANAGE_CATEGORIES = "manage_categories"
+    MANAGE_MACROS = "manage_macros"
+    CREATE_OPERATOR_INVITES = "create_operator_invites"
+    ACCEPT_OPERATOR_INVITES = "accept_operator_invites"
+    EXPORT_TICKETS = "export_tickets"
+    EXPORT_ANALYTICS = "export_analytics"
+
+
+CLIENT_PERMISSIONS = frozenset(
+    {
+        Permission.VIEW_TICKET,
+        Permission.CREATE_TICKET,
+        Permission.CLIENT_REPLY,
+        Permission.ACCEPT_OPERATOR_INVITES,
+    }
+)
+
+OPERATOR_PERMISSIONS = CLIENT_PERMISSIONS | frozenset(
+    {
+        Permission.ACCESS_OPERATOR,
+        Permission.OPERATOR_REPLY,
+        Permission.CLOSE_TICKET,
+        Permission.ASSIGN_TICKET,
+        Permission.ADD_INTERNAL_NOTE,
+        Permission.USE_AI_ASSIST,
+        Permission.MANAGE_CATEGORIES,
+        Permission.MANAGE_MACROS,
+        Permission.EXPORT_TICKETS,
+        Permission.EXPORT_ANALYTICS,
+    }
+)
+
+SUPER_ADMIN_PERMISSIONS = OPERATOR_PERMISSIONS | frozenset(
+    {
+        Permission.ACCESS_ADMIN,
+        Permission.MANAGE_OPERATORS,
+        Permission.CREATE_OPERATOR_INVITES,
+    }
+)
 
 
 ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
-    UserRole.SUPER_ADMIN: frozenset(
-        {
-            Permission.ACCESS_OPERATOR,
-            Permission.MANAGE_OPERATORS,
-            Permission.ACCESS_ADMIN,
-        }
-    ),
-    UserRole.OPERATOR: frozenset({Permission.ACCESS_OPERATOR}),
-    UserRole.USER: frozenset(),
+    UserRole.SUPER_ADMIN: SUPER_ADMIN_PERMISSIONS,
+    UserRole.OPERATOR: OPERATOR_PERMISSIONS,
+    UserRole.USER: CLIENT_PERMISSIONS,
 }
+
+INTERNAL_SERVICE_PERMISSIONS = SUPER_ADMIN_PERMISSIONS
 
 
 def get_permission_denied_message(permission: Permission) -> str:
-    if permission in {Permission.MANAGE_OPERATORS, Permission.ACCESS_ADMIN}:
+    if permission in {
+        Permission.MANAGE_OPERATORS,
+        Permission.ACCESS_ADMIN,
+        Permission.CREATE_OPERATOR_INVITES,
+    }:
         return "Доступно только суперадминистраторам."
     return "Доступно только операторам и суперадминистраторам."
 

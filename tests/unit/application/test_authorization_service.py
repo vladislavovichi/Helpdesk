@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import NoReturn
 
 from application.services.authorization import (
+    INTERNAL_SERVICE_PERMISSIONS,
+    ROLE_PERMISSIONS,
     AuthorizationError,
     AuthorizationService,
     Permission,
@@ -181,3 +183,20 @@ async def test_second_super_admin_is_recognized_from_configured_set() -> None:
     result = await service.resolve_role(telegram_user_id=84)
 
     assert result == UserRole.SUPER_ADMIN
+
+
+def test_authorization_permission_matrix_covers_ticket_and_admin_operations() -> None:
+    assert Permission.CREATE_TICKET in ROLE_PERMISSIONS[UserRole.USER]
+    assert Permission.CLIENT_REPLY in ROLE_PERMISSIONS[UserRole.USER]
+    assert Permission.OPERATOR_REPLY not in ROLE_PERMISSIONS[UserRole.USER]
+    assert Permission.USE_AI_ASSIST not in ROLE_PERMISSIONS[UserRole.USER]
+
+    assert Permission.OPERATOR_REPLY in ROLE_PERMISSIONS[UserRole.OPERATOR]
+    assert Permission.ADD_INTERNAL_NOTE in ROLE_PERMISSIONS[UserRole.OPERATOR]
+    assert Permission.EXPORT_TICKETS in ROLE_PERMISSIONS[UserRole.OPERATOR]
+    assert Permission.MANAGE_OPERATORS not in ROLE_PERMISSIONS[UserRole.OPERATOR]
+    assert Permission.CREATE_OPERATOR_INVITES not in ROLE_PERMISSIONS[UserRole.OPERATOR]
+
+    assert Permission.MANAGE_OPERATORS in ROLE_PERMISSIONS[UserRole.SUPER_ADMIN]
+    assert Permission.CREATE_OPERATOR_INVITES in ROLE_PERMISSIONS[UserRole.SUPER_ADMIN]
+    assert ROLE_PERMISSIONS[UserRole.SUPER_ADMIN] == INTERNAL_SERVICE_PERMISSIONS

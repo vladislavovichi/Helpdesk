@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from application.services.authorization import AuthorizationError, Permission
+from application.services.authorization import ROLE_PERMISSIONS, AuthorizationError, Permission
 from domain.contracts.repositories import OperatorRepository
+from domain.enums.roles import UserRole
 
 
 @dataclass(slots=True)
@@ -20,7 +21,10 @@ class HelpdeskPermissionGuard:
         if telegram_user_id is None:
             raise AuthorizationError(permission)
 
-        if permission == Permission.MANAGE_OPERATORS:
+        if permission in ROLE_PERMISSIONS[UserRole.USER]:
+            return
+
+        if permission not in ROLE_PERMISSIONS[UserRole.OPERATOR]:
             if telegram_user_id not in self.super_admin_telegram_user_ids:
                 raise AuthorizationError(permission)
             return

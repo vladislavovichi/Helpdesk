@@ -14,6 +14,7 @@ from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.http import build_handler_class
+from mini_app.responses import BinaryPayload
 
 BOT_TOKEN = "123:ABC"
 
@@ -29,6 +30,7 @@ class StubGateway:
         self.role = role
         self.dashboard_error = dashboard_error
         self.ticket_error = ticket_error
+        self.calls: list[str] = []
 
     async def get_session(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
         return {
@@ -55,6 +57,56 @@ class StubGateway:
         if self.ticket_error is not None:
             raise self.ticket_error
         return {"ticket": {"public_id": "ticket"}}
+
+    async def take_ticket(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("take_ticket")
+        return {"public_id": "ticket", "status": "assigned"}
+
+    async def refresh_ticket_ai_summary(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("refresh_ticket_ai_summary")
+        return {"available": True, "short_summary": "Кратко"}
+
+    async def generate_ticket_reply_draft(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+    ) -> dict[str, object]:
+        del user, ticket_public_id
+        self.calls.append("generate_ticket_reply_draft")
+        return {"available": True, "reply_text": "Здравствуйте!"}
+
+    async def export_ticket(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        ticket_public_id: object,
+        format: object,
+    ) -> BinaryPayload:
+        del user, ticket_public_id, format
+        self.calls.append("export_ticket")
+        return BinaryPayload(
+            filename="ticket.html",
+            content_type="text/html; charset=utf-8",
+            content=b"<html>ticket</html>",
+        )
+
+    async def list_operators(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
+        del user
+        self.calls.append("list_operators")
+        return {"items": [{"telegram_user_id": 1001, "display_name": "Operator"}]}
 
 
 def test_http_session_accepts_valid_telegram_init_data() -> None:
@@ -126,13 +178,117 @@ def test_http_maps_backend_unavailable_to_safe_response() -> None:
     assert "token" not in payload["error"].lower()
 
 
+def test_http_routes_ticket_action_through_gateway_without_handler_call() -> None:
+    ticket_id = uuid4()
+    gateway = StubGateway()
+
+    status, payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path=f"/api/tickets/{ticket_id}/take",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert status == 200
+    assert payload == {"public_id": "ticket", "status": "assigned"}
+    assert gateway.calls == ["take_ticket"]
+
+
+def test_http_routes_ai_summary_and_reply_draft() -> None:
+    ticket_id = uuid4()
+    gateway = StubGateway()
+
+    summary_status, summary_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path=f"/api/tickets/{ticket_id}/ai-summary",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+    draft_status, draft_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path=f"/api/tickets/{ticket_id}/ai-reply-draft",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert summary_status == 200
+    assert summary_payload["short_summary"] == "Кратко"
+    assert draft_status == 200
+    assert draft_payload["reply_text"] == "Здравствуйте!"
+    assert gateway.calls == ["refresh_ticket_ai_summary", "generate_ticket_reply_draft"]
+
+
+def test_http_routes_ticket_export_as_binary_response() -> None:
+    ticket_id = uuid4()
+    gateway = StubGateway()
+
+    status, headers, body = request_raw(
+        gateway=gateway,
+        path=f"/api/tickets/{ticket_id}/export?format=html",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert status == 200
+    assert headers["Content-Type"] == "text/html; charset=utf-8"
+    assert headers["Content-Disposition"] == 'attachment; filename="ticket.html"'
+    assert body == b"<html>ticket</html>"
+    assert gateway.calls == ["export_ticket"]
+
+
+def test_http_restricts_admin_routes_to_super_admin() -> None:
+    status, payload = request_json(
+        gateway=StubGateway(role=UserRole.OPERATOR),
+        path="/api/admin/operators",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert status == 403
+    assert payload == {"error": "Доступно только суперадминистраторам.", "code": "access_denied"}
+
+
+def test_http_allows_super_admin_route() -> None:
+    gateway = StubGateway(role=UserRole.SUPER_ADMIN)
+
+    status, payload = request_json(
+        gateway=gateway,
+        path="/api/admin/operators",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert status == 200
+    assert payload["items"][0]["telegram_user_id"] == 1001
+    assert gateway.calls == ["list_operators"]
+
+
 def request_json(
     *,
     gateway: StubGateway,
     path: str,
     init_data: str,
+    method: str = "GET",
+    body: bytes = b"",
     init_data_ttl_seconds: int = 3600,
 ) -> tuple[int, dict[str, Any]]:
+    status, _headers, response_body = request_raw(
+        gateway=gateway,
+        path=path,
+        init_data=init_data,
+        method=method,
+        body=body,
+        init_data_ttl_seconds=init_data_ttl_seconds,
+    )
+    return status, cast(dict[str, Any], json.loads(response_body.decode()))
+
+
+def request_raw(
+    *,
+    gateway: StubGateway,
+    path: str,
+    init_data: str,
+    method: str = "GET",
+    body: bytes = b"",
+    init_data_ttl_seconds: int = 3600,
+) -> tuple[int, dict[str, str], bytes]:
     handler_cls = build_handler_class(
         gateway=cast(Any, gateway),
         config=MiniAppConfig(
@@ -143,13 +299,17 @@ def request_json(
         bot_token=BOT_TOKEN,
         static_dir=Path("src/mini_app/static"),
     )
+    content_length = f"Content-Length: {len(body)}\r\n" if body else ""
     request = (
-        f"GET {path} HTTP/1.1\r\nHost: mini-app.test\r\nX-Telegram-Init-Data: {init_data}\r\n\r\n"
-    ).encode()
+        f"{method} {path} HTTP/1.1\r\n"
+        "Host: mini-app.test\r\n"
+        f"X-Telegram-Init-Data: {init_data}\r\n"
+        f"{content_length}\r\n"
+    ).encode() + body
     connection = FakeSocket(request)
     handler_cls(cast(Any, connection), ("127.0.0.1", 12345), cast(Any, object()))
     status, _headers, body = parse_http_response(connection.output.getvalue())
-    return status, cast(dict[str, Any], json.loads(body.decode()))
+    return status, _headers, body
 
 
 class FakeSocket:

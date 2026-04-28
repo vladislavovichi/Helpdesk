@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True)
 class ApplicationError(Exception):
     public_message: str
     code: str
@@ -45,3 +45,9 @@ class AIUnavailableError(ApplicationError):
 class ConcurrencyConflictError(ApplicationError):
     def __init__(self, message: str = "Операция конфликтует с другим изменением.") -> None:
         super().__init__(message, "concurrency_conflict")
+
+
+AppError = ApplicationError
+NotFoundAppError = NotFoundError
+ForbiddenAppError = ForbiddenError
+ConflictAppError = ConcurrencyConflictError

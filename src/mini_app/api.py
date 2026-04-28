@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
-from time import monotonic
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from application.ai.summaries import TicketReplyDraft
@@ -14,6 +12,7 @@ from application.contracts.tickets import (
     AssignNextQueuedTicketCommand,
     TicketAssignmentCommand,
 )
+from application.errors import NotFoundError
 from application.services.stats import AnalyticsWindow
 from application.use_cases.ai.settings import (
     AISettingsRepository,
@@ -22,22 +21,16 @@ from application.use_cases.ai.settings import (
 )
 from application.use_cases.analytics.exports import AnalyticsExportFormat, AnalyticsSection
 from application.use_cases.tickets.exports import TicketReportFormat
-from application.use_cases.tickets.summaries import (
-    OperatorTicketSummary,
-    QueuedTicketSummary,
-    TicketDetailsSummary,
-)
 from backend.grpc.contracts import HelpdeskBackendClientFactory
-from domain.enums.tickets import TicketStatus
 from mini_app.auth import TelegramMiniAppUser
+from mini_app.gateway_ai import MiniAppAIRateLimiter, rate_limited_ai_summary_payload
+from mini_app.gateway_dashboard import build_operator_dashboard, load_dashboard_ticket_details
+from mini_app.responses import BinaryPayload
 from mini_app.serializers import (
-    is_negative_dashboard_sentiment,
-    needs_operator_reply,
     serialize_access_context,
     serialize_ai_settings,
     serialize_analytics_snapshot,
     serialize_archived_ticket,
-    serialize_dashboard_bucket,
     serialize_macro,
     serialize_operator,
     serialize_operator_invite,
@@ -48,51 +41,6 @@ from mini_app.serializers import (
     serialize_ticket_reply_draft,
     serialize_ticket_timeline,
 )
-
-
-@dataclass(slots=True)
-class MiniAppAIRateLimiter:
-    summary_limit: int = 3
-    reply_draft_limit: int = 5
-    window_seconds: int = 60
-    _buckets: dict[tuple[str, int, UUID], tuple[float, int]] = field(default_factory=dict)
-
-    async def allow(
-        self,
-        *,
-        operation: str,
-        operator_telegram_user_id: int,
-        ticket_public_id: UUID,
-    ) -> bool:
-        limit = self.summary_limit if operation == "summary" else self.reply_draft_limit
-        if limit <= 0:
-            return False
-        now = monotonic()
-        key = (operation, operator_telegram_user_id, ticket_public_id)
-        window_started_at, count = self._buckets.get(key, (now, 0))
-        if now - window_started_at >= self.window_seconds:
-            window_started_at = now
-            count = 0
-        count += 1
-        self._buckets[key] = (window_started_at, count)
-        self._prune(now)
-        return count <= limit
-
-    def _prune(self, now: float) -> None:
-        expired = [
-            key
-            for key, (window_started_at, _count) in self._buckets.items()
-            if now - window_started_at >= self.window_seconds
-        ]
-        for key in expired:
-            self._buckets.pop(key, None)
-
-
-@dataclass(slots=True, frozen=True)
-class BinaryPayload:
-    filename: str
-    content_type: str
-    content: bytes
 
 
 @dataclass(slots=True)
@@ -135,7 +83,7 @@ class MiniAppGateway:
                 actor=actor,
             )
             archive = await client.list_archived_tickets(actor=actor)
-            ticket_details = await self._load_dashboard_ticket_details(
+            ticket_details = await load_dashboard_ticket_details(
                 client=client,
                 actor=actor,
                 tickets=[*queued, *mine],
@@ -145,7 +93,7 @@ class MiniAppGateway:
         queued_serialized = [serialize_queue_ticket(item) for item in queued]
         archive_serialized = [serialize_archived_ticket(item) for item in archive[:6]]
         escalations = [item for item in mine_serialized if item["status"] == "escalated"]
-        operator_dashboard = self._build_operator_dashboard(
+        operator_dashboard = build_operator_dashboard(
             queued=queued,
             mine=mine,
             ticket_details=ticket_details,
@@ -179,7 +127,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if ticket is None:
-            raise LookupError("Свободная заявка не найдена.")
+            raise NotFoundError("Свободная заявка не найдена.")
         return {
             "ticket": {
                 "public_id": str(ticket.public_id),
@@ -219,7 +167,7 @@ class MiniAppGateway:
                 actor=actor,
             )
             if details is None:
-                raise LookupError("Заявка не найдена.")
+                raise NotFoundError("Заявка не найдена.")
             ai_snapshot = await client.get_ticket_ai_assist_snapshot(
                 ticket_public_id=ticket_public_id,
                 refresh_summary=False,
@@ -261,7 +209,7 @@ class MiniAppGateway:
             operator_telegram_user_id=user.telegram_user_id,
             ticket_public_id=ticket_public_id,
         ):
-            return _rate_limited_ai_summary_payload(model_id=settings.default_model_id)
+            return rate_limited_ai_summary_payload(model_id=settings.default_model_id)
         async with self.backend_client_factory() as client:
             ai_snapshot = await client.get_ticket_ai_assist_snapshot(
                 ticket_public_id=ticket_public_id,
@@ -269,10 +217,10 @@ class MiniAppGateway:
                 actor=actor,
             )
         if ai_snapshot is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         serialized = serialize_ticket_ai_snapshot(ai_snapshot)
         if serialized is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return self._apply_ai_settings_to_snapshot_payload(serialized)
 
     async def generate_ticket_reply_draft(
@@ -315,10 +263,10 @@ class MiniAppGateway:
                 actor=actor,
             )
         if draft is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         serialized = serialize_ticket_reply_draft(draft)
         if serialized is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return serialized
 
     async def take_ticket(
@@ -337,7 +285,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if ticket is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return {"public_id": str(ticket.public_id), "status": ticket.status.value}
 
     async def close_ticket(
@@ -353,7 +301,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if ticket is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return {"public_id": str(ticket.public_id), "status": ticket.status.value}
 
     async def escalate_ticket(
@@ -369,7 +317,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if ticket is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return {"public_id": str(ticket.public_id), "status": ticket.status.value}
 
     async def assign_ticket(
@@ -389,7 +337,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if ticket is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return {"public_id": str(ticket.public_id), "status": ticket.status.value}
 
     async def add_note(
@@ -410,7 +358,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if ticket is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return {"public_id": str(ticket.public_id), "status": ticket.status.value}
 
     async def apply_macro(
@@ -431,7 +379,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if result is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return {
             "ticket_public_id": str(result.ticket.public_id),
             "ticket_status": result.ticket.status.value,
@@ -465,7 +413,7 @@ class MiniAppGateway:
                 actor=actor,
             )
         if export is None:
-            raise LookupError("Заявка не найдена.")
+            raise NotFoundError("Заявка не найдена.")
         return BinaryPayload(
             filename=export.filename,
             content_type=export.content_type,
@@ -573,177 +521,3 @@ class MiniAppGateway:
             result["status_note"] = " ".join(notes)
             result["unavailable_reason"] = result.get("unavailable_reason") or result["status_note"]
         return result
-
-    async def _load_dashboard_ticket_details(
-        self,
-        *,
-        client: Any,
-        actor: RequestActor,
-        tickets: list[QueuedTicketSummary | OperatorTicketSummary],
-    ) -> dict[UUID, TicketDetailsSummary]:
-        unique_ticket_ids = list(dict.fromkeys(ticket.public_id for ticket in tickets))
-        if not unique_ticket_ids:
-            return {}
-
-        details = await asyncio.gather(
-            *(
-                self._safe_get_ticket_details(
-                    client=client,
-                    actor=actor,
-                    ticket_public_id=ticket_public_id,
-                )
-                for ticket_public_id in unique_ticket_ids
-            )
-        )
-        return {item.public_id: item for item in details if item is not None}
-
-    async def _safe_get_ticket_details(
-        self,
-        *,
-        client: Any,
-        actor: RequestActor,
-        ticket_public_id: UUID,
-    ) -> TicketDetailsSummary | None:
-        try:
-            return cast(
-                TicketDetailsSummary | None,
-                await client.get_ticket_details(ticket_public_id=ticket_public_id, actor=actor),
-            )
-        except Exception:  # noqa: BLE001
-            return None
-
-    def _build_operator_dashboard(
-        self,
-        *,
-        queued: Any,
-        mine: Any,
-        ticket_details: dict[UUID, TicketDetailsSummary],
-    ) -> dict[str, Any]:
-        queue_records = [ticket_details.get(ticket.public_id, ticket) for ticket in queued]
-        my_records = [ticket_details.get(ticket.public_id, ticket) for ticket in mine]
-        visible_records = _deduplicate_dashboard_tickets([*queue_records, *my_records])
-
-        escalated_tickets = [
-            ticket
-            for ticket in visible_records
-            if getattr(ticket, "status", None) == TicketStatus.ESCALATED
-        ]
-        tickets_without_category = [
-            ticket
-            for ticket in visible_records
-            if not getattr(ticket, "category_title", None)
-            and getattr(ticket, "category_id", None) is None
-        ]
-        negative_sentiment_tickets = [
-            ticket for ticket in visible_records if is_negative_dashboard_sentiment(ticket)
-        ]
-        tickets_without_operator_reply = [
-            ticket for ticket in my_records if needs_operator_reply(ticket)
-        ]
-
-        buckets = {
-            "unassigned_open_tickets": serialize_dashboard_bucket(
-                key="unassigned_open_tickets",
-                label="Свободные заявки",
-                tickets=list(queue_records),
-                route="queue",
-                empty_label="Свободных заявок сейчас нет.",
-            ),
-            "my_active_tickets": serialize_dashboard_bucket(
-                key="my_active_tickets",
-                label="Мои активные",
-                tickets=list(my_records),
-                route="mine",
-                empty_label="У вас нет активных заявок.",
-            ),
-            "escalated_tickets": serialize_dashboard_bucket(
-                key="escalated_tickets",
-                label="Эскалации",
-                tickets=escalated_tickets,
-                route="mine",
-                severity="critical",
-                empty_label="Эскалаций в видимой зоне нет.",
-            ),
-            "sla_breached_tickets": serialize_dashboard_bucket(
-                key="sla_breached_tickets",
-                label="SLA нарушен",
-                tickets=[],
-                route="queue",
-                severity="critical",
-                empty_label="Живой SLA пока недоступен.",
-                unavailable_reason=("Живой SLA пока не передаётся в рабочее место."),
-            ),
-            "sla_at_risk_tickets": serialize_dashboard_bucket(
-                key="sla_at_risk_tickets",
-                label="SLA в риске",
-                tickets=[],
-                route="queue",
-                severity="warning",
-                empty_label="Живой SLA пока недоступен.",
-                unavailable_reason=("Живой SLA пока не передаётся в рабочее место."),
-            ),
-            "negative_sentiment_tickets": serialize_dashboard_bucket(
-                key="negative_sentiment_tickets",
-                label="Негативный тон",
-                tickets=negative_sentiment_tickets,
-                route="mine",
-                severity="warning",
-                empty_label="Негативных сигналов в видимой зоне нет.",
-            ),
-            "tickets_without_operator_reply": serialize_dashboard_bucket(
-                key="tickets_without_operator_reply",
-                label="Ждут моего ответа",
-                tickets=tickets_without_operator_reply,
-                route="mine",
-                severity="warning",
-                empty_label="Нет заявок, где сейчас нужен ваш ответ.",
-            ),
-            "tickets_without_category": serialize_dashboard_bucket(
-                key="tickets_without_category",
-                label="Без темы",
-                tickets=tickets_without_category,
-                route="queue",
-                empty_label="Все видимые заявки размечены темами.",
-            ),
-        }
-        return {
-            "buckets": buckets,
-            "sections": {
-                "needs_attention": [
-                    "sla_breached_tickets",
-                    "sla_at_risk_tickets",
-                    "escalated_tickets",
-                    "negative_sentiment_tickets",
-                ],
-                "my_work": ["my_active_tickets", "tickets_without_operator_reply"],
-                "queue": ["unassigned_open_tickets", "tickets_without_category"],
-            },
-        }
-
-
-def _rate_limited_ai_summary_payload(*, model_id: str | None) -> dict[str, Any]:
-    return {
-        "available": False,
-        "unavailable_reason": "rate_limited",
-        "model_id": model_id,
-        "short_summary": None,
-        "user_goal": None,
-        "actions_taken": None,
-        "current_status": None,
-        "summary_status": "missing",
-        "summary_generated_at": None,
-        "status_note": None,
-        "macro_suggestions": [],
-    }
-
-
-def _deduplicate_dashboard_tickets(tickets: list[Any]) -> list[Any]:
-    seen: set[UUID] = set()
-    result: list[Any] = []
-    for ticket in tickets:
-        public_id = getattr(ticket, "public_id", None)
-        if not isinstance(public_id, UUID) or public_id in seen:
-            continue
-        seen.add(public_id)
-        result.append(ticket)
-    return result

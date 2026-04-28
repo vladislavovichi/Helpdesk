@@ -14,12 +14,21 @@ from bot.handlers.user.operator_invites import router as operator_invites_router
 
 def build_root_router() -> Router:
     root_router = Router(name="root")
-    root_router.include_router(system_router)
-    root_router.include_router(admin_router)
-    root_router.include_router(operator_router)
-    root_router.include_router(operator_invites_router)
-    root_router.include_router(user_cancellation_router)
-    root_router.include_router(intake_router)
-    root_router.include_router(feedback_router)
-    root_router.include_router(client_router)
+    for child_router in (
+        system_router,
+        admin_router,
+        operator_router,
+        operator_invites_router,
+        user_cancellation_router,
+        intake_router,
+        feedback_router,
+        client_router,
+    ):
+        _detach_from_previous_root(child_router)
+        root_router.include_router(child_router)
     return root_router
+
+
+def _detach_from_previous_root(router: Router) -> None:
+    if router.parent_router is not None:
+        router._parent_router = None
