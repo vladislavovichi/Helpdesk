@@ -316,4 +316,3 @@ def _format_presence(value: bool | None) -> str:
     if value is False:
         return "missing"
     return "unknown"
-

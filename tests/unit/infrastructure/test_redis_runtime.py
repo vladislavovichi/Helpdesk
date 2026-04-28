@@ -80,7 +80,7 @@ async def test_ticket_lock_uses_ttl_and_owner_token_for_safe_release() -> None:
     redis.set.assert_awaited_once_with("ticket-lock:1", lock.token, ex=45, nx=True)
     redis.eval.assert_awaited_once()
     script, key_count, key, token = redis.eval.await_args.args
-    assert "redis.call(\"get\", KEYS[1]) == ARGV[1]" in script
+    assert 'redis.call("get", KEYS[1]) == ARGV[1]' in script
     assert (key_count, key, token) == (1, "ticket-lock:1", lock.token)
 
 

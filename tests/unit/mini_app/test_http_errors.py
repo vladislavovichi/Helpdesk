@@ -24,13 +24,9 @@ def test_http_error_mapping_is_explicit_for_application_errors() -> None:
 
 def test_ai_routes_hide_backend_error_code_behind_ai_unavailable() -> None:
     assert (
-        safe_application_error_code(BackendUnavailableError(), is_ai_route=True)
-        == "ai_unavailable"
+        safe_application_error_code(BackendUnavailableError(), is_ai_route=True) == "ai_unavailable"
     )
-    assert (
-        safe_application_error_code(AIUnavailableError(), is_ai_route=True)
-        == "ai_unavailable"
-    )
+    assert safe_application_error_code(AIUnavailableError(), is_ai_route=True) == "ai_unavailable"
     assert (
         safe_application_error_code(BackendUnavailableError(), is_ai_route=False)
         == "backend_unavailable"
