@@ -8,6 +8,7 @@ from application.errors import (
     ApplicationError,
     BackendUnavailableError,
     ForbiddenError,
+    InternalApplicationError,
     NotFoundError,
     RateLimitError,
     ValidationAppError,
@@ -27,6 +28,8 @@ def application_error_status(exc: ApplicationError) -> HTTPStatus:
         return HTTPStatus.TOO_MANY_REQUESTS
     if isinstance(exc, (BackendUnavailableError, AIUnavailableError)):
         return HTTPStatus.SERVICE_UNAVAILABLE
+    if isinstance(exc, InternalApplicationError):
+        return HTTPStatus.INTERNAL_SERVER_ERROR
     return HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -52,19 +55,7 @@ def mini_app_error_response(
             "error": exc.public_message,
             "code": safe_application_error_code(exc, is_ai_route=is_ai_route),
         }
-    if isinstance(exc, PermissionError):
-        return HTTPStatus.FORBIDDEN, {
-            "error": str(exc),
-            "code": "forbidden" if is_ai_route else "access_denied",
-        }
-    if isinstance(exc, LookupError):
-        return HTTPStatus.NOT_FOUND, {"error": str(exc), "code": "not_found"}
-    if isinstance(exc, ValueError):
-        return HTTPStatus.BAD_REQUEST, {
-            "error": str(exc),
-            "code": "validation_error" if is_ai_route else "invalid_request",
-        }
-    if isinstance(exc, ConnectionError | OSError | RuntimeError | TimeoutError):
+    if isinstance(exc, ConnectionError | OSError | TimeoutError):
         return HTTPStatus.SERVICE_UNAVAILABLE, {
             "error": MINI_APP_UNAVAILABLE_MESSAGE,
             "code": "ai_unavailable" if is_ai_route else "backend_unavailable",

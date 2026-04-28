@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import grpc
 
 from application.contracts.actors import RequestActor
+from application.errors import ForbiddenError, ValidationAppError
 from infrastructure.config.settings import BackendAuthConfig
 
 INTERNAL_AUTH_TOKEN_HEADER = "x-helpdesk-internal-token"
@@ -46,7 +47,7 @@ def resolve_backend_request_context(
 
     provided_token = metadata.get(INTERNAL_AUTH_TOKEN_HEADER)
     if not provided_token or provided_token != auth_config.token.strip():
-        raise PermissionError("Внутренний backend запрос отклонён.")
+        raise ForbiddenError("Внутренний backend запрос отклонён.")
 
     caller = metadata.get(CALLER_HEADER, "unknown")
     correlation_id = metadata.get(CORRELATION_ID_HEADER, "")
@@ -57,9 +58,9 @@ def resolve_backend_request_context(
         try:
             resolved_actor = RequestActor(telegram_user_id=int(metadata_actor_id))
         except ValueError as exc:
-            raise ValueError("Некорректный идентификатор internal actor.") from exc
+            raise ValidationAppError("Некорректный идентификатор internal actor.") from exc
         if actor is not None and actor.telegram_user_id != resolved_actor.telegram_user_id:
-            raise ValueError("Actor transport metadata не совпадает с protobuf request.")
+            raise ValidationAppError("Actor transport metadata не совпадает с protobuf request.")
         actor = resolved_actor
 
     if not correlation_id:

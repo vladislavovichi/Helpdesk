@@ -10,6 +10,7 @@ from typing import Any, cast
 from urllib.parse import urlencode
 from uuid import uuid4
 
+from application.errors import NotFoundError
 from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.auth import TelegramMiniAppUser
@@ -231,7 +232,7 @@ def test_http_forbids_user_role_from_operator_dashboard() -> None:
 
 def test_http_maps_missing_ticket_to_not_found() -> None:
     status, payload = request_json(
-        gateway=StubGateway(ticket_error=LookupError("Заявка не найдена.")),
+        gateway=StubGateway(ticket_error=NotFoundError("Заявка не найдена.")),
         path=f"/api/tickets/{uuid4()}",
         init_data=build_init_data(auth_date=datetime.now(UTC)),
     )

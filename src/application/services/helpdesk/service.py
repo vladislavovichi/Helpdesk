@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from application.contracts.ai import AIServiceClientFactory
 from application.contracts.runtime import CorrelationIdProvider, SLADeadlineScheduler
+from application.errors import InternalApplicationError
 from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.ai_operations import HelpdeskAIOperations
@@ -120,7 +121,7 @@ class HelpdeskService(
 
     def __post_init__(self) -> None:
         if not self.super_admin_telegram_user_ids:
-            raise RuntimeError("Не настроены Telegram user id супер администраторов.")
+            raise InternalApplicationError("Не настроены Telegram user id супер администраторов.")
 
         self._ticket_deps = TicketDeps(
             ticket_repository=self.ticket_repository,

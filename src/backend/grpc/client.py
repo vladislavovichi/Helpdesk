@@ -30,6 +30,7 @@ from application.errors import (
     BackendUnavailableError,
     ConcurrencyConflictError,
     ForbiddenError,
+    InternalApplicationError,
     NotFoundError,
     RateLimitError,
     ValidationAppError,
@@ -745,4 +746,4 @@ def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
         return BackendUnavailableError(details or "Backend сервис временно недоступен.")
     if exc.code() == grpc.StatusCode.ABORTED:
         return ConcurrencyConflictError(details or "Операция конфликтует с другим изменением.")
-    return RuntimeError(details or "Внутренняя ошибка backend gRPC.")
+    return InternalApplicationError(details or "Внутренняя ошибка backend gRPC.")

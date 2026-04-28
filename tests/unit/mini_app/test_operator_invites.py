@@ -87,7 +87,14 @@ def test_admin_invite_route_returns_link_fields_for_super_admin(tmp_path: Path) 
 
 
 def test_static_renderer_invite_and_macro_copy_contracts() -> None:
-    source = Path("src/mini_app/static/assets/renderers.js").read_text(encoding="utf-8")
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in Path("src/mini_app/static/assets").glob("renderers*.js")
+    )
+    source += "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in Path("src/mini_app/static/assets/renderers").glob("*.js")
+    )
 
     assert "Все макросы" not in source
     assert "Скопировать ссылку" in source

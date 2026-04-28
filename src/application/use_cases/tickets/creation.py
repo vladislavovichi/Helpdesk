@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from application.contracts.ai import AIServiceClientFactory
 from application.contracts.tickets import ClientTicketMessageCommand
+from application.errors import InternalApplicationError
 from application.use_cases.tickets.common import (
     build_status_payload,
     build_ticket_subject,
@@ -51,7 +52,7 @@ class CreateTicketFromClientMessageUseCase:
                 attachment=command.attachment,
             )
             if result is None:
-                raise RuntimeError("Не удалось добавить сообщение в активную заявку.")
+                raise InternalApplicationError("Не удалось добавить сообщение в активную заявку.")
             return result
 
         ticket = await self.ticket_repository.create(
@@ -63,7 +64,7 @@ class CreateTicketFromClientMessageUseCase:
             category_id=command.category_id,
         )
         if ticket.id is None:
-            raise RuntimeError("Не удалось сгенерировать идентификатор заявки.")
+            raise InternalApplicationError("Не удалось сгенерировать идентификатор заявки.")
 
         await self.ticket_event_repository.add(
             ticket_id=ticket.id,
@@ -78,7 +79,7 @@ class CreateTicketFromClientMessageUseCase:
 
         queued_ticket = await self.ticket_repository.enqueue(ticket_public_id=ticket.public_id)
         if queued_ticket is None:
-            raise RuntimeError("Не удалось поставить заявку в очередь.")
+            raise InternalApplicationError("Не удалось поставить заявку в очередь.")
 
         await self.ticket_event_repository.add(
             ticket_id=ticket.id,
@@ -98,7 +99,7 @@ class CreateTicketFromClientMessageUseCase:
             attachment=command.attachment,
         )
         if added_message is None:
-            raise RuntimeError("Не удалось сохранить первое сообщение заявки.")
+            raise InternalApplicationError("Не удалось сохранить первое сообщение заявки.")
 
         return build_ticket_summary(
             queued_ticket,

@@ -1,4 +1,19 @@
 import { MiniAppRequestError, createMiniAppApi } from "./api.js";
+import { createNoticeController } from "./app/notices.js";
+import { syncRoute as syncRouteState } from "./app/router.js";
+import {
+  DEFAULT_ROUTE,
+  createInitialState,
+  invalidateTicketCollections as invalidateTicketCollectionsState,
+  invalidateTicketData as invalidateTicketDataState,
+  loadAdmin as loadAdminState,
+  loadAnalytics as loadAnalyticsState,
+  loadArchive as loadArchiveState,
+  loadDashboard as loadDashboardState,
+  loadMyTickets as loadMyTicketsState,
+  loadQueue as loadQueueState,
+  loadTicket as loadTicketState,
+} from "./app/state.js";
 import {
   buildNavigation,
   renderAccessDenied,
@@ -25,36 +40,8 @@ const navStrip = document.getElementById("nav-strip");
 const identityName = document.getElementById("identity-name");
 const identityRole = document.getElementById("identity-role");
 const appNotice = document.getElementById("app-notice");
-const DEFAULT_ROUTE = "dashboard";
-const NAV_ROUTES = new Set(["dashboard", "queue", "mine", "archive", "analytics", "admin"]);
-
-const state = {
-  api: null,
-  launch: null,
-  session: null,
-  currentRoute: "dashboard",
-  currentTicketId: null,
-  analyticsWindow: "7d",
-  filters: {
-    queue: { search: "" },
-    mine: { search: "" },
-    archive: { search: "", category: "", pickerOpen: false },
-  },
-  cache: {
-    dashboard: null,
-    queue: null,
-    mine: null,
-    archive: null,
-    analytics: {},
-    admin: null,
-    tickets: {},
-  },
-  aiReplyDrafts: {},
-  lastInvite: null,
-  aiSettingsDraft: null,
-};
-
-let noticeTimeoutId = 0;
+const state = createInitialState();
+const { handleCopy, showNotice } = createNoticeController({ appNotice, telegram });
 
 async function boot() {
   state.launch = await resolveLaunchContext();
@@ -100,19 +87,12 @@ function updateIdentity() {
 }
 
 function syncRoute() {
-  const hash = normalizeHashRoute(window.location.hash);
-  if (hash.startsWith("ticket/") && hash.split("/")[1]) {
-    state.currentRoute = "ticket";
-    state.currentTicketId = hash.split("/")[1] ?? null;
-    navStrip.innerHTML = buildNavigation(state.session.access.role, "");
-    return;
-  }
-
-  const route = NAV_ROUTES.has(hash) ? hash : DEFAULT_ROUTE;
-  state.currentRoute =
-    route === "admin" && state.session.access.role !== "super_admin" ? DEFAULT_ROUTE : route;
-  state.currentTicketId = null;
-  navStrip.innerHTML = buildNavigation(state.session.access.role, state.currentRoute);
+  syncRouteState({
+    state,
+    hash: window.location.hash,
+    navStrip,
+    buildNavigation,
+  });
 }
 
 async function renderRoute() {
@@ -493,109 +473,40 @@ async function runMutation(work) {
   }
 }
 
-async function handleCopy(value, successMessage = "Скопировано.") {
-  try {
-    await navigator.clipboard.writeText(value);
-    showNotice(successMessage || "Скопировано.", "success");
-    if (telegram?.HapticFeedback) {
-      telegram.HapticFeedback.notificationOccurred("success");
-    }
-  } catch (_error) {
-    showNotice("Не удалось скопировать. Скопируйте вручную.", "danger");
-  }
-}
-
-function showNotice(message, tone = "neutral") {
-  if (!appNotice) {
-    return;
-  }
-
-  window.clearTimeout(noticeTimeoutId);
-  appNotice.hidden = false;
-  appNotice.textContent = message;
-  appNotice.dataset.tone = tone;
-  noticeTimeoutId = window.setTimeout(() => {
-    appNotice.hidden = true;
-    appNotice.textContent = "";
-    delete appNotice.dataset.tone;
-  }, 2600);
-}
-
 function invalidateTicketCollections() {
-  state.cache.dashboard = null;
-  state.cache.queue = null;
-  state.cache.mine = null;
-  state.cache.archive = null;
-  state.cache.analytics = {};
-  state.cache.admin = null;
+  invalidateTicketCollectionsState(state);
 }
 
 function invalidateTicketData(ticketId) {
-  invalidateTicketCollections();
-  if (ticketId) {
-    delete state.cache.tickets[ticketId];
-    delete state.aiReplyDrafts[ticketId];
-  }
+  invalidateTicketDataState(state, ticketId);
 }
 
 async function loadDashboard() {
-  if (state.cache.dashboard) {
-    return state.cache.dashboard;
-  }
-  state.cache.dashboard = await state.api.getOperatorDashboard();
-  return state.cache.dashboard;
+  return loadDashboardState(state);
 }
 
 async function loadQueue() {
-  if (state.cache.queue) {
-    return state.cache.queue;
-  }
-  state.cache.queue = await state.api.getQueue();
-  return state.cache.queue;
+  return loadQueueState(state);
 }
 
 async function loadMyTickets() {
-  if (state.cache.mine) {
-    return state.cache.mine;
-  }
-  state.cache.mine = await state.api.getMyTickets();
-  return state.cache.mine;
+  return loadMyTicketsState(state);
 }
 
 async function loadArchive() {
-  if (state.cache.archive) {
-    return state.cache.archive;
-  }
-  state.cache.archive = await state.api.getArchive();
-  return state.cache.archive;
+  return loadArchiveState(state);
 }
 
 async function loadAnalytics(windowKey) {
-  if (state.cache.analytics[windowKey]) {
-    return state.cache.analytics[windowKey];
-  }
-  state.cache.analytics[windowKey] = await state.api.getAnalytics(windowKey);
-  return state.cache.analytics[windowKey];
+  return loadAnalyticsState(state, windowKey);
 }
 
 async function loadAdmin() {
-  if (state.cache.admin) {
-    return state.cache.admin;
-  }
-  const [operators, aiSettings] = await Promise.all([
-    state.api.getOperators(),
-    state.api.getAISettings(),
-  ]);
-  state.cache.admin = { operators, aiSettings };
-  return state.cache.admin;
+  return loadAdminState(state);
 }
 
 async function loadTicket(ticketId) {
-  if (state.cache.tickets[ticketId]) {
-    return state.cache.tickets[ticketId];
-  }
-  state.cache.tickets[ticketId] = await state.api.getTicket(ticketId);
-  return state.cache.tickets[ticketId];
+  return loadTicketState(state, ticketId);
 }
 
 function resolveErrorMessage(error) {
@@ -603,14 +514,6 @@ function resolveErrorMessage(error) {
     return error.message;
   }
   return "Сервис временно недоступен.";
-}
-
-function normalizeHashRoute(hash) {
-  return String(hash || "")
-    .replace(/^#/, "")
-    .split("?")[0]
-    .replace(/^\/+/, "")
-    .trim();
 }
 
 function normalizeNullableInput(value) {

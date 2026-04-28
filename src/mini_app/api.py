@@ -12,13 +12,16 @@ from application.use_cases.tickets.exports import TicketReportFormat
 from backend.grpc.contracts import HelpdeskBackendClientFactory
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.gateway.admin import MiniAppAdminGateway
-from mini_app.gateway.ai import MiniAppAIGateway, apply_ai_settings_to_snapshot_payload
+from mini_app.gateway.ai import (
+    MiniAppAIGateway,
+    MiniAppAIRateLimiter,
+    apply_ai_settings_to_snapshot_payload,
+)
 from mini_app.gateway.analytics import MiniAppAnalyticsGateway
 from mini_app.gateway.dashboard import MiniAppDashboardGateway
 from mini_app.gateway.exports import MiniAppExportsGateway
 from mini_app.gateway.session import MiniAppSessionGateway
 from mini_app.gateway.tickets import MiniAppTicketsGateway
-from mini_app.gateway_ai import MiniAppAIRateLimiter
 from mini_app.responses import BinaryPayload
 
 

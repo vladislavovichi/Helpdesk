@@ -37,6 +37,11 @@ class BackendUnavailableError(ApplicationError):
         super().__init__(message, "backend_unavailable")
 
 
+class InternalApplicationError(ApplicationError):
+    def __init__(self, message: str = "Внутренняя ошибка backend сервиса.") -> None:
+        super().__init__(message, "internal_error")
+
+
 class AIUnavailableError(ApplicationError):
     def __init__(self, message: str = "AI-service временно недоступен.") -> None:
         super().__init__(message, "ai_unavailable")

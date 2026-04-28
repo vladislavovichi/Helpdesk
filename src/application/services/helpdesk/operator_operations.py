@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 
 from application.contracts.actors import OperatorIdentity, RequestActor, actor_telegram_user_id
+from application.errors import ForbiddenError, InternalApplicationError
 from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
@@ -55,7 +56,7 @@ class HelpdeskOperatorOperations:
     ) -> AccessContextSummary:
         actor_id = actor_telegram_user_id(actor)
         if actor_id is None:
-            raise PermissionError("Не удалось определить Telegram пользователя.")
+            raise ForbiddenError("Не удалось определить Telegram пользователя.")
 
         if actor_id in self.super_admin_telegram_user_ids:
             role = UserRole.SUPER_ADMIN
@@ -138,7 +139,7 @@ class HelpdeskOperatorOperations:
             actor_telegram_user_id=actor_id,
         )
         if actor_id is None:
-            raise RuntimeError("Operator invite creation requires an actor.")
+            raise InternalApplicationError("Operator invite creation requires an actor.")
         result = await self._components.operators.create_operator_invite(
             created_by_telegram_user_id=actor_id
         )

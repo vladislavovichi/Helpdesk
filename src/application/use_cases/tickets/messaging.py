@@ -12,6 +12,7 @@ from application.contracts.ai import (
     AnalyzeTicketSentimentCommand,
 )
 from application.contracts.tickets import AddInternalNoteCommand, OperatorTicketReplyCommand
+from application.errors import ValidationAppError
 from application.use_cases.tickets.common import (
     build_event_type_for_message,
     build_message_payload,
@@ -76,7 +77,7 @@ class AddMessageToTicketUseCase:
         from domain.tickets import ensure_message_addable
 
         if text is None and attachment is None:
-            raise ValueError("Нужно передать текст сообщения или вложение.")
+            raise ValidationAppError("Нужно передать текст сообщения или вложение.")
 
         ensure_message_addable(ticket.status)
         current_time = utcnow()
@@ -340,7 +341,7 @@ class AddInternalNoteToTicketUseCase:
     ) -> TicketSummary | None:
         normalized_text = command.text.strip()
         if not normalized_text:
-            raise ValueError("Текст заметки не может быть пустым.")
+            raise ValidationAppError("Текст заметки не может быть пустым.")
 
         ticket = await self.ticket_repository.get_by_public_id(command.ticket_public_id)
         if ticket is None or ticket.id is None:

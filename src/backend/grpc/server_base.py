@@ -15,6 +15,7 @@ from application.errors import (
     BackendUnavailableError,
     ConcurrencyConflictError,
     ForbiddenError,
+    InternalApplicationError,
     NotFoundError,
     RateLimitError,
     ValidationAppError,
@@ -50,7 +51,7 @@ class HelpdeskBackendGrpcServiceBase:
                 auth_config=self.auth_config,
                 fallback_actor=fallback_actor,
             )
-        except (PermissionError, ValueError) as exc:
+        except ApplicationError as exc:
             await abort_for_exception(context, exc, method=method)
             raise RuntimeError("unreachable") from exc
         correlation_token = bind_correlation_id(request_context.correlation_id)
@@ -178,9 +179,7 @@ async def abort_for_exception(
 ) -> None:
     level = (
         logging.WARNING
-        if isinstance(
-            exc, (InvalidTicketTransitionError, AuthorizationError, PermissionError, ValueError)
-        )
+        if isinstance(exc, (InvalidTicketTransitionError, AuthorizationError, ApplicationError))
         else logging.ERROR
     )
     logger.log(
@@ -207,12 +206,10 @@ async def abort_for_exception(
         await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))
     if isinstance(exc, ConcurrencyConflictError):
         await context.abort(grpc.StatusCode.ABORTED, str(exc))
+    if isinstance(exc, InternalApplicationError):
+        await context.abort(grpc.StatusCode.INTERNAL, str(exc))
     if isinstance(exc, ApplicationError):
         await context.abort(grpc.StatusCode.UNKNOWN, str(exc))
-    if isinstance(exc, PermissionError):
-        await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
-    if isinstance(exc, ValueError):
-        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
     if isinstance(exc, (ConnectionError, OSError, TimeoutError)):
         await context.abort(grpc.StatusCode.UNAVAILABLE, "Backend сервис временно недоступен.")
     await context.abort(grpc.StatusCode.INTERNAL, "Внутренняя ошибка backend сервиса.")

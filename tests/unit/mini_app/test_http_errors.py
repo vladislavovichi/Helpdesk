@@ -6,11 +6,16 @@ from application.errors import (
     AIUnavailableError,
     BackendUnavailableError,
     ForbiddenError,
+    InternalApplicationError,
     NotFoundError,
     RateLimitError,
     ValidationAppError,
 )
-from mini_app.http_errors import application_error_status, safe_application_error_code
+from mini_app.http_errors import (
+    application_error_status,
+    mini_app_error_response,
+    safe_application_error_code,
+)
 
 
 def test_http_error_mapping_is_explicit_for_application_errors() -> None:
@@ -20,6 +25,7 @@ def test_http_error_mapping_is_explicit_for_application_errors() -> None:
     assert application_error_status(RateLimitError()) is HTTPStatus.TOO_MANY_REQUESTS
     assert application_error_status(BackendUnavailableError()) is HTTPStatus.SERVICE_UNAVAILABLE
     assert application_error_status(AIUnavailableError()) is HTTPStatus.SERVICE_UNAVAILABLE
+    assert application_error_status(InternalApplicationError()) is HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 def test_ai_routes_hide_backend_error_code_behind_ai_unavailable() -> None:
@@ -36,3 +42,16 @@ def test_ai_routes_hide_backend_error_code_behind_ai_unavailable() -> None:
 def test_forbidden_error_preserves_existing_mini_app_codes() -> None:
     assert safe_application_error_code(ForbiddenError(), is_ai_route=False) == "access_denied"
     assert safe_application_error_code(ForbiddenError(), is_ai_route=True) == "forbidden"
+
+
+def test_application_error_maps_to_mini_app_http_response() -> None:
+    status, payload = mini_app_error_response(
+        ValidationAppError("Некорректный запрос."),
+        is_ai_route=False,
+    )
+
+    assert status is HTTPStatus.BAD_REQUEST
+    assert payload == {
+        "error": "Некорректный запрос.",
+        "code": "validation_error",
+    }

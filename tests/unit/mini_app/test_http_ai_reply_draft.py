@@ -8,6 +8,7 @@ from typing import Any, cast
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from application.errors import NotFoundError, ValidationAppError
 from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.auth import TelegramMiniAppAuthError, TelegramMiniAppUser
@@ -76,7 +77,7 @@ def test_ai_reply_draft_route_normalizes_backend_unavailable_error(tmp_path: Pat
 
 
 def test_ai_reply_draft_route_normalizes_not_found_error(tmp_path: Path) -> None:
-    gateway = StubGateway(error=LookupError("missing"))
+    gateway = StubGateway(error=NotFoundError("missing"))
     handler = _build_handler(gateway=gateway, static_dir=tmp_path)
 
     _dispatch_via_request(handler, role=UserRole.OPERATOR)
@@ -86,7 +87,7 @@ def test_ai_reply_draft_route_normalizes_not_found_error(tmp_path: Path) -> None
 
 
 def test_ai_reply_draft_route_normalizes_validation_error(tmp_path: Path) -> None:
-    gateway = StubGateway(error=ValueError("bad payload"))
+    gateway = StubGateway(error=ValidationAppError("bad payload"))
     handler = _build_handler(gateway=gateway, static_dir=tmp_path)
 
     _dispatch_via_request(handler, role=UserRole.OPERATOR)
