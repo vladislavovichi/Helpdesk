@@ -35,3 +35,8 @@ def test_ai_routes_hide_backend_error_code_behind_ai_unavailable() -> None:
         safe_application_error_code(BackendUnavailableError(), is_ai_route=False)
         == "backend_unavailable"
     )
+
+
+def test_forbidden_error_preserves_existing_mini_app_codes() -> None:
+    assert safe_application_error_code(ForbiddenError(), is_ai_route=False) == "access_denied"
+    assert safe_application_error_code(ForbiddenError(), is_ai_route=True) == "forbidden"

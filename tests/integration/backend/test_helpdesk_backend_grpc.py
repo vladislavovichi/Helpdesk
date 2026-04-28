@@ -21,6 +21,7 @@ from application.ai.summaries import (
 from application.contracts.actors import OperatorIdentity, RequestActor
 from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import AddInternalNoteCommand, ClientTicketMessageCommand
+from application.errors import ForbiddenError
 from application.services.helpdesk.service import HelpdeskService, HelpdeskServiceFactory
 from application.services.stats import (
     AnalyticsCategorySnapshot,
@@ -194,10 +195,10 @@ async def test_helpdesk_grpc_rejects_invalid_internal_token() -> None:
         async with client_factory() as client:
             try:
                 await client.get_backend_status()
-            except PermissionError as exc:
+            except ForbiddenError as exc:
                 assert "отклонён" in str(exc)
             else:
-                raise AssertionError("expected PermissionError")
+                raise AssertionError("expected ForbiddenError")
     finally:
         await server.stop()
 

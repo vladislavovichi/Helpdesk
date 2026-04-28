@@ -10,7 +10,6 @@ from typing import Any
 from urllib.parse import ParseResult, urlparse
 
 from application.errors import ApplicationError
-from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.api import MiniAppGateway
 from mini_app.auth import (
@@ -18,12 +17,15 @@ from mini_app.auth import (
     TelegramMiniAppUser,
     validate_telegram_mini_app_init_data,
 )
-from mini_app.http_errors import application_error_status, safe_application_error_code
+from mini_app.http_errors import mini_app_error_response
 from mini_app.launch import ResolvedMiniAppLaunch, resolve_mini_app_launch
 from mini_app.responses import serve_file, write_json
 from mini_app.routes.admin import handle_admin_routes
 from mini_app.routes.ai import is_ai_route
+from mini_app.routes.analytics import handle_analytics_routes
 from mini_app.routes.dashboard import handle_dashboard_routes
+from mini_app.routes.queue import handle_queue_routes
+from mini_app.routes.session import handle_session_route, require_operator_session
 from mini_app.routes.tickets import handle_ticket_routes
 
 logger = logging.getLogger(__name__)
@@ -123,38 +125,8 @@ def build_handler_class(
                     },
                 )
             except ApplicationError as exc:
-                status = application_error_status(exc)
-                self._write_json(
-                    status,
-                    {
-                        "error": exc.public_message,
-                        "code": safe_application_error_code(
-                            exc,
-                            is_ai_route=is_ai_route(path),
-                        ),
-                    },
-                )
-            except PermissionError as exc:
-                self._write_json(
-                    HTTPStatus.FORBIDDEN,
-                    {
-                        "error": str(exc),
-                        "code": "forbidden" if is_ai_route(path) else "access_denied",
-                    },
-                )
-            except LookupError as exc:
-                self._write_json(
-                    HTTPStatus.NOT_FOUND,
-                    {"error": str(exc), "code": "not_found"},
-                )
-            except ValueError as exc:
-                self._write_json(
-                    HTTPStatus.BAD_REQUEST,
-                    {
-                        "error": str(exc),
-                        "code": "validation_error" if is_ai_route(path) else "invalid_request",
-                    },
-                )
+                status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(path))
+                self._write_json(status, payload)
             except (ConnectionError, OSError, RuntimeError, TimeoutError) as exc:
                 logger.warning(
                     "Mini App backend dependency failed method=%s path=%s error=%s",
@@ -162,22 +134,15 @@ def build_handler_class(
                     path,
                     exc,
                 )
-                self._write_json(
-                    HTTPStatus.SERVICE_UNAVAILABLE,
-                    {
-                        "error": "Mini App временно недоступен. Попробуйте ещё раз чуть позже.",
-                        "code": ("ai_unavailable" if is_ai_route(path) else "backend_unavailable"),
-                    },
-                )
-            except Exception:  # noqa: BLE001
+                status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(path))
+                self._write_json(status, payload)
+            except (PermissionError, LookupError, ValueError) as exc:
+                status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(path))
+                self._write_json(status, payload)
+            except Exception as exc:  # noqa: BLE001
                 logger.exception("Mini App request failed method=%s path=%s", method, self.path)
-                self._write_json(
-                    HTTPStatus.INTERNAL_SERVER_ERROR,
-                    {
-                        "error": "Mini App временно недоступен. Попробуйте ещё раз.",
-                        "code": "internal_error",
-                    },
-                )
+                status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(path))
+                self._write_json(status, payload)
 
         def _handle_public_request(
             self,
@@ -228,36 +193,29 @@ def build_handler_class(
             user: TelegramMiniAppUser,
             session: dict[str, Any],
         ) -> None:
-            if method == "GET" and path == "/api/session":
-                self._write_json(
-                    HTTPStatus.OK,
-                    {
-                        **session,
-                        "launch": {
-                            "source": launch.source,
-                            "client_source": launch.client_source,
-                        },
-                    },
-                )
+            if handle_session_route(
+                self,
+                method=method,
+                path=path,
+                launch=launch,
+                session=session,
+            ):
                 return
 
-            if session["access"]["role"] == UserRole.USER.value:
-                self._write_json(
-                    HTTPStatus.FORBIDDEN,
-                    {
-                        "error": (
-                            "Рабочее место доступно только операторам и суперадминистраторам."
-                        ),
-                        "code": "forbidden" if is_ai_route(path) else "access_denied",
-                    },
-                )
+            if not require_operator_session(self, path=path, session=session):
                 return
 
             if handle_dashboard_routes(
                 self,
                 method=method,
                 path=path,
-                parsed=parsed,
+                user=user,
+            ):
+                return
+            if handle_queue_routes(
+                self,
+                method=method,
+                path=path,
                 user=user,
             ):
                 return
@@ -271,6 +229,14 @@ def build_handler_class(
             ):
                 return
             if handle_ticket_routes(
+                self,
+                method=method,
+                path=path,
+                parsed=parsed,
+                user=user,
+            ):
+                return
+            if handle_analytics_routes(
                 self,
                 method=method,
                 path=path,
@@ -350,3 +316,4 @@ def _format_presence(value: bool | None) -> str:
     if value is False:
         return "missing"
     return "unknown"
+

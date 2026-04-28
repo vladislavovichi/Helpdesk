@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import ParseResult
 
+from application.errors import ForbiddenError
 from domain.enums.roles import UserRole
 from mini_app.auth import TelegramMiniAppUser
 from mini_app.request_parsing import read_json_body
@@ -46,4 +47,4 @@ def handle_admin_routes(
 
 def require_admin(session: dict[str, Any]) -> None:
     if session["access"]["role"] != UserRole.SUPER_ADMIN.value:
-        raise PermissionError("Доступно только суперадминистраторам.")
+        raise ForbiddenError("Доступно только суперадминистраторам.")

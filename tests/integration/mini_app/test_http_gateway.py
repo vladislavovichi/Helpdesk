@@ -47,6 +47,34 @@ class StubGateway:
             raise self.dashboard_error
         return {"ok": True}
 
+    async def list_queue(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
+        del user
+        self.calls.append("list_queue")
+        return {"items": [{"public_id": "queued-ticket", "status": "queued"}]}
+
+    async def take_next_ticket(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
+        del user
+        self.calls.append("take_next_ticket")
+        return {
+            "ticket": {
+                "public_id": "next-ticket",
+                "public_number": "#42",
+                "status": "assigned",
+                "created": "2026-04-20T10:00:00+00:00",
+                "event_type": "general",
+            }
+        }
+
+    async def list_my_tickets(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
+        del user
+        self.calls.append("list_my_tickets")
+        return {"items": [{"public_id": "my-ticket", "status": "assigned"}]}
+
+    async def list_archive(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
+        del user
+        self.calls.append("list_archive")
+        return {"items": [{"public_id": "closed-ticket", "status": "closed"}]}
+
     async def get_ticket_workspace(
         self,
         *,
@@ -103,10 +131,56 @@ class StubGateway:
             content=b"<html>ticket</html>",
         )
 
+    async def get_analytics(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        window: object,
+    ) -> dict[str, object]:
+        del user
+        self.calls.append(f"get_analytics:{window}")
+        return {"snapshot": {"window": "7d", "total_open_tickets": 3}}
+
+    async def export_analytics(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        window: object,
+        section: object,
+        format: object,
+    ) -> BinaryPayload:
+        del user, window, section, format
+        self.calls.append("export_analytics")
+        return BinaryPayload(
+            filename="analytics.csv",
+            content_type="text/csv; charset=utf-8",
+            content=b"metric,value\nopen,3\n",
+        )
+
     async def list_operators(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
         del user
         self.calls.append("list_operators")
         return {"items": [{"telegram_user_id": 1001, "display_name": "Operator"}]}
+
+    async def get_ai_settings(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
+        del user
+        self.calls.append("get_ai_settings")
+        return {"settings": {"ai_reply_drafts_enabled": True}}
+
+    async def update_ai_settings(
+        self,
+        *,
+        user: TelegramMiniAppUser,
+        payload: dict[str, object],
+    ) -> dict[str, object]:
+        del user
+        self.calls.append("update_ai_settings")
+        return {"settings": payload}
+
+    async def create_operator_invite(self, *, user: TelegramMiniAppUser) -> dict[str, object]:
+        del user
+        self.calls.append("create_operator_invite")
+        return {"invite": {"code": "invite-code", "telegram_deep_link": None}}
 
 
 def test_http_session_accepts_valid_telegram_init_data() -> None:
@@ -178,6 +252,61 @@ def test_http_maps_backend_unavailable_to_safe_response() -> None:
     assert "token" not in payload["error"].lower()
 
 
+def test_http_routes_queue_surfaces() -> None:
+    gateway = StubGateway()
+    init_data = build_init_data(auth_date=datetime.now(UTC))
+
+    queue_status, queue_payload = request_json(
+        gateway=gateway,
+        path="/api/queue",
+        init_data=init_data,
+    )
+    take_status, take_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path="/api/queue/take-next",
+        init_data=init_data,
+    )
+    mine_status, mine_payload = request_json(
+        gateway=gateway,
+        path="/api/my-tickets",
+        init_data=init_data,
+    )
+    archive_status, archive_payload = request_json(
+        gateway=gateway,
+        path="/api/archive",
+        init_data=init_data,
+    )
+
+    assert queue_status == 200
+    assert queue_payload["items"][0]["public_id"] == "queued-ticket"
+    assert take_status == 200
+    assert take_payload["ticket"]["public_number"] == "#42"
+    assert mine_status == 200
+    assert mine_payload["items"][0]["public_id"] == "my-ticket"
+    assert archive_status == 200
+    assert archive_payload["items"][0]["status"] == "closed"
+    assert gateway.calls == [
+        "list_queue",
+        "take_next_ticket",
+        "list_my_tickets",
+        "list_archive",
+    ]
+
+
+def test_http_routes_ticket_details_through_gateway() -> None:
+    gateway = StubGateway()
+
+    status, payload = request_json(
+        gateway=gateway,
+        path=f"/api/tickets/{uuid4()}",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+    )
+
+    assert status == 200
+    assert payload == {"ticket": {"public_id": "ticket"}}
+
+
 def test_http_routes_ticket_action_through_gateway_without_handler_call() -> None:
     ticket_id = uuid4()
     gateway = StubGateway()
@@ -235,6 +364,30 @@ def test_http_routes_ticket_export_as_binary_response() -> None:
     assert gateway.calls == ["export_ticket"]
 
 
+def test_http_routes_analytics_and_export() -> None:
+    gateway = StubGateway()
+    init_data = build_init_data(auth_date=datetime.now(UTC))
+
+    status, payload = request_json(
+        gateway=gateway,
+        path="/api/analytics?window=7d",
+        init_data=init_data,
+    )
+    export_status, export_headers, export_body = request_raw(
+        gateway=gateway,
+        path="/api/analytics/export?window=7d&section=overview&format=csv",
+        init_data=init_data,
+    )
+
+    assert status == 200
+    assert payload["snapshot"]["total_open_tickets"] == 3
+    assert export_status == 200
+    assert export_headers["Content-Type"] == "text/csv; charset=utf-8"
+    assert export_headers["Content-Disposition"] == 'attachment; filename="analytics.csv"'
+    assert export_body == b"metric,value\nopen,3\n"
+    assert gateway.calls == ["get_analytics:7d", "export_analytics"]
+
+
 def test_http_restricts_admin_routes_to_super_admin() -> None:
     status, payload = request_json(
         gateway=StubGateway(role=UserRole.OPERATOR),
@@ -258,6 +411,51 @@ def test_http_allows_super_admin_route() -> None:
     assert status == 200
     assert payload["items"][0]["telegram_user_id"] == 1001
     assert gateway.calls == ["list_operators"]
+
+
+def test_http_routes_admin_ai_settings_and_invites_for_super_admin() -> None:
+    gateway = StubGateway(role=UserRole.SUPER_ADMIN)
+    init_data = build_init_data(auth_date=datetime.now(UTC))
+
+    settings_status, settings_payload = request_json(
+        gateway=gateway,
+        path="/api/admin/ai-settings",
+        init_data=init_data,
+    )
+    update_status, update_payload = request_json(
+        gateway=gateway,
+        method="PUT",
+        path="/api/admin/ai-settings",
+        init_data=init_data,
+        body=json.dumps({"ai_reply_drafts_enabled": False}).encode(),
+    )
+    invite_status, invite_payload = request_json(
+        gateway=gateway,
+        method="POST",
+        path="/api/admin/invites",
+        init_data=init_data,
+    )
+
+    assert settings_status == 200
+    assert settings_payload["settings"]["ai_reply_drafts_enabled"] is True
+    assert update_status == 200
+    assert update_payload["settings"]["ai_reply_drafts_enabled"] is False
+    assert invite_status == 200
+    assert invite_payload["invite"]["code"] == "invite-code"
+    assert gateway.calls == ["get_ai_settings", "update_ai_settings", "create_operator_invite"]
+
+
+def test_http_rejects_invalid_ticket_action_json() -> None:
+    status, payload = request_json(
+        gateway=StubGateway(),
+        method="POST",
+        path=f"/api/tickets/{uuid4()}/notes",
+        init_data=build_init_data(auth_date=datetime.now(UTC)),
+        body=b"{invalid",
+    )
+
+    assert status == 400
+    assert payload["code"] == "validation_error"
 
 
 def request_json(

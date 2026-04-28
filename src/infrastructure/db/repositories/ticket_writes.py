@@ -94,6 +94,8 @@ class SqlAlchemyTicketWriteRepository:
 
     async def _get_ticket_for_update(self, ticket_public_id: UUID) -> TicketEntity | None:
         result = await self.session.execute(
-            select(TicketModel).where(TicketModel.public_id == ticket_public_id)
+            select(TicketModel)
+            .where(TicketModel.public_id == ticket_public_id)
+            .with_for_update()
         )
         return result.scalar_one_or_none()

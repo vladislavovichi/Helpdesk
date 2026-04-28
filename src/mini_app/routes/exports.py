@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import ParseResult, parse_qs
 from uuid import UUID
 
+from application.errors import ValidationAppError
 from application.use_cases.analytics.exports import AnalyticsExportFormat, AnalyticsSection
 from application.use_cases.tickets.exports import TicketReportFormat
 from mini_app.auth import TelegramMiniAppUser
@@ -20,8 +21,11 @@ def handle_analytics_export(
 ) -> None:
     window = parse_analytics_window(parsed)
     query = parse_qs(parsed.query)
-    section = AnalyticsSection(query.get("section", ["overview"])[0])
-    analytics_format = AnalyticsExportFormat(query.get("format", ["html"])[0])
+    try:
+        section = AnalyticsSection(query.get("section", ["overview"])[0])
+        analytics_format = AnalyticsExportFormat(query.get("format", ["html"])[0])
+    except ValueError as exc:
+        raise ValidationAppError("Некорректные параметры экспорта аналитики.") from exc
     write_binary(
         handler,
         asyncio.run(
@@ -43,7 +47,10 @@ def handle_ticket_export(
     parsed: ParseResult,
 ) -> None:
     query = parse_qs(parsed.query)
-    ticket_format = TicketReportFormat(query.get("format", ["html"])[0])
+    try:
+        ticket_format = TicketReportFormat(query.get("format", ["html"])[0])
+    except ValueError as exc:
+        raise ValidationAppError("Некорректный формат экспорта заявки.") from exc
     write_binary(
         handler,
         asyncio.run(

@@ -29,6 +29,7 @@ from application.contracts.tickets import (
 from application.errors import (
     BackendUnavailableError,
     ConcurrencyConflictError,
+    ForbiddenError,
     NotFoundError,
     RateLimitError,
     ValidationAppError,
@@ -735,7 +736,7 @@ def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
     if exc.code() == grpc.StatusCode.FAILED_PRECONDITION:
         return InvalidTicketTransitionError(details or "Недопустимый переход заявки.")
     if exc.code() == grpc.StatusCode.PERMISSION_DENIED:
-        return PermissionError(details or "Недостаточно прав.")
+        return ForbiddenError(details or "Недостаточно прав.")
     if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
         return ValidationAppError(details or "Некорректный запрос.")
     if exc.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:

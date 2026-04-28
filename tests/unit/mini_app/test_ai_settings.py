@@ -15,6 +15,7 @@ import pytest
 
 from application.ai.summaries import TicketAssistSnapshot, TicketReplyDraft, TicketSummaryStatus
 from application.contracts.actors import RequestActor
+from application.errors import ForbiddenError
 from application.use_cases.ai.settings import InMemoryAISettingsRepository, RuntimeAISettings
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from domain.enums.roles import UserRole
@@ -29,7 +30,7 @@ def test_ai_settings_routes_are_super_admin_only(tmp_path: Path) -> None:
     gateway = StubAISettingsGateway()
     handler = _build_handler(gateway=gateway, static_dir=tmp_path)
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(ForbiddenError):
         _dispatch_ai_settings(handler, role=UserRole.OPERATOR)
     assert gateway.get_called is False
 

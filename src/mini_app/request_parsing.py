@@ -10,7 +10,10 @@ from application.services.stats import AnalyticsWindow
 
 def parse_analytics_window(parsed: ParseResult) -> AnalyticsWindow:
     query = parse_qs(parsed.query)
-    return AnalyticsWindow(query.get("window", ["7d"])[0])
+    try:
+        return AnalyticsWindow(query.get("window", ["7d"])[0])
+    except ValueError as exc:
+        raise ValidationAppError("Некорректное окно аналитики.") from exc
 
 
 def read_json_body(handler: Any) -> dict[str, Any]:
