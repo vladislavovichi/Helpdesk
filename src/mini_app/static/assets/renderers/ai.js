@@ -55,6 +55,11 @@ export function renderTicketAiCard(ai) {
           ? `<div class="ai-warning">${escapeHtml(ai.unavailable_reason)}</div>`
           : ""
       }
+      ${
+        unavailable && ai.failure_reason
+          ? `<div class="ai-warning">Техническая причина: ${escapeHtml(ai.failure_reason)}</div>`
+          : ""
+      }
       <div class="ai-section">
         ${renderAiField("Сводка", ai.short_summary)}
         ${renderAiField("Цель клиента", ai.user_goal)}
@@ -140,6 +145,11 @@ function renderAiReplyDraft(payload, isLoading) {
     return `
       <div class="ai-warning">
         ${escapeHtml(payload.unavailable_reason || "AI-черновик сейчас недоступен.")}
+        ${
+          payload.failure_reason
+            ? `<br><small>Техническая причина: ${escapeHtml(payload.failure_reason)}</small>`
+            : ""
+        }
       </div>
     `;
   }

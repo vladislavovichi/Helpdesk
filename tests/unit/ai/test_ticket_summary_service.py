@@ -35,8 +35,9 @@ class StubProvider(AIProvider):
         messages: object,
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str:
-        del messages, max_output_tokens, temperature
+        del messages, max_output_tokens, temperature, expect_json
         return self._raw
 
 
@@ -59,3 +60,4 @@ async def test_generate_ticket_summary_rejects_low_value_payload() -> None:
 
     assert result.available is False
     assert result.unavailable_reason == "Не удалось подготовить достаточно надёжную сводку."
+    assert result.failure_reason == "schema_validation_failed"

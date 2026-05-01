@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from infrastructure.config import settings as settings_module
-from infrastructure.config.settings import Settings
+from infrastructure.config.settings import AuthorizationConfig, Settings
 
 
 def test_database_url_is_built_from_parts(
@@ -40,6 +40,49 @@ def test_explicit_urls_override_component_settings() -> None:
 
 def test_super_admin_ids_are_loaded_from_settings(sample_settings: Settings) -> None:
     assert sample_settings.authorization.super_admin_telegram_user_ids == (42,)
+
+
+def test_ai_reply_draft_generation_settings_have_separate_defaults() -> None:
+    settings = Settings(
+        _env_file=None,
+        authorization=AuthorizationConfig(super_admin_telegram_user_ids=(99,)),
+    )  # type: ignore[call-arg]
+
+    assert settings.ai.normalized_provider == "local"
+    assert settings.ai.model_id == "Qwen/Qwen2.5-0.5B-Instruct"
+    assert settings.ai.summary_temperature == 0.2
+    assert settings.ai.summary_max_output_tokens == 700
+    assert settings.ai.reply_draft_temperature == 0.4
+    assert settings.ai.reply_draft_max_output_tokens == 1000
+    assert settings.ai.category_max_output_tokens == 400
+    assert settings.ai.local_top_p == 0.9
+    assert settings.ai.local_repetition_penalty == 1.05
+
+
+def test_ai_reply_draft_generation_settings_load_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI__REPLY_DRAFT_TEMPERATURE", "0.47")
+    monkeypatch.setenv("AI__REPLY_DRAFT_MAX_OUTPUT_TOKENS", "777")
+
+    settings = Settings(
+        _env_file=None,
+        authorization=AuthorizationConfig(super_admin_telegram_user_ids=(99,)),
+    )  # type: ignore[call-arg]
+
+    assert settings.ai.reply_draft_temperature == 0.47
+    assert settings.ai.reply_draft_max_output_tokens == 777
+
+
+def test_hosted_ai_provider_setting_is_ignored_for_backward_compatibility() -> None:
+    settings = Settings.model_validate(
+        {
+            "authorization": {"super_admin_telegram_user_ids": [99]},
+            "ai": {"provider": "huggingface"},
+        }
+    )
+
+    assert settings.ai.normalized_provider == "local"
 
 
 def test_super_admin_ids_are_parsed_from_comma_separated_env_style_value() -> None:

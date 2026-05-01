@@ -10,7 +10,6 @@ from app.bootstrap import close_runtime as close_app_runtime
 from app.runtime_factories import build_helpdesk_backend_client_factory
 from application.contracts.ai import PredictTicketCategoryCommand
 from backend.grpc.client import ping_helpdesk_backend
-from infrastructure.ai.provider import build_ai_provider
 from infrastructure.config.settings import Settings, get_settings
 from infrastructure.db.session import build_engine, dispose_engine, ping_database_engine
 from infrastructure.health import ProbeCheck, ProbeReport, ProbeStatus
@@ -24,7 +23,6 @@ async def run() -> int:
 
     db_engine = build_engine(settings.database)
     redis = build_redis_client(settings.redis)
-    ai_provider = build_ai_provider(settings.ai)
     checks: list[ProbeCheck] = [
         ProbeCheck(
             name="smoke_runner",
@@ -56,12 +54,11 @@ async def run() -> int:
             ProbeCheck(
                 name="ai_provider_config",
                 category="operations",
-                status=ProbeStatus.OK if ai_provider.is_enabled else ProbeStatus.WARN,
+                status=ProbeStatus.OK,
                 detail=build_ai_provider_visibility_detail(
                     settings.ai,
-                    provider_enabled=ai_provider.is_enabled,
-                    model_id=ai_provider.model_id,
-                    disabled_reason=getattr(ai_provider, "disabled_reason", None),
+                    model_loaded=False,
+                    model_id=settings.ai.effective_model_id,
                 ),
                 affects_readiness=False,
             )

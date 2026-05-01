@@ -53,7 +53,7 @@ make health-ai
 
 Разделяйте два случая:
 
-- `ai-service` жив, но provider disabled или без token - основной helpdesk работает без AI-подсказок;
+- `ai-service` жив, но локальная модель не загрузилась - backend не должен считать AI готовым;
 - `ai-service` не отвечает по gRPC - backend не проходит готовность.
 
 Проверьте:
@@ -61,9 +61,18 @@ make health-ai
 - `AI_SERVICE__HOST`;
 - `AI_SERVICE__PORT`;
 - `AI_SERVICE_AUTH__TOKEN`;
-- `AI__PROVIDER`;
 - `AI__MODEL_ID`;
-- `AI__API_TOKEN`.
+- `AI__LOCAL_MODEL_PATH`;
+- `AI__LOCAL_DEVICE`;
+- `AI__LOCAL_DTYPE`.
+
+Для локальной модели проверьте:
+
+- `make health-ai`;
+- `docker compose -f ops/docker/compose.yml -f ops/docker/compose.dev.yml ps ai-service`;
+- `AI__MODEL_ID` или `AI__LOCAL_MODEL_PATH`;
+- cache volumes `ai-huggingface-cache`, `ai-torch-cache`, `ai-torch-kernels-cache`;
+- `make ai-smoke`.
 
 ## Bot недоступен
 
@@ -200,14 +209,14 @@ make smoke
 
 Проверьте:
 
-- `AI__PROVIDER=huggingface`;
 - `AI__MODEL_ID` задан;
-- `AI__API_TOKEN` задан;
-- `AI__BASE_URL` доступен;
+- `AI__LOCAL_MODEL_PATH` существует, если задан;
+- cache volumes доступны на запись;
+- хватает памяти под модель;
 - `AI_SERVICE_AUTH__TOKEN` одинаковый для backend и `ai-service`;
 - runtime AI settings в Mini App admin не отключают нужную функцию.
 
-Если provider возвращает ошибку, `ai-service` должен показать её в логах операции, а UI - недоступность конкретной подсказки.
+Если локальная модель возвращает ошибку, `ai-service` должен показать короткую sanitized причину, а UI - недоступность конкретной подсказки.
 
 ## Экспорты падают
 

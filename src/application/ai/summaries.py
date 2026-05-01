@@ -39,6 +39,7 @@ class TicketAssistSnapshot:
     macro_suggestions: tuple[TicketMacroSuggestion, ...] = ()
     status_note: str | None = None
     unavailable_reason: str | None = None
+    failure_reason: str | None = None
     model_id: str | None = None
 
 
@@ -50,6 +51,7 @@ class TicketCategoryPrediction:
     category_title: str | None = None
     confidence: AIPredictionConfidence = AIPredictionConfidence.NONE
     reason: str | None = None
+    failure_reason: str | None = None
     model_id: str | None = None
 
 
@@ -62,4 +64,5 @@ class TicketReplyDraft:
     safety_note: str | None = None
     missing_information: tuple[str, ...] | None = None
     unavailable_reason: str | None = None
+    failure_reason: str | None = None
     model_id: str | None = None

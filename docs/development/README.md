@@ -82,21 +82,24 @@ make full-cloudflared
 
 ## AI локально
 
-Без реального провайдера оставьте:
+Reliora использует только локальную transformers-модель внутри `ai-service`:
 
-```dotenv
-AI__PROVIDER=disabled
+```bash
+make docker-up
+make health-ai
+make ai-smoke
 ```
 
-Или используйте `huggingface`:
+Модель загружается один раз при старте `ai-service`. По умолчанию используется `Qwen/Qwen2.5-0.5B-Instruct`. Для локального каталога модели положите его в `models/` и задайте `AI__LOCAL_MODEL_PATH=/models/qwen`.
 
-```dotenv
-AI__PROVIDER=huggingface
-AI__MODEL_ID=Qwen/Qwen3.5-4B
-AI__API_TOKEN=hf_xxx
+`make health-ai` проверяет статус без генерации. `make ai-smoke` выполняет реальную генерацию и JSON/schema validation.
+
+Для запуска `ai-service` без Docker установите локальную AI-группу зависимостей:
+
+```bash
+poetry install --with local-ai
+make run-ai
 ```
-
-`ai-service` всё равно должен быть доступен backend по gRPC. Отключённый провайдер - допустимое состояние; недоступный `ai-service` - проблема готовности backend.
 
 ## Проверки
 
@@ -109,6 +112,8 @@ AI__API_TOKEN=hf_xxx
 | `make proto-check` | gRPC stubs соответствуют `.proto` |
 | `make migration-check` | Alembic upgrade и `alembic check` |
 | `make smoke` | работающий стек и ключевые связи |
+| `make health-ai` | статус локальной модели без генерации |
+| `make ai-smoke` | реальная AI-проверка через локальную модель |
 | `make check` | `lint`, `typecheck`, `test` |
 | `make ci` | `check`, `proto-check`, `migration-check` |
 
@@ -191,6 +196,6 @@ make proto-check
 | backend не готов | `make logs-backend`, настройки `DATABASE__*`, `REDIS__*`, `AI_SERVICE__*` |
 | bot не запускает polling | `APP__DRY_RUN=false` и заданный `BOT__TOKEN` |
 | Mini App не открывается из Telegram | публичный `HTTPS` в `MINI_APP__PUBLIC_URL`, не `localhost` |
-| AI не отвечает | `make logs-ai`, `AI__PROVIDER`, `AI__MODEL_ID`, `AI__API_TOKEN` |
+| AI не отвечает | `make logs-ai`, `AI__MODEL_ID`, `AI__LOCAL_MODEL_PATH`, cache volumes |
 | `proto-check` падает | выполните `make proto`, затем посмотрите diff generated files |
 | `migration-check` падает | проверьте SQLAlchemy models и новую Alembic revision |

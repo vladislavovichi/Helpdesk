@@ -76,12 +76,16 @@ AI-контур работает через `ai-service`. Минимальный
 
 ```dotenv
 AI_SERVICE_AUTH__TOKEN=change-me-ai-in-prod
-AI__PROVIDER=huggingface
-AI__MODEL_ID=Qwen/Qwen3.5-4B
-AI__API_TOKEN=hf_xxx
+AI__MODEL_ID=Qwen/Qwen2.5-0.5B-Instruct
+AI__LOCAL_MODEL_PATH=
+AI__LOCAL_DEVICE=auto
+AI__REPLY_DRAFT_TEMPERATURE=0.4
+AI__REPLY_DRAFT_MAX_OUTPUT_TOKENS=1000
 ```
 
-Если провайдер не настроен, основной helpdesk продолжает работать. AI-операции возвращают состояние недоступности: оператор не получает сводку, черновик или рекомендацию, но заявка и переписка не ломаются.
+AI runtime локальный: `ai-service` загружает transformers model один раз при старте. Первый запуск может скачать веса в cache volumes. CPU работает по умолчанию, но может быть медленным; для локального каталога модели используйте `AI__LOCAL_MODEL_PATH=/models/<dir>`.
+
+Для проверки статуса без генерации используйте `make health-ai`. Для реальной генерации и JSON/schema validation используйте `make ai-smoke`.
 
 ## Полезные команды
 
@@ -92,6 +96,7 @@ AI__API_TOKEN=hf_xxx
 | `make ps` | показать состояние сервисов |
 | `make health` | проверить health контейнеров |
 | `make smoke` | проверить связи PostgreSQL, Redis, backend, ai-service и bot runtime |
+| `make ai-smoke` | проверить реальный AI completion через ai-service gRPC |
 | `make logs` | смотреть логи `ai-service`, `backend`, `bot`, `mini-app` |
 | `make run-mini-app` | запустить Mini App gateway локально |
 | `make backup-db` | создать логический backup PostgreSQL |

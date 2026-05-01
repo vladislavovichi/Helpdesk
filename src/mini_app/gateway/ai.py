@@ -56,6 +56,7 @@ def rate_limited_ai_summary_payload(*, model_id: str | None) -> dict[str, Any]:
     return {
         "available": False,
         "unavailable_reason": "rate_limited",
+        "failure_reason": "rate_limited",
         "model_id": model_id,
         "short_summary": None,
         "user_goal": None,
@@ -118,6 +119,7 @@ class MiniAppAIGateway:
                     TicketReplyDraft(
                         available=False,
                         unavailable_reason="AI reply drafts are disabled by admin settings.",
+                        failure_reason="disabled_by_settings",
                         model_id=settings.default_model_id,
                     )
                 )
@@ -133,6 +135,7 @@ class MiniAppAIGateway:
                     TicketReplyDraft(
                         available=False,
                         unavailable_reason="rate_limited",
+                        failure_reason="rate_limited",
                         model_id=settings.default_model_id,
                     )
                 )

@@ -29,6 +29,7 @@ from application.contracts.ai import (
     AIPredictTicketCategoryCommand,
     AIServiceClient,
     AIServiceClientFactory,
+    AIServiceStatus,
     AnalyzedTicketSentimentResult,
     AnalyzeTicketSentimentCommand,
     GeneratedTicketReplyDraftResult,
@@ -57,13 +58,25 @@ class GrpcAIServiceClient(AIServiceClient):
     read_retry_attempts: int
     retry_backoff_seconds: float
 
-    async def get_service_status(self) -> tuple[str, str]:
+    async def get_service_status(self) -> AIServiceStatus:
         response = await self._invoke_unary(
             self.stub.GetAIServiceStatus,
             ai_service_pb2.Empty(),
             retryable=True,
         )
-        return response.service, response.status
+        return AIServiceStatus(
+            service=response.service,
+            status=response.status,
+            provider=response.provider if response.HasField("provider") else None,
+            model_id=response.model_id if response.HasField("model_id") else None,
+            model_loaded=response.model_loaded,
+            device=response.device if response.HasField("device") else None,
+            dtype=response.dtype if response.HasField("dtype") else None,
+            cache_dir=response.cache_dir if response.HasField("cache_dir") else None,
+            max_concurrent_requests=(
+                response.max_concurrent_requests if response.max_concurrent_requests > 0 else None
+            ),
+        )
 
     async def generate_ticket_summary(
         self,
@@ -202,8 +215,10 @@ async def ping_ai_service(
         auth_config=auth_config,
         resilience_config=resilience_config,
     )() as client:
-        service, status = await client.get_service_status()
-    return service == "helpdesk-ai-service" and status == "ready"
+        status = await client.get_service_status()
+    return (
+        status.service == "helpdesk-ai-service" and status.status == "ready" and status.model_loaded
+    )
 
 
 def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
@@ -211,6 +226,6 @@ def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
         return ForbiddenError(exc.details() or "Внутренний запрос к ai-service отклонён.")
     if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
         return ValidationAppError(exc.details() or "Некорректный AI-запрос.")
-    if exc.code() == grpc.StatusCode.UNAVAILABLE:
+    if exc.code() in {grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.DEADLINE_EXCEEDED}:
         return AIUnavailableError(exc.details() or "AI-service временно недоступен.")
     return RuntimeError(exc.details() or "Внутренняя ошибка ai-service.")

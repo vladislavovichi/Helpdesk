@@ -63,18 +63,19 @@ def test_probe_report_fails_when_readiness_check_fails() -> None:
 
 def test_ai_health_visibility_does_not_expose_secrets() -> None:
     config = AIConfig(
-        provider="huggingface",
         model_id="safe-model",
-        api_token="hf_secret_token",
-        timeout_seconds=3.5,
     )
 
     detail = build_ai_provider_visibility_detail(
         config,
-        provider_enabled=True,
+        model_loaded=True,
         model_id="safe-model",
+        device="cpu",
+        dtype="float32",
+        cache_dir="/cache/huggingface",
+        max_concurrent_requests=1,
     )
 
-    assert "provider_configured=yes" in detail
+    assert "provider=local" in detail
     assert "safe-model" in detail
-    assert "hf_secret_token" not in detail
+    assert "loaded=true" in detail

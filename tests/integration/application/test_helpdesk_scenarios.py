@@ -16,6 +16,7 @@ from application.contracts.ai import (
     AIPredictTicketCategoryCommand,
     AIServiceClient,
     AIServiceClientFactory,
+    AIServiceStatus,
     AnalyzedTicketSentimentResult,
     AnalyzeTicketSentimentCommand,
     GeneratedTicketReplyDraftResult,
@@ -72,8 +73,13 @@ from infrastructure.exports.ticket_report_html import render_ticket_report_html
 
 
 class DisabledTestAIClient(AIServiceClient):
-    async def get_service_status(self) -> tuple[str, str]:
-        return "helpdesk-ai-service", "ready"
+    async def get_service_status(self) -> AIServiceStatus:
+        return AIServiceStatus(
+            service="helpdesk-ai-service",
+            status="ready",
+            provider="local",
+            model_loaded=True,
+        )
 
     async def generate_ticket_summary(
         self,

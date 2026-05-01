@@ -230,22 +230,133 @@ class AIServiceAuthConfig(BaseModel):
 
 
 class AIConfig(BaseModel):
-    provider: str = "disabled"
-    model_id: str | None = None
-    api_token: str | None = None
-    base_url: str = "https://router.huggingface.co/v1/chat/completions"
-    timeout_seconds: float = 20.0
-    summary_temperature: float = 0.15
-    summary_max_output_tokens: int = 320
+    provider: str | None = None
+    model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    local_model_path: Path | None = None
+    local_cache_dir: Path = Path("/cache/huggingface")
+    local_torch_cache_dir: Path = Path("/cache/torch")
+    local_torch_kernel_cache_dir: Path = Path("/cache/torch_kernels")
+    local_device: str = "auto"
+    local_dtype: str = "auto"
+    local_max_input_tokens: int = 4096
+    local_max_concurrent_requests: int = 1
+    local_top_p: float = 0.9
+    local_repetition_penalty: float = 1.05
+    local_trust_remote_code: bool = False
+    summary_temperature: float = 0.2
+    summary_max_output_tokens: int = 700
+    reply_draft_temperature: float = 0.4
+    reply_draft_max_output_tokens: int = 1000
     macros_temperature: float = 0.2
     macros_max_output_tokens: int = 280
     category_temperature: float = 0.1
-    category_max_output_tokens: int = 160
+    category_max_output_tokens: int = 400
 
     @property
     def normalized_provider(self) -> str:
-        provider = self.provider.strip().lower()
-        return provider or "disabled"
+        return "local"
+
+    @property
+    def effective_model_id(self) -> str:
+        if self.local_model_path is not None:
+            return str(self.local_model_path)
+        return self.model_id
+
+    @field_validator(
+        "local_model_path",
+        "local_cache_dir",
+        "local_torch_cache_dir",
+        "local_torch_kernel_cache_dir",
+        mode="before",
+    )
+    @classmethod
+    def validate_local_paths(cls, value: object) -> Path | None:
+        if value is None or isinstance(value, Path):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip()
+            return Path(normalized) if normalized else None
+        return None
+
+    @field_validator("provider")
+    @classmethod
+    def validate_legacy_provider(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return value.strip().lower()
+
+    @field_validator("model_id")
+    @classmethod
+    def validate_model_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("AI__MODEL_ID must not be empty.")
+        return normalized
+
+    @field_validator("local_device")
+    @classmethod
+    def validate_local_device(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"auto", "cpu", "cuda", "mps"}:
+            return normalized
+        if normalized.startswith("cuda:"):
+            suffix = normalized.removeprefix("cuda:")
+            if suffix.isdigit():
+                return normalized
+        raise ValueError("AI__LOCAL_DEVICE must be auto, cpu, cuda, cuda:N, or mps.")
+
+    @field_validator("local_dtype")
+    @classmethod
+    def validate_local_dtype(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"auto", "float16", "bfloat16", "float32"}:
+            raise ValueError("AI__LOCAL_DTYPE must be one of: auto, float16, bfloat16, float32.")
+        return normalized
+
+    @field_validator("local_max_input_tokens", "local_max_concurrent_requests")
+    @classmethod
+    def validate_local_positive_int(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("AI local numeric limits must be positive.")
+        return value
+
+    @field_validator(
+        "summary_max_output_tokens",
+        "reply_draft_max_output_tokens",
+        "macros_max_output_tokens",
+        "category_max_output_tokens",
+    )
+    @classmethod
+    def validate_positive_token_limit(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("AI output token limits must be positive.")
+        return value
+
+    @field_validator(
+        "summary_temperature",
+        "reply_draft_temperature",
+        "macros_temperature",
+        "category_temperature",
+    )
+    @classmethod
+    def validate_temperature(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("AI temperatures must be zero or positive.")
+        return value
+
+    @field_validator("local_top_p")
+    @classmethod
+    def validate_local_top_p(cls, value: float) -> float:
+        if not 0 < value <= 1:
+            raise ValueError("AI__LOCAL_TOP_P must be in the range (0, 1].")
+        return value
+
+    @field_validator("local_repetition_penalty")
+    @classmethod
+    def validate_local_repetition_penalty(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("AI__LOCAL_REPETITION_PENALTY must be positive.")
+        return value
 
 
 class RuntimeAISettingsConfig(BaseModel):

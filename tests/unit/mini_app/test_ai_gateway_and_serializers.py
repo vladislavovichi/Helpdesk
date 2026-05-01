@@ -85,6 +85,7 @@ def test_serialize_ticket_ai_snapshot_contains_mini_app_fields() -> None:
     assert payload == {
         "available": True,
         "unavailable_reason": None,
+        "failure_reason": None,
         "model_id": "test-model",
         "short_summary": "Клиент ждёт восстановления доступа.",
         "user_goal": "Войти в личный кабинет.",
@@ -117,6 +118,7 @@ def test_serialize_unavailable_ticket_ai_snapshot_contains_degraded_state() -> N
     assert payload is not None
     assert payload["available"] is False
     assert payload["unavailable_reason"] == "AI-провайдер не настроен."
+    assert payload["failure_reason"] is None
     assert payload["summary_status"] == "missing"
     assert payload["macro_suggestions"] == []
 
@@ -163,6 +165,7 @@ async def test_rate_limited_ai_summary_refresh_returns_clear_unavailable_respons
 
     assert result["available"] is False
     assert result["unavailable_reason"] == "rate_limited"
+    assert result["failure_reason"] == "rate_limited"
     assert client.calls == []
 
 
@@ -187,6 +190,7 @@ async def test_rate_limited_reply_draft_returns_clear_unavailable_response() -> 
 
     assert result["available"] is False
     assert result["unavailable_reason"] == "rate_limited"
+    assert result["failure_reason"] == "rate_limited"
     assert client.draft_calls == []
 
 
@@ -201,6 +205,7 @@ def test_serialize_ticket_reply_draft_contains_expected_fields() -> None:
         "safety_note": "Без обещаний сроков.",
         "missing_information": ["номер заказа"],
         "unavailable_reason": None,
+        "failure_reason": None,
         "model_id": "reply-model",
     }
 
@@ -217,6 +222,7 @@ def test_serialize_unavailable_ticket_reply_draft_contains_degraded_state() -> N
     assert payload["available"] is False
     assert payload["reply_text"] is None
     assert payload["unavailable_reason"] == "AI-провайдер не настроен."
+    assert payload["failure_reason"] is None
 
 
 def _build_snapshot() -> TicketAssistSnapshot:

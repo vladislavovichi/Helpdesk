@@ -118,6 +118,7 @@ async def test_disabled_reply_drafts_return_unavailable_without_backend_call() -
 
     assert result["available"] is False
     assert result["unavailable_reason"] == "AI reply drafts are disabled by admin settings."
+    assert result["failure_reason"] == "disabled_by_settings"
     assert result["model_id"] == "safe-model"
     assert client.reply_draft_calls == []
 

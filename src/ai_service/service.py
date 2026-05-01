@@ -102,8 +102,11 @@ class AIApplicationService:
             ticket_public_id=command.ticket_public_id,
         )
         if not self.provider.is_enabled:
-            operation.finish(success=False, failure_reason="disabled_by_settings")
-            return unavailable_summary_result(self.provider.model_id)
+            operation.finish(success=False, failure_reason="ai_unavailable")
+            return unavailable_summary_result(
+                self.provider.model_id,
+                failure_reason="ai_unavailable",
+            )
 
         completion = await complete_json_with_metadata(
             provider=self.provider,
@@ -123,6 +126,7 @@ class AIApplicationService:
             return GeneratedTicketSummaryResult(
                 available=False,
                 unavailable_reason="Не удалось подготовить сводку.",
+                failure_reason=_normalize_failure_reason(completion.failure_reason),
                 model_id=self.provider.model_id,
             )
         summary = build_generated_ticket_summary(
@@ -134,12 +138,13 @@ class AIApplicationService:
         if summary is None:
             operation.finish(
                 success=False,
-                failure_reason="validation_failed",
+                failure_reason="schema_validation_failed",
                 retry_count=completion.retry_count,
             )
             return GeneratedTicketSummaryResult(
                 available=False,
                 unavailable_reason="Не удалось подготовить достаточно надёжную сводку.",
+                failure_reason="schema_validation_failed",
                 model_id=self.provider.model_id,
             )
         operation.finish(success=True, retry_count=completion.retry_count)
@@ -165,8 +170,11 @@ class AIApplicationService:
             operation.finish(success=False, failure_reason="missing_context")
             return SuggestedMacrosResult(available=True, model_id=self.provider.model_id)
         if not self.provider.is_enabled:
-            operation.finish(success=False, failure_reason="disabled_by_settings")
-            return unavailable_macros_result(self.provider.model_id)
+            operation.finish(success=False, failure_reason="ai_unavailable")
+            return unavailable_macros_result(
+                self.provider.model_id,
+                failure_reason="ai_unavailable",
+            )
 
         completion = await complete_json_with_metadata(
             provider=self.provider,
@@ -186,6 +194,7 @@ class AIApplicationService:
             return SuggestedMacrosResult(
                 available=False,
                 unavailable_reason="Не удалось подобрать макросы.",
+                failure_reason=_normalize_failure_reason(completion.failure_reason),
                 model_id=self.provider.model_id,
             )
         suggestions = build_suggested_macros(
@@ -208,16 +217,19 @@ class AIApplicationService:
             ticket_public_id=command.ticket_public_id,
         )
         if not self.provider.is_enabled:
-            operation.finish(success=False, failure_reason="disabled_by_settings")
-            return unavailable_reply_draft_result(self.provider.model_id)
+            operation.finish(success=False, failure_reason="ai_unavailable")
+            return unavailable_reply_draft_result(
+                self.provider.model_id,
+                failure_reason="ai_unavailable",
+            )
 
         completion = await complete_json_with_metadata(
             provider=self.provider,
             instructions=REPLY_DRAFT_INSTRUCTIONS,
             prompt=build_reply_draft_prompt(command),
             schema=ReplyDraftPayload,
-            max_output_tokens=self.config.summary_max_output_tokens,
-            temperature=self.config.summary_temperature,
+            max_output_tokens=self.config.reply_draft_max_output_tokens,
+            temperature=self.config.reply_draft_temperature,
         )
         payload = completion.payload
         if payload is None:
@@ -229,6 +241,7 @@ class AIApplicationService:
             return GeneratedTicketReplyDraftResult(
                 available=False,
                 unavailable_reason="Не удалось подготовить черновик ответа.",
+                failure_reason=_normalize_failure_reason(completion.failure_reason),
                 model_id=self.provider.model_id,
             )
         draft = build_reply_draft(
@@ -242,12 +255,13 @@ class AIApplicationService:
         if draft is None:
             operation.finish(
                 success=False,
-                failure_reason="validation_failed",
+                failure_reason="schema_validation_failed",
                 retry_count=completion.retry_count,
             )
             return GeneratedTicketReplyDraftResult(
                 available=False,
                 unavailable_reason="Не удалось подготовить достаточно надёжный черновик.",
+                failure_reason="schema_validation_failed",
                 model_id=self.provider.model_id,
             )
         operation.finish(success=True, retry_count=completion.retry_count)
@@ -265,8 +279,11 @@ class AIApplicationService:
             operation.finish(success=False, failure_reason="missing_context")
             return AIPredictedCategoryResult(available=False, model_id=self.provider.model_id)
         if not self.provider.is_enabled:
-            operation.finish(success=False, failure_reason="disabled_by_settings")
-            return unavailable_category_result(self.provider.model_id)
+            operation.finish(success=False, failure_reason="ai_unavailable")
+            return unavailable_category_result(
+                self.provider.model_id,
+                failure_reason="ai_unavailable",
+            )
 
         completion = await complete_json_with_metadata(
             provider=self.provider,
@@ -287,12 +304,15 @@ class AIApplicationService:
         if prediction is None:
             operation.finish(
                 success=False,
-                failure_reason=completion.failure_reason or "validation_failed",
+                failure_reason=completion.failure_reason or "schema_validation_failed",
                 retry_count=completion.retry_count,
             )
             return AIPredictedCategoryResult(
                 available=False,
                 confidence=AIPredictionConfidence.NONE,
+                failure_reason=_normalize_failure_reason(
+                    completion.failure_reason or "schema_validation_failed"
+                ),
                 model_id=self.provider.model_id,
             )
         operation.finish(success=True, retry_count=completion.retry_count)

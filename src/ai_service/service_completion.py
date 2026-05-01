@@ -11,10 +11,15 @@ from application.ai.contracts import AIMessage, AIProvider, AIProviderError, AIP
 
 
 class AICompletionFailureReason(StrEnum):
-    PROVIDER_UNAVAILABLE = "provider_unavailable"
+    AI_UNAVAILABLE = "ai_unavailable"
+    LOCAL_MODEL_LOAD_FAILED = "local_model_load_failed"
+    LOCAL_MODEL_NOT_FOUND = "local_model_not_found"
+    LOCAL_GENERATION_FAILED = "local_generation_failed"
+    LOCAL_OUT_OF_MEMORY = "local_out_of_memory"
+    GRPC_UNAVAILABLE = "grpc_unavailable"
     TIMEOUT = "timeout"
     INVALID_JSON = "invalid_json"
-    VALIDATION_FAILED = "validation_failed"
+    SCHEMA_VALIDATION_FAILED = "schema_validation_failed"
     UNKNOWN = "unknown"
 
 
@@ -63,6 +68,7 @@ async def complete_json_with_metadata[SchemaT: BaseModel](
             messages=messages,
             max_output_tokens=max_output_tokens,
             temperature=temperature,
+            expect_json=True,
         )
     except TimeoutError as exc:
         return AIJSONCompletionResult(
@@ -88,6 +94,7 @@ async def complete_json_with_metadata[SchemaT: BaseModel](
             ),
             max_output_tokens=max_output_tokens,
             temperature=temperature,
+            expect_json=True,
         )
     except TimeoutError as exc:
         return AIJSONCompletionResult(
@@ -126,7 +133,7 @@ def _validate_json_payload[SchemaT: BaseModel](
     except ValidationError:
         return AIJSONCompletionResult(
             payload=None,
-            failure_reason=AICompletionFailureReason.VALIDATION_FAILED,
+            failure_reason=AICompletionFailureReason.SCHEMA_VALIDATION_FAILED,
         )
 
 
@@ -164,8 +171,7 @@ def extract_json_object(raw: str) -> dict[str, Any] | None:
 
 def _provider_failure_reason(exc: AIProviderError) -> AICompletionFailureReason:
     raw = getattr(exc, "failure_category", None)
-    if raw == AICompletionFailureReason.TIMEOUT.value:
-        return AICompletionFailureReason.TIMEOUT
-    if raw == AICompletionFailureReason.PROVIDER_UNAVAILABLE.value:
-        return AICompletionFailureReason.PROVIDER_UNAVAILABLE
+    for reason in AICompletionFailureReason:
+        if raw == reason.value:
+            return reason
     return AICompletionFailureReason.UNKNOWN

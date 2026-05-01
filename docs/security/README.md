@@ -97,7 +97,6 @@ Runtime AI settings в Mini App admin могут отключать отдель
 - `AI_SERVICE_AUTH__TOKEN`;
 - `DATABASE__PASSWORD`;
 - `REDIS__PASSWORD`, если Redis защищён паролем;
-- `AI__API_TOKEN`, если AI включён;
 - `AUTHORIZATION__SUPER_ADMIN_TELEGRAM_USER_IDS`.
 
 `.env` не должен попадать в публичные артефакты и отчёты.

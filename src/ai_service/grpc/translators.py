@@ -191,6 +191,8 @@ def serialize_generated_ticket_reply_draft_result(
         message.unavailable_reason = result.unavailable_reason
     if result.model_id is not None:
         message.model_id = result.model_id
+    if result.failure_reason is not None:
+        message.failure_reason = result.failure_reason
     return message
 
 
@@ -210,6 +212,7 @@ def deserialize_generated_ticket_reply_draft_result(
             result.unavailable_reason if result.HasField("unavailable_reason") else None
         ),
         model_id=result.model_id if result.HasField("model_id") else None,
+        failure_reason=result.failure_reason if result.HasField("failure_reason") else None,
     )
 
 
@@ -230,6 +233,8 @@ def serialize_generated_ticket_summary_result(
         message.unavailable_reason = result.unavailable_reason
     if result.model_id is not None:
         message.model_id = result.model_id
+    if result.failure_reason is not None:
+        message.failure_reason = result.failure_reason
     return message
 
 
@@ -251,6 +256,7 @@ def deserialize_generated_ticket_summary_result(
             result.unavailable_reason if result.HasField("unavailable_reason") else None
         ),
         model_id=result.model_id if result.HasField("model_id") else None,
+        failure_reason=result.failure_reason if result.HasField("failure_reason") else None,
     )
 
 
@@ -313,6 +319,8 @@ def serialize_suggested_macros_result(
         message.unavailable_reason = result.unavailable_reason
     if result.model_id is not None:
         message.model_id = result.model_id
+    if result.failure_reason is not None:
+        message.failure_reason = result.failure_reason
     return message
 
 
@@ -333,6 +341,7 @@ def deserialize_suggested_macros_result(
             result.unavailable_reason if result.HasField("unavailable_reason") else None
         ),
         model_id=result.model_id if result.HasField("model_id") else None,
+        failure_reason=result.failure_reason if result.HasField("failure_reason") else None,
     )
 
 
@@ -381,6 +390,8 @@ def serialize_predicted_category_result(
         message.unavailable_reason = result.unavailable_reason
     if result.model_id is not None:
         message.model_id = result.model_id
+    if result.failure_reason is not None:
+        message.failure_reason = result.failure_reason
     return message
 
 
@@ -396,6 +407,7 @@ def deserialize_predicted_category_result(
             result.unavailable_reason if result.HasField("unavailable_reason") else None
         ),
         model_id=result.model_id if result.HasField("model_id") else None,
+        failure_reason=result.failure_reason if result.HasField("failure_reason") else None,
     )
 
 

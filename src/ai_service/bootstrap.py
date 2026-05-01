@@ -4,7 +4,7 @@ import logging
 
 from ai_service.grpc.server import build_ai_service_grpc_server
 from ai_service.service import AIApplicationService
-from application.ai.contracts import AIProvider
+from application.ai.contracts import AIProvider, AIProviderError
 from infrastructure.ai.provider import build_ai_provider
 from infrastructure.config.settings import Settings
 from infrastructure.startup_checks import validate_ai_service_startup_settings
@@ -20,24 +20,23 @@ async def build_runtime(settings: Settings) -> AIServiceRuntime:
     logger = logging.getLogger(__name__)
     validate_ai_service_startup_settings(settings)
     logger.info(
-        "Initializing ai-service runtime bind=%s provider=%s model=%s",
+        "Initializing ai-service runtime bind=%s provider=local model=%s",
         settings.ai_service.bind_target,
-        settings.ai.normalized_provider,
-        settings.ai.model_id,
+        settings.ai.effective_model_id,
     )
     provider = build_ai_provider(settings.ai)
-    if provider.is_enabled:
-        logger.info(
-            "AI provider is enabled provider=%s model=%s",
-            settings.ai.normalized_provider,
-            provider.model_id,
-        )
-    else:
-        logger.warning(
-            "AI provider is running in degraded mode provider=%s reason=%s",
-            settings.ai.normalized_provider,
-            getattr(provider, "disabled_reason", "provider is disabled"),
-        )
+    load = getattr(provider, "load", None)
+    if load is not None:
+        try:
+            await load()
+        except AIProviderError as exc:
+            logger.error(
+                "Local AI model startup failed failure_reason=%s model=%s",
+                exc.failure_category,
+                provider.model_id,
+            )
+            raise
+    logger.info("AI provider is ready provider=local model=%s", provider.model_id)
     service = _build_service(settings, provider)
     grpc_server = build_ai_service_grpc_server(
         service=service,

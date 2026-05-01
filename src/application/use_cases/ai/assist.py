@@ -20,12 +20,15 @@ from application.contracts.ai import (
     AIPredictTicketCategoryCommand,
     AIReplyDraftSummaryContext,
     AIServiceClientFactory,
+    GeneratedTicketSummaryResult,
     GenerateTicketReplyDraftCommand,
     GenerateTicketSummaryCommand,
     MacroCandidate,
     PredictTicketCategoryCommand,
+    SuggestedMacrosResult,
     SuggestMacrosCommand,
 )
+from application.errors import AIUnavailableError
 from application.use_cases.ai.settings import (
     AISettingsProvider,
     InMemoryAISettingsRepository,
@@ -43,6 +46,7 @@ from domain.entities.ticket import TicketAttachmentDetails, TicketDetails, Ticke
 
 _MAX_MACRO_REASON_LENGTH = 120
 _MAX_CATEGORY_REASON_LENGTH = 120
+_AI_GRPC_FAILURES = (AIUnavailableError, TimeoutError, OSError, ConnectionError)
 
 
 @dataclass(slots=True, frozen=True)
@@ -86,48 +90,73 @@ class BuildTicketAssistSnapshotUseCase:
         status_note: str | None = None
         settings = self.ai_settings_provider.get()
 
-        async with self.ai_client_factory() as ai_client:
-            if refresh_summary and settings.ai_summaries_enabled:
-                summary_result = await ai_client.generate_ticket_summary(
-                    _build_generate_ticket_summary_command(
-                        ticket,
-                        settings=settings,
+        try:
+            async with self.ai_client_factory() as ai_client:
+                if refresh_summary and settings.ai_summaries_enabled:
+                    summary_result = await ai_client.generate_ticket_summary(
+                        _build_generate_ticket_summary_command(
+                            ticket,
+                            settings=settings,
+                        )
                     )
-                )
-                if not summary_result.available or summary_result.summary is None:
-                    status_note = (
+                    if not summary_result.available or summary_result.summary is None:
+                        status_note = (
+                            "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
+                            if stored_summary is not None
+                            else "Сводку сейчас подготовить не удалось."
+                        )
+                    else:
+                        generated_summary = summary_result.summary
+                        stored_summary = await self.ticket_ai_summary_repository.upsert(
+                            ticket_id=ticket.id,
+                            short_summary=generated_summary.short_summary,
+                            user_goal=generated_summary.user_goal,
+                            actions_taken=generated_summary.actions_taken,
+                            current_status=generated_summary.current_status,
+                            generated_at=datetime.now(UTC),
+                            source_ticket_updated_at=ticket.updated_at,
+                            source_message_count=len(ticket.message_history),
+                            source_internal_note_count=len(ticket.internal_notes),
+                            model_id=summary_result.model_id,
+                        )
+                        status_note = "Сводка обновлена по сохранённой переписке."
+                elif refresh_summary:
+                    status_note = "AI-сводки отключены в настройках администратора."
+
+                if settings.ai_macro_suggestions_enabled:
+                    macros_result = await ai_client.suggest_macros(
+                        _build_suggest_macros_command(
+                            ticket=ticket,
+                            macros=macros,
+                            settings=settings,
+                        )
+                    )
+                else:
+                    status_note = status_note or "AI-подсказки макросов отключены."
+        except _AI_GRPC_FAILURES:
+            if refresh_summary and settings.ai_summaries_enabled:
+                summary_result = GeneratedTicketSummaryResult(
+                    available=False,
+                    unavailable_reason=(
                         "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
                         if stored_summary is not None
                         else "Сводку сейчас подготовить не удалось."
-                    )
-                else:
-                    generated_summary = summary_result.summary
-                    stored_summary = await self.ticket_ai_summary_repository.upsert(
-                        ticket_id=ticket.id,
-                        short_summary=generated_summary.short_summary,
-                        user_goal=generated_summary.user_goal,
-                        actions_taken=generated_summary.actions_taken,
-                        current_status=generated_summary.current_status,
-                        generated_at=datetime.now(UTC),
-                        source_ticket_updated_at=ticket.updated_at,
-                        source_message_count=len(ticket.message_history),
-                        source_internal_note_count=len(ticket.internal_notes),
-                        model_id=summary_result.model_id,
-                    )
-                    status_note = "Сводка обновлена по сохранённой переписке."
-            elif refresh_summary:
-                status_note = "AI-сводки отключены в настройках администратора."
-
-            if settings.ai_macro_suggestions_enabled:
-                macros_result = await ai_client.suggest_macros(
-                    _build_suggest_macros_command(
-                        ticket=ticket,
-                        macros=macros,
-                        settings=settings,
-                    )
+                    ),
+                    failure_reason="grpc_unavailable",
+                    model_id=settings.default_model_id,
                 )
-            else:
-                status_note = status_note or "AI-подсказки макросов отключены."
+            if settings.ai_macro_suggestions_enabled:
+                macros_result = SuggestedMacrosResult(
+                    available=False,
+                    unavailable_reason="Новые AI-подсказки временно недоступны.",
+                    failure_reason="grpc_unavailable",
+                    model_id=settings.default_model_id,
+                )
+            status_note = status_note or (
+                "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
+                if stored_summary is not None
+                else "Сводку сейчас подготовить не удалось."
+            )
 
         macro_suggestions = _resolve_macro_suggestions(
             macros=macros,
@@ -138,6 +167,7 @@ class BuildTicketAssistSnapshotUseCase:
             return TicketAssistSnapshot(
                 available=False,
                 unavailable_reason=_resolve_unavailable_reason(summary_result, macros_result),
+                failure_reason=_resolve_failure_reason(summary_result, macros_result),
                 model_id=_resolve_model_id(summary_result, macros_result, stored_summary),
             )
 
@@ -191,6 +221,10 @@ class BuildTicketAssistSnapshotUseCase:
                 and not macros_result.available
                 else None
             ),
+            failure_reason=_resolve_failure_reason(
+                summary_result if _is_unavailable_result(summary_result) else None,
+                macros_result if _is_unavailable_result(macros_result) else None,
+            ),
             model_id=_resolve_model_id(summary_result, macros_result, stored_summary),
         )
 
@@ -228,18 +262,27 @@ class GenerateTicketReplyDraftUseCase:
             return TicketReplyDraft(
                 available=False,
                 unavailable_reason="AI reply drafts are disabled by admin settings.",
+                failure_reason="disabled_by_settings",
                 model_id=settings.default_model_id,
             )
         stored_summary = await self.ticket_ai_summary_repository.get_by_ticket_id(
             ticket_id=ticket.id
         )
-        async with self.ai_client_factory() as ai_client:
-            result = await ai_client.generate_ticket_reply_draft(
-                _build_generate_ticket_reply_draft_command(
-                    ticket=ticket,
-                    stored_summary=stored_summary,
-                    settings=settings,
+        try:
+            async with self.ai_client_factory() as ai_client:
+                result = await ai_client.generate_ticket_reply_draft(
+                    _build_generate_ticket_reply_draft_command(
+                        ticket=ticket,
+                        stored_summary=stored_summary,
+                        settings=settings,
+                    )
                 )
+        except _AI_GRPC_FAILURES:
+            return TicketReplyDraft(
+                available=False,
+                unavailable_reason="AI-черновик сейчас недоступен.",
+                failure_reason="grpc_unavailable",
+                model_id=settings.default_model_id,
             )
         return TicketReplyDraft(
             available=result.available,
@@ -249,6 +292,7 @@ class GenerateTicketReplyDraftUseCase:
             safety_note=result.safety_note,
             missing_information=result.missing_information,
             unavailable_reason=result.unavailable_reason,
+            failure_reason=result.failure_reason,
             model_id=result.model_id,
         )
 
@@ -273,26 +317,34 @@ class PredictTicketCategoryUseCase:
         if not settings.ai_category_prediction_enabled:
             return TicketCategoryPrediction(
                 available=False,
+                failure_reason="disabled_by_settings",
                 model_id=settings.default_model_id,
             )
         categories = await self._list_categories()
         if not categories or not _has_signal(command):
             return TicketCategoryPrediction(available=False)
 
-        async with self.ai_client_factory() as ai_client:
-            result = await ai_client.predict_ticket_category(
-                AIPredictTicketCategoryCommand(
-                    text=command.text,
-                    attachment=_build_attachment_context_from_prediction(command),
-                    categories=tuple(
-                        AICategoryOption(
-                            id=category.id,
-                            code=category.code,
-                            title=category.title,
-                        )
-                        for category in categories
-                    ),
+        try:
+            async with self.ai_client_factory() as ai_client:
+                result = await ai_client.predict_ticket_category(
+                    AIPredictTicketCategoryCommand(
+                        text=command.text,
+                        attachment=_build_attachment_context_from_prediction(command),
+                        categories=tuple(
+                            AICategoryOption(
+                                id=category.id,
+                                code=category.code,
+                                title=category.title,
+                            )
+                            for category in categories
+                        ),
+                    )
                 )
+        except _AI_GRPC_FAILURES:
+            return TicketCategoryPrediction(
+                available=False,
+                failure_reason="grpc_unavailable",
+                model_id=settings.default_model_id,
             )
 
         if (
@@ -306,6 +358,7 @@ class PredictTicketCategoryUseCase:
         ):
             return TicketCategoryPrediction(
                 available=False,
+                failure_reason=result.failure_reason,
                 model_id=result.model_id,
             )
 
@@ -313,6 +366,7 @@ class PredictTicketCategoryUseCase:
         if category is None:
             return TicketCategoryPrediction(
                 available=False,
+                failure_reason=result.failure_reason,
                 model_id=result.model_id,
             )
 
@@ -589,12 +643,24 @@ def _ai_unavailable(summary_result: object | None, macros_result: object | None)
     return bool(checks) and not any(bool(getattr(item, "available", False)) for item in checks)
 
 
+def _is_unavailable_result(result: object | None) -> bool:
+    return result is not None and not bool(getattr(result, "available", False))
+
+
 def _resolve_unavailable_reason(*results: object | None) -> str:
     for result in results:
         reason = getattr(result, "unavailable_reason", None) if result is not None else None
         if isinstance(reason, str) and reason.strip():
             return reason
     return "AI-подсказки сейчас недоступны."
+
+
+def _resolve_failure_reason(*results: object | None) -> str | None:
+    for result in results:
+        reason = getattr(result, "failure_reason", None) if result is not None else None
+        if isinstance(reason, str) and reason.strip():
+            return reason.strip()
+    return None
 
 
 def _resolve_model_id(

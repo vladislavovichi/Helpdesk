@@ -12,6 +12,7 @@ def serialize_ticket_ai_snapshot(snapshot: TicketAssistSnapshot | None) -> dict[
     return {
         "available": snapshot.available,
         "unavailable_reason": snapshot.unavailable_reason,
+        "failure_reason": snapshot.failure_reason,
         "model_id": snapshot.model_id,
         "short_summary": snapshot.short_summary,
         "user_goal": snapshot.user_goal,
@@ -46,5 +47,6 @@ def serialize_ticket_reply_draft(draft: TicketReplyDraft | None) -> dict[str, An
             list(draft.missing_information) if draft.missing_information is not None else None
         ),
         "unavailable_reason": draft.unavailable_reason,
+        "failure_reason": draft.failure_reason,
         "model_id": draft.model_id,
     }

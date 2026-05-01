@@ -22,6 +22,8 @@ def format_ticket_assist_snapshot(
                 or "Продолжайте работу через карточку и библиотеку макросов.",
             ]
         )
+        if snapshot.failure_reason:
+            lines.append(f"Техническая причина: {snapshot.failure_reason}")
         return "\n".join(lines)
 
     lines.extend(["", _format_summary_status(snapshot)])
@@ -57,6 +59,8 @@ def format_ticket_assist_snapshot(
         lines.extend(["", snapshot.status_note])
     elif snapshot.unavailable_reason:
         lines.extend(["", snapshot.unavailable_reason])
+    if snapshot.failure_reason:
+        lines.extend(["", f"Техническая причина: {snapshot.failure_reason}"])
 
     if snapshot.model_id:
         lines.extend(["", f"Модель: {snapshot.model_id}"])

@@ -1,5 +1,7 @@
 FROM python:3.12-slim
 
+ARG POETRY_INSTALL_ARGS="--only main"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src \
@@ -15,7 +17,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml poetry.lock README.md ./
-RUN poetry install --only main --no-root
+RUN poetry install ${POETRY_INSTALL_ARGS} --no-root
 
 COPY migrations ./migrations
 COPY ops ./ops

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -93,6 +93,7 @@ class GeneratedTicketSummaryResult:
     available: bool
     summary: AIGeneratedTicketSummary | None = None
     unavailable_reason: str | None = None
+    failure_reason: str | None = None
     model_id: str | None = None
 
 
@@ -105,6 +106,7 @@ class GeneratedTicketReplyDraftResult:
     safety_note: str | None = None
     missing_information: tuple[str, ...] | None = None
     unavailable_reason: str | None = None
+    failure_reason: str | None = None
     model_id: str | None = None
 
 
@@ -138,6 +140,7 @@ class SuggestedMacrosResult:
     available: bool
     suggestions: tuple[AISuggestedMacro, ...] = ()
     unavailable_reason: str | None = None
+    failure_reason: str | None = None
     model_id: str | None = None
 
 
@@ -162,6 +165,7 @@ class AIPredictedCategoryResult:
     confidence: AIPredictionConfidence = AIPredictionConfidence.NONE
     reason: str | None = None
     unavailable_reason: str | None = None
+    failure_reason: str | None = None
     model_id: str | None = None
 
 
@@ -181,8 +185,25 @@ class AnalyzedTicketSentimentResult:
     model_id: str | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class AIServiceStatus:
+    service: str
+    status: str
+    provider: str | None = None
+    model_id: str | None = None
+    model_loaded: bool = False
+    device: str | None = None
+    dtype: str | None = None
+    cache_dir: str | None = None
+    max_concurrent_requests: int | None = None
+
+    def __iter__(self) -> Iterator[str]:
+        yield self.service
+        yield self.status
+
+
 class AIServiceClient(Protocol):
-    async def get_service_status(self) -> tuple[str, str]: ...
+    async def get_service_status(self) -> AIServiceStatus: ...
 
     async def generate_ticket_summary(
         self,

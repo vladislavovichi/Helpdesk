@@ -71,6 +71,7 @@ message GenerateTicketReplyDraftResponse {
   repeated string missing_information = 6;
   optional string unavailable_reason = 7;
   optional string model_id = 8;
+  optional string failure_reason = 9;
 }
 
 message GenerateTicketSummaryResponse {
@@ -78,6 +79,7 @@ message GenerateTicketSummaryResponse {
   GeneratedTicketSummary summary = 2;
   optional string unavailable_reason = 3;
   optional string model_id = 4;
+  optional string failure_reason = 5;
 }
 
 message MacroCandidate {
@@ -107,6 +109,7 @@ message SuggestMacrosResponse {
   repeated AISuggestedMacro suggestions = 2;
   optional string unavailable_reason = 3;
   optional string model_id = 4;
+  optional string failure_reason = 5;
 }
 
 message AICategoryOption {
@@ -128,6 +131,7 @@ message PredictCategoryResponse {
   optional string reason = 4;
   optional string unavailable_reason = 5;
   optional string model_id = 6;
+  optional string failure_reason = 7;
 }
 
 message AnalyzeTicketSentimentCommand {
@@ -149,6 +153,11 @@ message AIServiceStatus {
   string status = 2;
   optional string provider = 3;
   optional string model_id = 4;
+  bool model_loaded = 5;
+  optional string device = 6;
+  optional string dtype = 7;
+  optional string cache_dir = 8;
+  int32 max_concurrent_requests = 9;
 }
 
 service HelpdeskAIService {

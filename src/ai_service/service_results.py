@@ -162,34 +162,54 @@ def has_macro_suggestion_signal(command: SuggestMacrosCommand) -> bool:
     )
 
 
-def unavailable_reply_draft_result(model_id: str | None) -> GeneratedTicketReplyDraftResult:
+def unavailable_reply_draft_result(
+    model_id: str | None,
+    *,
+    failure_reason: str = "ai_unavailable",
+) -> GeneratedTicketReplyDraftResult:
     return GeneratedTicketReplyDraftResult(
         available=False,
-        unavailable_reason="AI-провайдер не настроен.",
+        unavailable_reason="Локальная AI-модель недоступна.",
+        failure_reason=failure_reason,
         model_id=model_id,
     )
 
 
-def unavailable_summary_result(model_id: str | None) -> GeneratedTicketSummaryResult:
+def unavailable_summary_result(
+    model_id: str | None,
+    *,
+    failure_reason: str = "ai_unavailable",
+) -> GeneratedTicketSummaryResult:
     return GeneratedTicketSummaryResult(
         available=False,
-        unavailable_reason="AI-провайдер не настроен.",
+        unavailable_reason="Локальная AI-модель недоступна.",
+        failure_reason=failure_reason,
         model_id=model_id,
     )
 
 
-def unavailable_macros_result(model_id: str | None) -> SuggestedMacrosResult:
+def unavailable_macros_result(
+    model_id: str | None,
+    *,
+    failure_reason: str = "ai_unavailable",
+) -> SuggestedMacrosResult:
     return SuggestedMacrosResult(
         available=False,
-        unavailable_reason="AI-провайдер не настроен.",
+        unavailable_reason="Локальная AI-модель недоступна.",
+        failure_reason=failure_reason,
         model_id=model_id,
     )
 
 
-def unavailable_category_result(model_id: str | None) -> AIPredictedCategoryResult:
+def unavailable_category_result(
+    model_id: str | None,
+    *,
+    failure_reason: str = "ai_unavailable",
+) -> AIPredictedCategoryResult:
     return AIPredictedCategoryResult(
         available=False,
-        unavailable_reason="AI-провайдер не настроен.",
+        unavailable_reason="Локальная AI-модель недоступна.",
+        failure_reason=failure_reason,
         model_id=model_id,
     )
 

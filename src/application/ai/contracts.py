@@ -16,7 +16,7 @@ class AIMessage:
 class AIProviderError(RuntimeError):
     """Raised when the configured AI provider cannot complete a request."""
 
-    def __init__(self, message: str, *, failure_category: str = "provider_unavailable") -> None:
+    def __init__(self, message: str, *, failure_category: str = "ai_unavailable") -> None:
         super().__init__(message)
         self.failure_category = failure_category
 
@@ -41,4 +41,5 @@ class AIProvider(Protocol):
         messages: Sequence[AIMessage],
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str: ...

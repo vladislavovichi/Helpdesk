@@ -5,6 +5,8 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile
+      args:
+        POETRY_INSTALL_ARGS: "--only main,local-ai"
     command: ["sh", "/app/ops/docker/entrypoint.sh"]
     environment:
       PYTHONPATH: /app/src
@@ -12,6 +14,18 @@ services:
       AI_SERVICE__HOST: ai-service
       AI_SERVICE__PORT: 50061
       AI_SERVICE__LISTEN_HOST: 0.0.0.0
+      AI__MODEL_ID: ${AI__MODEL_ID:-Qwen/Qwen2.5-0.5B-Instruct}
+      AI__LOCAL_MODEL_PATH: ${AI__LOCAL_MODEL_PATH:-}
+      AI__LOCAL_CACHE_DIR: /cache/huggingface
+      AI__LOCAL_TORCH_CACHE_DIR: /cache/torch
+      AI__LOCAL_TORCH_KERNEL_CACHE_DIR: /cache/torch_kernels
+      AI__LOCAL_DEVICE: ${AI__LOCAL_DEVICE:-auto}
+      AI__LOCAL_DTYPE: ${AI__LOCAL_DTYPE:-auto}
+      AI__LOCAL_MAX_INPUT_TOKENS: ${AI__LOCAL_MAX_INPUT_TOKENS:-4096}
+      AI__LOCAL_MAX_CONCURRENT_REQUESTS: ${AI__LOCAL_MAX_CONCURRENT_REQUESTS:-1}
+      AI__LOCAL_TOP_P: ${AI__LOCAL_TOP_P:-0.9}
+      AI__LOCAL_REPETITION_PENALTY: ${AI__LOCAL_REPETITION_PENALTY:-1.05}
+      AI__LOCAL_TRUST_REMOTE_CODE: ${AI__LOCAL_TRUST_REMOTE_CODE:-false}
       RUN_MIGRATIONS: "false"
       SERVICE_MODULE: ai_service.main
     env_file:
@@ -22,11 +36,16 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 25s
+      start_period: ${AI_SERVICE_HEALTH_START_PERIOD:-180s}
     networks:
       - helpdesk
     ports:
       - "${AI_SERVICE_EXPOSE_PORT:-50081}:50061"
+    volumes:
+      - ../../models:/models:ro
+      - ai-huggingface-cache:/cache/huggingface
+      - ai-torch-cache:/cache/torch
+      - ai-torch-kernels-cache:/cache/torch_kernels
     restart: unless-stopped
     stop_grace_period: 20s
 
@@ -193,3 +212,6 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  ai-huggingface-cache:
+  ai-torch-cache:
+  ai-torch-kernels-cache:

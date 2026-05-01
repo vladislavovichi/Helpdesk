@@ -185,6 +185,8 @@ def serialize_ticket_assist_snapshot(
         message.summary_generated_at.CopyFrom(_serialize_timestamp(snapshot.summary_generated_at))
     if snapshot.status_note is not None:
         message.status_note = snapshot.status_note
+    if snapshot.failure_reason is not None:
+        message.failure_reason = snapshot.failure_reason
     message.macro_suggestions.extend(
         helpdesk_pb2.TicketAssistMacroSuggestion(
             macro_id=item.macro_id,
@@ -216,6 +218,7 @@ def deserialize_ticket_assist_snapshot(
         unavailable_reason=(
             snapshot.unavailable_reason if _has(snapshot, "unavailable_reason") else None
         ),
+        failure_reason=snapshot.failure_reason if _has(snapshot, "failure_reason") else None,
         model_id=snapshot.model_id if _has(snapshot, "model_id") else None,
         short_summary=snapshot.short_summary if _has(snapshot, "short_summary") else None,
         user_goal=snapshot.user_goal if _has(snapshot, "user_goal") else None,
@@ -255,6 +258,8 @@ def serialize_ticket_reply_draft(draft: TicketReplyDraft) -> helpdesk_pb2.Ticket
         message.unavailable_reason = draft.unavailable_reason
     if draft.model_id is not None:
         message.model_id = draft.model_id
+    if draft.failure_reason is not None:
+        message.failure_reason = draft.failure_reason
     return message
 
 
@@ -269,6 +274,7 @@ def deserialize_ticket_reply_draft(draft: helpdesk_pb2.TicketReplyDraft) -> Tick
             tuple(draft.missing_information) if draft.missing_information else None
         ),
         unavailable_reason=draft.unavailable_reason if _has(draft, "unavailable_reason") else None,
+        failure_reason=draft.failure_reason if _has(draft, "failure_reason") else None,
         model_id=draft.model_id if _has(draft, "model_id") else None,
     )
 
@@ -290,6 +296,8 @@ def serialize_ticket_category_prediction(
         message.reason = prediction.reason
     if prediction.model_id is not None:
         message.model_id = prediction.model_id
+    if prediction.failure_reason is not None:
+        message.failure_reason = prediction.failure_reason
     return message
 
 
@@ -303,6 +311,7 @@ def deserialize_ticket_category_prediction(
         category_title=prediction.category_title if _has(prediction, "category_title") else None,
         confidence=AIPredictionConfidence(prediction.confidence),
         reason=prediction.reason if _has(prediction, "reason") else None,
+        failure_reason=prediction.failure_reason if _has(prediction, "failure_reason") else None,
         model_id=prediction.model_id if _has(prediction, "model_id") else None,
     )
 

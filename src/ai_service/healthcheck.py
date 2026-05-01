@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from ai_service.grpc.client import ping_ai_service
-from infrastructure.ai.provider import build_ai_provider
-from infrastructure.config.settings import AIConfig, get_settings
+from ai_service.grpc.client import build_ai_service_client_factory
+from application.contracts.ai import AIServiceStatus
+from application.errors import ApplicationError
+from infrastructure.config.settings import AIConfig, Settings, get_settings
 from infrastructure.health import (
     EXPECTED_HEALTH_FAILURES,
     ProbeCheck,
@@ -14,12 +15,25 @@ from infrastructure.health import (
 )
 from infrastructure.logging import configure_logging
 
+EXPECTED_AI_STATUS_FAILURES = (*EXPECTED_HEALTH_FAILURES, ApplicationError)
+
 
 async def run() -> int:
     settings = get_settings()
     configure_logging(settings.logging, app=settings.app)
 
-    provider = build_ai_provider(settings.ai)
+    status_error: Exception | None = None
+    try:
+        status = await _read_ai_service_status(settings)
+    except EXPECTED_AI_STATUS_FAILURES as exc:
+        status_error = exc
+        status = AIServiceStatus(
+            service="helpdesk-ai-service",
+            status="unavailable",
+            provider="local",
+            model_id=settings.ai.effective_model_id,
+            model_loaded=False,
+        )
     report = ProbeReport(
         checks=(
             ProbeCheck(
@@ -42,31 +56,46 @@ async def run() -> int:
                 ),
             ),
             ProbeCheck(
-                name="ai_provider",
+                name="local_ai_model",
                 category="operations",
-                status=ProbeStatus.OK if provider.is_enabled else ProbeStatus.WARN,
+                status=ProbeStatus.OK if status.model_loaded else ProbeStatus.FAIL,
                 detail=build_ai_provider_visibility_detail(
                     settings.ai,
-                    provider_enabled=provider.is_enabled,
-                    model_id=provider.model_id,
-                    disabled_reason=getattr(provider, "disabled_reason", None),
+                    model_loaded=status.model_loaded,
+                    model_id=status.model_id,
+                    device=status.device,
+                    dtype=status.dtype,
+                    cache_dir=status.cache_dir,
+                    max_concurrent_requests=status.max_concurrent_requests,
                 ),
-                affects_readiness=False,
             ),
             await _run_probe(
                 name="ai_service_grpc",
                 category="service",
                 detail=f"ai-service gRPC отвечает на {settings.ai_service.target}",
-                probe=lambda: ping_ai_service(
-                    settings.ai_service,
-                    auth_config=settings.ai_service_auth,
-                    resilience_config=settings.resilience,
-                ),
+                probe=lambda: _status_is_ready(status, status_error),
             ),
         )
     )
     print(report.render())
     return report.exit_code
+
+
+async def _read_ai_service_status(settings: Settings) -> AIServiceStatus:
+    async with build_ai_service_client_factory(
+        settings.ai_service,
+        auth_config=settings.ai_service_auth,
+        resilience_config=settings.resilience,
+    )() as client:
+        return await client.get_service_status()
+
+
+async def _status_is_ready(status: AIServiceStatus, status_error: Exception | None) -> bool:
+    if status_error is not None:
+        raise status_error
+    return (
+        status.service == "helpdesk-ai-service" and status.status == "ready" and status.model_loaded
+    )
 
 
 async def _run_probe(
@@ -78,7 +107,7 @@ async def _run_probe(
 ) -> ProbeCheck:
     try:
         ok = await probe()
-    except EXPECTED_HEALTH_FAILURES as exc:
+    except EXPECTED_AI_STATUS_FAILURES as exc:
         return ProbeCheck(
             name=name,
             category=category,
@@ -105,21 +134,22 @@ async def _run_probe(
 def build_ai_provider_visibility_detail(
     config: AIConfig,
     *,
-    provider_enabled: bool,
+    model_loaded: bool,
     model_id: str | None,
-    disabled_reason: str | None = None,
+    device: str | None = None,
+    dtype: str | None = None,
+    cache_dir: str | None = None,
+    max_concurrent_requests: int | None = None,
 ) -> str:
-    provider_configured = config.normalized_provider != "disabled" and bool(config.model_id)
-    if provider_enabled:
-        return (
-            f"provider_configured=yes provider={config.normalized_provider} "
-            f"model_id={model_id or '<none>'} timeout_seconds={config.timeout_seconds}"
-        )
-    reason = disabled_reason or "AI provider is disabled."
     return (
-        f"provider_configured={'yes' if provider_configured else 'no'} "
-        f"provider={config.normalized_provider} model_id={config.model_id or '<none>'} "
-        f"status=disabled reason={reason}"
+        "provider=local "
+        f"model_id={model_id or config.effective_model_id} "
+        f"loaded={str(model_loaded).lower()} "
+        f"device={device or config.local_device} "
+        f"dtype={dtype or config.local_dtype} "
+        f"cache_dir={cache_dir or config.local_cache_dir} "
+        "max_concurrent_requests="
+        f"{max_concurrent_requests or config.local_max_concurrent_requests}"
     )
 
 

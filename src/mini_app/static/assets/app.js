@@ -306,14 +306,15 @@ function bindGlobalEvents() {
 
     const ticketAiRefreshButton = event.target.closest("[data-ticket-ai-refresh]");
     if (ticketAiRefreshButton && state.currentTicketId) {
-      let refreshed = false;
+      let refreshedPayload = null;
       await runMutation(async () => {
-        await state.api.refreshTicketAi(state.currentTicketId);
+        refreshedPayload = await state.api.refreshTicketAi(state.currentTicketId);
         invalidateTicketData(state.currentTicketId);
         await renderRoute();
-        refreshed = true;
       });
-      if (refreshed) {
+      if (refreshedPayload?.available === false) {
+        showNotice("AI-сводка сейчас недоступна.", "danger");
+      } else if (refreshedPayload) {
         showNotice("AI-сводка обновлена.", "success");
       }
       return;
@@ -328,13 +329,15 @@ function bindGlobalEvents() {
       await runMutation(async () => {
         const payload = await state.api.generateTicketReplyDraft(ticketId);
         state.aiReplyDrafts[ticketId] = { loading: false, payload };
-        generated = true;
+        generated = payload;
       });
       if (!generated) {
         state.aiReplyDrafts[ticketId] = { loading: false, payload: null };
       }
       await renderRoute();
-      if (generated) {
+      if (generated?.available === false) {
+        showNotice("AI-черновик сейчас недоступен.", "danger");
+      } else if (generated) {
         showNotice("AI-черновик подготовлен.", "success");
       }
       return;

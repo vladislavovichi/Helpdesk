@@ -211,6 +211,7 @@ message TicketAssistSnapshot {
   optional string summary_status = 9;
   optional google.protobuf.Timestamp summary_generated_at = 10;
   optional string status_note = 11;
+  optional string failure_reason = 12;
 }
 
 message TicketReplyDraft {
@@ -222,6 +223,7 @@ message TicketReplyDraft {
   repeated string missing_information = 6;
   optional string unavailable_reason = 7;
   optional string model_id = 8;
+  optional string failure_reason = 9;
 }
 
 message PredictTicketCategoryCommand {
@@ -239,6 +241,7 @@ message TicketCategoryPrediction {
   string confidence = 5;
   optional string reason = 6;
   optional string model_id = 7;
+  optional string failure_reason = 8;
 }
 
 message TicketReportExport {

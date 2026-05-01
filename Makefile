@@ -42,7 +42,7 @@ define port_is_available
 python3 -c 'import socket, sys; sock = socket.socket(); sock.settimeout(0.2); result = sock.connect_ex(("127.0.0.1", int(sys.argv[1]))); sock.close(); sys.exit(0 if result != 0 else 1)' "$(1)"
 endef
 
-.PHONY: help install lint format typecheck test repo-hygiene proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
+.PHONY: help install lint format typecheck test repo-hygiene proto proto-check check ci health health-bot health-backend health-ai health-mini-app smoke ai-smoke run run-backend run-ai run-bot run-mini-app run-mini-app-cloudflared migrate migrate-stack migration-check make-migration docker-up docker-down restart ps full full-cloudflared full-down logs logs-bot logs-backend logs-ai logs-mini-app backup-db restore-db up down pre-commit-install pre-commit-run
 
 COMPOSE_CMD = $(COMPOSE) $(COMPOSE_FILES)
 
@@ -63,6 +63,7 @@ help:
 	@printf "  health-backend     Run the backend-side health check\n"
 	@printf "  health-ai          Run the ai-service health check\n"
 	@printf "  smoke             Run the operational smoke-check against the running stack\n"
+	@printf "  ai-smoke           Verify a real AI completion through ai-service gRPC\n"
 	@printf "  run                Start the Telegram bot runtime locally\n"
 	@printf "  run-backend        Start the backend gRPC service locally\n"
 	@printf "  run-ai             Start the ai-service gRPC runtime locally\n"
@@ -142,6 +143,10 @@ health-ai:
 health-mini-app:
 	$(call ensure_poetry_env)
 	$(POETRY) run python -m mini_app.healthcheck
+
+ai-smoke:
+	$(call ensure_poetry_env)
+	$(POETRY) run python ops/scripts/ai_smoke_check.py
 
 migration-check:
 	$(call ensure_poetry_env)

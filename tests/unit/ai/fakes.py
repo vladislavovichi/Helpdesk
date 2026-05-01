@@ -46,7 +46,9 @@ class FakeAIProvider(AIProvider):
         messages: Sequence[AIMessage],
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str:
+        del expect_json
         self.calls.append((messages, max_output_tokens, temperature))
         if self.raise_error:
             raise AIProviderError("fake provider failure")

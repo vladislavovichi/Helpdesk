@@ -92,13 +92,20 @@ class AIServiceGrpcService(ai_service_pb2_grpc.HelpdeskAIServiceServicer):
     ) -> ai_service_pb2.AIServiceStatus:
         del request
         async with self._rpc_scope(context, method="GetAIServiceStatus"):
+            provider_status = getattr(self.service.provider, "status", None)
             result = ai_service_pb2.AIServiceStatus(
                 service="helpdesk-ai-service",
                 status="ready",
-                provider=self.service.config.normalized_provider,
+                provider="local",
             )
             if self.service.provider.model_id is not None:
                 result.model_id = self.service.provider.model_id
+            if provider_status is not None:
+                result.model_loaded = provider_status.loaded
+                result.device = provider_status.device
+                result.dtype = provider_status.dtype
+                result.cache_dir = provider_status.cache_dir
+                result.max_concurrent_requests = provider_status.max_concurrent_requests
             return result
 
     async def GenerateTicketSummary(

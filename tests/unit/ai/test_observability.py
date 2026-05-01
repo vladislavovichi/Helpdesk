@@ -27,7 +27,7 @@ async def test_ai_operation_logs_provider_failure_category(caplog: LogCaptureFix
     assert _record_value(record, "operation") == "summary"
     assert _record_value(record, "model_id") == "ops-model"
     assert _record_value(record, "success") is False
-    assert _record_value(record, "failure_reason") == "provider_unavailable"
+    assert _record_value(record, "failure_reason") == "ai_unavailable"
     assert _record_value(record, "retry_count") == 0
     assert isinstance(_record_value(record, "latency_ms"), float)
 
@@ -50,7 +50,9 @@ async def test_invalid_json_logs_invalid_json_without_prompt_or_raw_response(
     assert "still not json" not in caplog.text
 
 
-async def test_validation_failure_logs_validation_failed(caplog: LogCaptureFixture) -> None:
+async def test_validation_failure_logs_schema_validation_failed(
+    caplog: LogCaptureFixture,
+) -> None:
     caplog.set_level(logging.INFO, logger="ai_service.service")
     service = AIApplicationService(
         provider=FakeAIProvider(
@@ -66,7 +68,7 @@ async def test_validation_failure_logs_validation_failed(caplog: LogCaptureFixtu
     await service.generate_ticket_summary(_summary_command(subject="login failure"))
 
     record = _last_ai_operation_record(caplog.records)
-    assert _record_value(record, "failure_reason") == "validation_failed"
+    assert _record_value(record, "failure_reason") == "schema_validation_failed"
     assert _record_value(record, "retry_count") == 0
 
 

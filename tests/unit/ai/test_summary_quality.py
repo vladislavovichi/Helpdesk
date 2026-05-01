@@ -75,7 +75,8 @@ async def test_summary_disabled_provider_returns_graceful_fallback() -> None:
     )
 
     assert result.available is False
-    assert result.unavailable_reason == "AI-провайдер не настроен."
+    assert result.unavailable_reason == "Локальная AI-модель недоступна."
+    assert result.failure_reason == "ai_unavailable"
     assert provider.call_count == 0
 
 

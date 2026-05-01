@@ -39,8 +39,9 @@ class StubProvider(AIProvider):
         messages: object,
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str:
-        del messages, max_output_tokens, temperature
+        del messages, max_output_tokens, temperature, expect_json
         return self._raw
 
 

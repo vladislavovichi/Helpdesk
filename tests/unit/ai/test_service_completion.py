@@ -7,7 +7,7 @@ import pytest
 from pydantic import BaseModel
 
 from ai_service.service_completion import AICompletionFailureReason, complete_json_with_metadata
-from application.ai.contracts import AIMessage, AIProvider
+from application.ai.contracts import AIMessage, AIProvider, AIProviderError
 
 
 class Payload(BaseModel):
@@ -33,7 +33,9 @@ class SequencedProvider(AIProvider):
         messages: Sequence[AIMessage],
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str:
+        del expect_json
         self.calls.append((messages, max_output_tokens, temperature))
         return self.responses.pop(0)
 
@@ -87,6 +89,22 @@ async def test_complete_json_maps_provider_timeout_to_unavailable_result() -> No
     assert result.failure_reason is AICompletionFailureReason.TIMEOUT
 
 
+async def test_complete_json_maps_local_generation_failure() -> None:
+    provider = LocalFailureProvider()
+
+    result = await complete_json_with_metadata(
+        provider=provider,
+        instructions="Return JSON.",
+        prompt='Expected: {"value":"..."}',
+        schema=Payload,
+        max_output_tokens=80,
+        temperature=0,
+    )
+
+    assert result.payload is None
+    assert result.failure_reason is AICompletionFailureReason.LOCAL_GENERATION_FAILED
+
+
 async def test_complete_json_does_not_swallow_cancellation() -> None:
     provider = CancelledProvider()
 
@@ -111,9 +129,31 @@ class TimeoutProvider(SequencedProvider):
         messages: Sequence[AIMessage],
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str:
+        del expect_json
         self.calls.append((messages, max_output_tokens, temperature))
         raise TimeoutError("provider timeout")
+
+
+class LocalFailureProvider(SequencedProvider):
+    def __init__(self) -> None:
+        super().__init__(())
+
+    async def complete(
+        self,
+        *,
+        messages: Sequence[AIMessage],
+        max_output_tokens: int,
+        temperature: float,
+        expect_json: bool = False,
+    ) -> str:
+        del expect_json
+        self.calls.append((messages, max_output_tokens, temperature))
+        raise AIProviderError(
+            "local generation failed",
+            failure_category="local_generation_failed",
+        )
 
 
 class CancelledProvider(SequencedProvider):
@@ -126,6 +166,8 @@ class CancelledProvider(SequencedProvider):
         messages: Sequence[AIMessage],
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str:
+        del expect_json
         self.calls.append((messages, max_output_tokens, temperature))
         raise asyncio.CancelledError

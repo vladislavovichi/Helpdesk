@@ -13,6 +13,7 @@ from application.contracts.ai import (
     AIPredictedCategoryResult,
     AIServiceClient,
     AIServiceClientFactory,
+    AIServiceStatus,
     AISuggestedMacro,
     AnalyzedTicketSentimentResult,
     GeneratedTicketReplyDraftResult,
@@ -61,8 +62,13 @@ class StubAIClient(AIServiceClient):
             model_id="Qwen/Qwen3.5-4B",
         )
 
-    async def get_service_status(self) -> tuple[str, str]:
-        return "helpdesk-ai-service", "ready"
+    async def get_service_status(self) -> AIServiceStatus:
+        return AIServiceStatus(
+            service="helpdesk-ai-service",
+            status="ready",
+            provider="local",
+            model_loaded=True,
+        )
 
     async def generate_ticket_summary(self, command: object) -> GeneratedTicketSummaryResult:
         del command
@@ -366,10 +372,13 @@ async def test_refresh_failure_keeps_previous_summary_and_marks_it_stale() -> No
                 summary_result=GeneratedTicketSummaryResult(
                     available=False,
                     unavailable_reason="Не удалось подготовить сводку.",
+                    failure_reason="invalid_json",
                     model_id="Qwen/Qwen3.5-4B",
                 ),
                 macros_result=SuggestedMacrosResult(
-                    available=True,
+                    available=False,
+                    unavailable_reason="Не удалось подобрать макросы.",
+                    failure_reason="rate_limited",
                     suggestions=(),
                     model_id="Qwen/Qwen3.5-4B",
                 ),
@@ -388,6 +397,7 @@ async def test_refresh_failure_keeps_previous_summary_and_marks_it_stale() -> No
         "После последней сводки появились 1 сообщение и 1 внутренняя заметка. "
         "Обновите её по переписке."
     )
+    assert snapshot.failure_reason == "invalid_json"
 
 
 async def test_macro_suggestions_skip_low_value_reasons() -> None:
@@ -424,14 +434,14 @@ async def test_macro_suggestions_skip_low_value_reasons() -> None:
     assert tuple(item.macro_id for item in snapshot.macro_suggestions) == (2,)
 
 
-async def test_predict_ticket_category_hides_low_confidence_prediction() -> None:
+async def test_predict_ticket_category_propagates_failure_reason_when_unavailable() -> None:
     use_case = PredictTicketCategoryUseCase(
         ticket_category_repository=cast(TicketCategoryRepository, StubCategoryRepository()),
         ai_client_factory=build_ai_client_factory(
             StubAIClient(
                 category_result=AIPredictedCategoryResult(
-                    available=True,
-                    category_id=1,
+                    available=False,
+                    failure_reason="local_generation_failed",
                     confidence=AIPredictionConfidence.LOW,
                     reason="Похоже на доступ.",
                     model_id="Qwen/Qwen3.5-4B",
@@ -448,3 +458,4 @@ async def test_predict_ticket_category_hides_low_confidence_prediction() -> None
 
     assert prediction.available is False
     assert prediction.category_id is None
+    assert prediction.failure_reason == "local_generation_failed"

@@ -55,10 +55,11 @@ async def test_run_startup_dependency_checks_propagates_unexpected_programming_e
 
 def _settings() -> Settings:
     return Settings(
+        _env_file=None,
         authorization=AuthorizationConfig(super_admin_telegram_user_ids=(1,)),
         resilience=ResilienceConfig(
             startup_retry_attempts=2,
             startup_check_timeout_seconds=0.1,
             startup_retry_backoff_seconds=0.0,
         ),
-    )
+    )  # type: ignore[call-arg]

@@ -21,6 +21,7 @@ class SequencedProvider(AIProvider):
         self.responses = list(responses)
         self._enabled = enabled
         self.calls: list[Sequence[AIMessage]] = []
+        self.options: list[tuple[int, float, bool]] = []
 
     @property
     def is_enabled(self) -> bool:
@@ -36,9 +37,10 @@ class SequencedProvider(AIProvider):
         messages: Sequence[AIMessage],
         max_output_tokens: int,
         temperature: float,
+        expect_json: bool = False,
     ) -> str:
-        del max_output_tokens, temperature
         self.calls.append(messages)
+        self.options.append((max_output_tokens, temperature, expect_json))
         return self.responses.pop(0)
 
 
@@ -52,7 +54,15 @@ async def test_generate_ticket_reply_draft_returns_validated_payload() -> None:
             ),
         )
     )
-    service = AIApplicationService(provider=provider, config=AIConfig())
+    service = AIApplicationService(
+        provider=provider,
+        config=AIConfig(
+            summary_temperature=0.11,
+            summary_max_output_tokens=321,
+            reply_draft_temperature=0.45,
+            reply_draft_max_output_tokens=950,
+        ),
+    )
 
     result = await service.generate_ticket_reply_draft(_build_command())
 
@@ -62,6 +72,7 @@ async def test_generate_ticket_reply_draft_returns_validated_payload() -> None:
     assert result.confidence == 0.82
     assert result.safety_note == "Не обещает сроки."
     assert result.missing_information == ("номер заказа",)
+    assert provider.options == [(950, 0.45, True)]
 
 
 async def test_generate_ticket_reply_draft_rejects_invalid_payload() -> None:
@@ -74,6 +85,7 @@ async def test_generate_ticket_reply_draft_rejects_invalid_payload() -> None:
 
     assert result.available is False
     assert result.unavailable_reason == "Не удалось подготовить черновик ответа."
+    assert result.failure_reason == "schema_validation_failed"
 
 
 async def test_generate_ticket_reply_draft_retries_invalid_json_once() -> None:
@@ -115,7 +127,8 @@ async def test_generate_ticket_reply_draft_degrades_when_provider_disabled() -> 
     result = await service.generate_ticket_reply_draft(_build_command())
 
     assert result.available is False
-    assert result.unavailable_reason == "AI-провайдер не настроен."
+    assert result.unavailable_reason == "Локальная AI-модель недоступна."
+    assert result.failure_reason == "ai_unavailable"
 
 
 def _build_command() -> GenerateTicketReplyDraftCommand:
