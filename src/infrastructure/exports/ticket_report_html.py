@@ -40,7 +40,7 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ticket case file · {escape(report.public_number)}</title>
   <style>
-{_document_css()}
+{_DOCUMENT_CSS}
   </style>
 </head>
 <body>
@@ -105,8 +105,7 @@ def render_ticket_report_html(report: TicketReport) -> bytes:
     return html.encode("utf-8")
 
 
-def _document_css() -> str:
-    return """
+_DOCUMENT_CSS = """
     :root {
       color-scheme: light;
       --bg: #f3eee7;
@@ -459,7 +458,7 @@ def _document_css() -> str:
       .asset-image { max-height: 95mm; }
       .report-footer { border-top: 1px solid #d6d3ce; margin-top: 10mm; }
     }
-    """
+"""
 
 
 def _render_hero(

@@ -44,6 +44,14 @@ class ValidatedMiniAppInitData:
     user: TelegramMiniAppUser
 
 
+@dataclass(slots=True, frozen=True)
+class _ParsedInitData:
+    raw_init_data: str
+    bot_token: str
+    values: dict[str, str]
+    provided_hash: str
+
+
 def validate_telegram_mini_app_init_data(
     *,
     init_data: str,
@@ -51,6 +59,22 @@ def validate_telegram_mini_app_init_data(
     max_age_seconds: int,
     now: datetime | None = None,
 ) -> ValidatedMiniAppInitData:
+    parsed = _parse_init_data(init_data=init_data, bot_token=bot_token)
+    _validate_init_data_hash(parsed)
+    auth_date = _validate_auth_date(
+        values=parsed.values,
+        max_age_seconds=max_age_seconds,
+        now=now,
+    )
+    user = _validate_user_payload(parsed.values)
+    return ValidatedMiniAppInitData(
+        raw_init_data=parsed.raw_init_data,
+        auth_date=auth_date,
+        user=user,
+    )
+
+
+def _parse_init_data(*, init_data: str, bot_token: str) -> _ParsedInitData:
     normalized_init_data = init_data.strip()
     normalized_bot_token = bot_token.strip()
     if not normalized_init_data:
@@ -87,11 +111,19 @@ def validate_telegram_mini_app_init_data(
             "В данных запуска отсутствует подпись Telegram.",
             code="missing_signature",
         )
+    return _ParsedInitData(
+        raw_init_data=normalized_init_data,
+        bot_token=normalized_bot_token,
+        values=values,
+        provided_hash=provided_hash,
+    )
 
-    data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(values.items()))
+
+def _validate_init_data_hash(parsed: _ParsedInitData) -> None:
+    data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed.values.items()))
     secret_key = hmac.new(
         b"WebAppData",
-        normalized_bot_token.encode("utf-8"),
+        parsed.bot_token.encode("utf-8"),
         hashlib.sha256,
     ).digest()
     expected_hash = hmac.new(
@@ -99,12 +131,19 @@ def validate_telegram_mini_app_init_data(
         data_check_string.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
-    if not hmac.compare_digest(expected_hash, provided_hash):
+    if not hmac.compare_digest(expected_hash, parsed.provided_hash):
         raise TelegramMiniAppAuthError(
             "Не удалось подтвердить запуск. Откройте рабочее место заново.",
             code="invalid_signature",
         )
 
+
+def _validate_auth_date(
+    *,
+    values: dict[str, str],
+    max_age_seconds: int,
+    now: datetime | None,
+) -> datetime:
     auth_timestamp_raw = values.get("auth_date", "").strip()
     if not auth_timestamp_raw:
         raise TelegramMiniAppAuthError(
@@ -130,7 +169,10 @@ def validate_telegram_mini_app_init_data(
             "Сеанс рабочего места устарел. Откройте рабочее место заново.",
             code="expired_init_data",
         )
+    return auth_date
 
+
+def _validate_user_payload(values: dict[str, str]) -> TelegramMiniAppUser:
     user_raw = values.get("user", "").strip()
     if not user_raw:
         raise TelegramMiniAppAuthError(
@@ -153,18 +195,12 @@ def validate_telegram_mini_app_init_data(
             code="incomplete_user_payload",
         )
 
-    return ValidatedMiniAppInitData(
-        raw_init_data=normalized_init_data,
-        auth_date=auth_date,
-        user=TelegramMiniAppUser(
-            telegram_user_id=user_id,
-            first_name=first_name,
-            last_name=payload.get("last_name")
-            if isinstance(payload.get("last_name"), str)
-            else None,
-            username=payload.get("username") if isinstance(payload.get("username"), str) else None,
-            language_code=payload.get("language_code")
-            if isinstance(payload.get("language_code"), str)
-            else None,
+    return TelegramMiniAppUser(
+        telegram_user_id=user_id,
+        first_name=first_name,
+        last_name=payload.get("last_name") if isinstance(payload.get("last_name"), str) else None,
+        username=payload.get("username") if isinstance(payload.get("username"), str) else None,
+        language_code=(
+            payload.get("language_code") if isinstance(payload.get("language_code"), str) else None
         ),
     )

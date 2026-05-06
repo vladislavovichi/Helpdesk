@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -46,6 +47,18 @@ from domain.tickets import InvalidTicketTransitionError, ensure_operator_replyab
 logger = logging.getLogger(__name__)
 
 
+@dataclass(slots=True)
+class _MessageEffects:
+    sentiment: TicketSentiment | None = None
+    sentiment_confidence: TicketSignalConfidence | None = None
+    sentiment_reason: str | None = None
+    extra_payload: dict[str, object] | None = None
+
+    def __post_init__(self) -> None:
+        if self.extra_payload is None:
+            self.extra_payload = {}
+
+
 class AddMessageToTicketUseCase:
     def __init__(
         self,
@@ -74,21 +87,14 @@ class AddMessageToTicketUseCase:
         if ticket is None or ticket.id is None:
             return None
 
-        from domain.tickets import ensure_message_addable
-
-        if text is None and attachment is None:
-            raise ValidationAppError("Нужно передать текст сообщения или вложение.")
-
-        ensure_message_addable(ticket.status)
+        self._validate_message_transition(ticket=ticket, text=text, attachment=attachment)
         current_time = utcnow()
-        if sender_type == TicketMessageSenderType.OPERATOR and ticket.first_response_at is None:
-            ticket.first_response_at = current_time
-        ticket.updated_at = current_time
-
-        message_sentiment: TicketSentiment | None = None
-        message_sentiment_confidence: TicketSignalConfidence | None = None
-        message_sentiment_reason: str | None = None
-        extra_payload: dict[str, object] = dict(extra_event_payload or {})
+        self._apply_message_timestamp_side_effects(
+            ticket=ticket,
+            sender_type=sender_type,
+            current_time=current_time,
+        )
+        effects = _MessageEffects(extra_payload=dict(extra_event_payload or {}))
 
         if sender_type == TicketMessageSenderType.CLIENT:
             recent_messages = tuple(
@@ -97,74 +103,185 @@ class AddMessageToTicketUseCase:
                     limit=6,
                 )
             )
-            duplicate_decision = detect_duplicate_client_message(
-                recent_messages=recent_messages,
-                incoming_text=text,
-                incoming_attachment=attachment,
-                current_time=current_time,
-            )
-            if duplicate_decision is not None:
-                new_duplicate_count = duplicate_decision.canonical_message.duplicate_count + 1
-                await self.ticket_message_repository.mark_duplicate(
-                    ticket_id=ticket.id,
-                    telegram_message_id=duplicate_decision.canonical_message.telegram_message_id,
-                    occurred_at=current_time,
-                )
-                await self.ticket_event_repository.add(
-                    ticket_id=ticket.id,
-                    event_type=TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
-                    payload_json={
-                        "sender_type": TicketMessageSenderType.CLIENT.value,
-                        "canonical_telegram_message_id": (
-                            duplicate_decision.canonical_message.telegram_message_id
-                        ),
-                        "duplicate_telegram_message_id": telegram_message_id,
-                        "duplicate_count": new_duplicate_count,
-                        "reason_code": duplicate_decision.reason_code,
-                    },
-                )
-                return build_ticket_summary(
-                    ticket,
-                    event_type=TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
-                )
-
-            sentiment_result = await self._analyze_client_sentiment(
+            duplicate_result = await self._collapse_duplicate_client_message(
+                ticket=ticket,
+                telegram_message_id=telegram_message_id,
                 text=text,
                 attachment=attachment,
                 recent_messages=recent_messages,
+                current_time=current_time,
             )
-            if sentiment_result is not None and sentiment_result.available:
-                message_sentiment = sentiment_result.sentiment
-                message_sentiment_confidence = sentiment_result.confidence
-                message_sentiment_reason = sentiment_result.reason
-                extra_payload.update(
-                    {
-                        "sentiment": message_sentiment.value,
-                        "sentiment_confidence": message_sentiment_confidence.value,
-                    }
-                )
-                if message_sentiment_reason is not None:
-                    extra_payload["sentiment_reason"] = message_sentiment_reason
-                self._apply_ticket_sentiment(
-                    ticket=ticket,
-                    sentiment=message_sentiment,
-                    confidence=message_sentiment_confidence,
-                    reason=message_sentiment_reason,
-                    detected_at=current_time,
-                )
-                bumped_priority = next_priority_for_sentiment(
-                    current_priority=ticket.priority,
-                    sentiment=message_sentiment,
-                )
-                if bumped_priority is not None and message_sentiment_confidence in {
-                    TicketSignalConfidence.MEDIUM,
-                    TicketSignalConfidence.HIGH,
-                }:
-                    previous_priority = ticket.priority
-                    ticket.priority = bumped_priority
-                    extra_payload["priority_bumped_from"] = previous_priority.value
-                    extra_payload["priority_bumped_to"] = bumped_priority.value
+            if duplicate_result is not None:
+                return duplicate_result
 
+            await self._apply_client_sentiment_side_effects(
+                ticket=ticket,
+                effects=effects,
+                recent_messages=recent_messages,
+                text=text,
+                attachment=attachment,
+                current_time=current_time,
+            )
+
+        event_type = await self._persist_message_and_event(
+            ticket=ticket,
+            telegram_message_id=telegram_message_id,
+            sender_type=sender_type,
+            text=text,
+            attachment=attachment,
+            sender_operator_id=sender_operator_id,
+            effects=effects,
+        )
+        await self._record_notification_and_audit_side_effects(
+            ticket=ticket,
+            telegram_message_id=telegram_message_id,
+            sender_type=sender_type,
+            effects=effects,
+        )
+        return build_ticket_summary(ticket, event_type=event_type)
+
+    def _validate_message_transition(
+        self,
+        *,
+        ticket: TicketEntity,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None,
+    ) -> None:
+        from domain.tickets import ensure_message_addable
+
+        if text is None and attachment is None:
+            raise ValidationAppError("Нужно передать текст сообщения или вложение.")
+        ensure_message_addable(ticket.status)
+
+    def _apply_message_timestamp_side_effects(
+        self,
+        *,
+        ticket: TicketEntity,
+        sender_type: TicketMessageSenderType,
+        current_time: datetime,
+    ) -> None:
+        if sender_type == TicketMessageSenderType.OPERATOR and ticket.first_response_at is None:
+            ticket.first_response_at = current_time
+        ticket.updated_at = current_time
+
+    async def _collapse_duplicate_client_message(
+        self,
+        *,
+        ticket: TicketEntity,
+        telegram_message_id: int,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None,
+        recent_messages: tuple[TicketMessageDetails, ...],
+        current_time: datetime,
+    ) -> TicketSummary | None:
+        assert ticket.id is not None
+        duplicate_decision = detect_duplicate_client_message(
+            recent_messages=recent_messages,
+            incoming_text=text,
+            incoming_attachment=attachment,
+            current_time=current_time,
+        )
+        if duplicate_decision is None:
+            return None
+
+        new_duplicate_count = duplicate_decision.canonical_message.duplicate_count + 1
+        await self.ticket_message_repository.mark_duplicate(
+            ticket_id=ticket.id,
+            telegram_message_id=duplicate_decision.canonical_message.telegram_message_id,
+            occurred_at=current_time,
+        )
+        await self.ticket_event_repository.add(
+            ticket_id=ticket.id,
+            event_type=TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
+            payload_json={
+                "sender_type": TicketMessageSenderType.CLIENT.value,
+                "canonical_telegram_message_id": (
+                    duplicate_decision.canonical_message.telegram_message_id
+                ),
+                "duplicate_telegram_message_id": telegram_message_id,
+                "duplicate_count": new_duplicate_count,
+                "reason_code": duplicate_decision.reason_code,
+            },
+        )
+        return build_ticket_summary(
+            ticket,
+            event_type=TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
+        )
+
+    async def _apply_client_sentiment_side_effects(
+        self,
+        *,
+        ticket: TicketEntity,
+        effects: _MessageEffects,
+        recent_messages: tuple[TicketMessageDetails, ...],
+        text: str | None,
+        attachment: TicketAttachmentDetails | None,
+        current_time: datetime,
+    ) -> None:
+        sentiment_result = await self._analyze_client_sentiment(
+            text=text,
+            attachment=attachment,
+            recent_messages=recent_messages,
+        )
+        if sentiment_result is None or not sentiment_result.available:
+            return
+
+        effects.sentiment = sentiment_result.sentiment
+        effects.sentiment_confidence = sentiment_result.confidence
+        effects.sentiment_reason = sentiment_result.reason
+        assert effects.extra_payload is not None
+        effects.extra_payload.update(
+            {
+                "sentiment": effects.sentiment.value,
+                "sentiment_confidence": effects.sentiment_confidence.value,
+            }
+        )
+        if effects.sentiment_reason is not None:
+            effects.extra_payload["sentiment_reason"] = effects.sentiment_reason
+        self._apply_ticket_sentiment(
+            ticket=ticket,
+            sentiment=effects.sentiment,
+            confidence=effects.sentiment_confidence,
+            reason=effects.sentiment_reason,
+            detected_at=current_time,
+        )
+        self._apply_priority_bump(ticket=ticket, effects=effects)
+
+    def _apply_priority_bump(
+        self,
+        *,
+        ticket: TicketEntity,
+        effects: _MessageEffects,
+    ) -> None:
+        if effects.sentiment is None:
+            return
+        bumped_priority = next_priority_for_sentiment(
+            current_priority=ticket.priority,
+            sentiment=effects.sentiment,
+        )
+        if bumped_priority is None or effects.sentiment_confidence not in {
+            TicketSignalConfidence.MEDIUM,
+            TicketSignalConfidence.HIGH,
+        }:
+            return
+        previous_priority = ticket.priority
+        ticket.priority = bumped_priority
+        assert effects.extra_payload is not None
+        effects.extra_payload["priority_bumped_from"] = previous_priority.value
+        effects.extra_payload["priority_bumped_to"] = bumped_priority.value
+
+    async def _persist_message_and_event(
+        self,
+        *,
+        ticket: TicketEntity,
+        telegram_message_id: int,
+        sender_type: TicketMessageSenderType,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None,
+        sender_operator_id: int | None,
+        effects: _MessageEffects,
+    ) -> TicketEventType | None:
+        assert ticket.id is not None
         await self.ticket_message_repository.add(
             ticket_id=ticket.id,
             telegram_message_id=telegram_message_id,
@@ -172,11 +289,10 @@ class AddMessageToTicketUseCase:
             text=text,
             attachment=attachment,
             sender_operator_id=sender_operator_id,
-            sentiment=message_sentiment,
-            sentiment_confidence=message_sentiment_confidence,
-            sentiment_reason=message_sentiment_reason,
+            sentiment=effects.sentiment,
+            sentiment_confidence=effects.sentiment_confidence,
+            sentiment_reason=effects.sentiment_reason,
         )
-
         event_type = build_event_type_for_message(sender_type)
         if event_type is not None:
             await self.ticket_event_repository.add(
@@ -187,9 +303,24 @@ class AddMessageToTicketUseCase:
                     sender_type=sender_type,
                     sender_operator_id=sender_operator_id,
                     attachment=attachment,
-                    extra_payload=extra_payload,
+                    extra_payload=effects.extra_payload,
                 ),
             )
+        return event_type
+
+    async def _record_notification_and_audit_side_effects(
+        self,
+        *,
+        ticket: TicketEntity,
+        telegram_message_id: int,
+        sender_type: TicketMessageSenderType,
+        effects: _MessageEffects,
+    ) -> None:
+        assert ticket.id is not None
+        extra_payload = effects.extra_payload or {}
+        message_sentiment = effects.sentiment
+        message_sentiment_confidence = effects.sentiment_confidence
+        message_sentiment_reason = effects.sentiment_reason
         if (
             sender_type == TicketMessageSenderType.CLIENT
             and message_sentiment == TicketSentiment.ESCALATION_RISK
@@ -211,8 +342,6 @@ class AddMessageToTicketUseCase:
                 event_type=TicketEventType.CLIENT_SENTIMENT_FLAGGED,
                 payload_json=payload,
             )
-
-        return build_ticket_summary(ticket, event_type=event_type)
 
     async def _analyze_client_sentiment(
         self,

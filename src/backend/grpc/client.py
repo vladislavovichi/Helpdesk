@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 from uuid import UUID
 
 import grpc
@@ -114,7 +114,26 @@ RETRYABLE_RPC_CODES = {
     grpc.StatusCode.UNAVAILABLE,
     grpc.StatusCode.DEADLINE_EXCEEDED,
 }
+_RPC_ERROR_MAP: dict[grpc.StatusCode, tuple[type[Exception], str]] = {
+    grpc.StatusCode.NOT_FOUND: (NotFoundError, "Ресурс не найден."),
+    grpc.StatusCode.FAILED_PRECONDITION: (
+        InvalidTicketTransitionError,
+        "Недопустимый переход заявки.",
+    ),
+    grpc.StatusCode.PERMISSION_DENIED: (ForbiddenError, "Недостаточно прав."),
+    grpc.StatusCode.INVALID_ARGUMENT: (ValidationAppError, "Некорректный запрос."),
+    grpc.StatusCode.RESOURCE_EXHAUSTED: (RateLimitError, "Слишком много запросов."),
+    grpc.StatusCode.UNAVAILABLE: (
+        BackendUnavailableError,
+        "Backend сервис временно недоступен.",
+    ),
+    grpc.StatusCode.ABORTED: (
+        ConcurrencyConflictError,
+        "Операция конфликтует с другим изменением.",
+    ),
+}
 logger = logging.getLogger(__name__)
+ResultT = TypeVar("ResultT")
 
 
 @dataclass(slots=True)
@@ -126,14 +145,11 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
     retry_backoff_seconds: float
 
     async def get_backend_status(self) -> tuple[str, str]:
-        try:
-            response = await self._invoke_unary(
-                self.stub.GetBackendStatus,
-                helpdesk_pb2.Empty(),
-                retryable=True,
-            )
-        except grpc.aio.AioRpcError as exc:
-            raise _translate_rpc_error(exc) from exc
+        response = await self._call_unary_raw(
+            self.stub.GetBackendStatus,
+            helpdesk_pb2.Empty(),
+            retryable=True,
+        )
         return response.service, response.status
 
     async def get_access_context(
@@ -143,28 +159,21 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
     ) -> AccessContextSummary:
         request = helpdesk_pb2.GetAccessContextRequest()
         _apply_actor(request, actor)
-        try:
-            result = await self._invoke_unary(
-                self.stub.GetAccessContext,
-                request,
-                actor=actor,
-                retryable=True,
-            )
-        except grpc.aio.AioRpcError as exc:
-            raise _translate_rpc_error(exc) from exc
-        return deserialize_access_context(result)
+        return await self._call_unary_required(
+            self.stub.GetAccessContext,
+            request,
+            actor=actor,
+            retryable=True,
+            deserialize=deserialize_access_context,
+        )
 
     async def get_client_active_ticket(self, *, client_chat_id: int) -> TicketSummary | None:
-        try:
-            result = await self._invoke_unary(
-                self.stub.GetClientActiveTicket,
-                helpdesk_pb2.GetClientActiveTicketRequest(client_chat_id=client_chat_id),
-                retryable=True,
-            )
-        except grpc.aio.AioRpcError as exc:
-            _raise_optional_rpc_error(exc)
-            return None
-        return deserialize_ticket_summary(result)
+        return await self._call_unary_optional(
+            self.stub.GetClientActiveTicket,
+            helpdesk_pb2.GetClientActiveTicketRequest(client_chat_id=client_chat_id),
+            retryable=True,
+            deserialize=deserialize_ticket_summary,
+        )
 
     async def list_client_ticket_categories(self) -> tuple[TicketCategorySummary, ...]:
         response = await self._collect_stream(
@@ -183,14 +192,11 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
     ) -> TicketSummary:
         request = helpdesk_pb2.CreateTicketFromClientMessageRequest()
         request.command.CopyFrom(serialize_client_ticket_message_command(command))
-        try:
-            result = await self._invoke_unary(
-                self.stub.CreateTicketFromClientMessage,
-                request,
-            )
-        except grpc.aio.AioRpcError as exc:
-            raise _translate_rpc_error(exc) from exc
-        return deserialize_ticket_summary(result)
+        return await self._call_unary_required(
+            self.stub.CreateTicketFromClientMessage,
+            request,
+            deserialize=deserialize_ticket_summary,
+        )
 
     async def create_ticket_from_client_intake(
         self,
@@ -198,14 +204,11 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
     ) -> TicketSummary:
         request = helpdesk_pb2.CreateTicketFromClientIntakeRequest()
         request.command.CopyFrom(serialize_client_ticket_message_command(command))
-        try:
-            result = await self._invoke_unary(
-                self.stub.CreateTicketFromClientIntake,
-                request,
-            )
-        except grpc.aio.AioRpcError as exc:
-            raise _translate_rpc_error(exc) from exc
-        return deserialize_ticket_summary(result)
+        return await self._call_unary_required(
+            self.stub.CreateTicketFromClientIntake,
+            request,
+            deserialize=deserialize_ticket_summary,
+        )
 
     async def get_ticket_details(
         self,
@@ -215,17 +218,13 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
     ) -> TicketDetailsSummary | None:
         request = helpdesk_pb2.GetTicketDetailsRequest(ticket_public_id=str(ticket_public_id))
         _apply_actor(request, actor)
-        try:
-            result = await self._invoke_unary(
-                self.stub.GetTicketDetails,
-                request,
-                actor=actor,
-                retryable=True,
-            )
-        except grpc.aio.AioRpcError as exc:
-            _raise_optional_rpc_error(exc)
-            return None
-        return deserialize_ticket_details(result)
+        return await self._call_unary_optional(
+            self.stub.GetTicketDetails,
+            request,
+            actor=actor,
+            retryable=True,
+            deserialize=deserialize_ticket_details,
+        )
 
     async def list_queued_tickets(
         self,
@@ -292,16 +291,12 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
         request = helpdesk_pb2.AssignNextQueuedTicketRequest()
         request.command.CopyFrom(serialize_assign_next_command(command))
         _apply_actor(request, actor)
-        try:
-            result = await self._invoke_unary(
-                self.stub.AssignNextQueuedTicket,
-                request,
-                actor=actor,
-            )
-        except grpc.aio.AioRpcError as exc:
-            _raise_optional_rpc_error(exc)
-            return None
-        return deserialize_ticket_summary(result)
+        return await self._call_unary_optional(
+            self.stub.AssignNextQueuedTicket,
+            request,
+            actor=actor,
+            deserialize=deserialize_ticket_summary,
+        )
 
     async def assign_ticket_to_operator(
         self,
@@ -311,16 +306,12 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
         request = helpdesk_pb2.AssignTicketToOperatorRequest()
         request.command.CopyFrom(serialize_ticket_assignment_command(command))
         _apply_actor(request, actor)
-        try:
-            result = await self._invoke_unary(
-                self.stub.AssignTicketToOperator,
-                request,
-                actor=actor,
-            )
-        except grpc.aio.AioRpcError as exc:
-            _raise_optional_rpc_error(exc)
-            return None
-        return deserialize_ticket_summary(result)
+        return await self._call_unary_optional(
+            self.stub.AssignTicketToOperator,
+            request,
+            actor=actor,
+            deserialize=deserialize_ticket_summary,
+        )
 
     async def close_ticket(
         self,
@@ -328,16 +319,12 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
         ticket_public_id: UUID,
         actor: RequestActor | None = None,
     ) -> TicketSummary | None:
-        try:
-            result = await self._invoke_unary(
-                self.stub.CloseTicket,
-                helpdesk_pb2.CloseTicketRequest(ticket_public_id=str(ticket_public_id)),
-                actor=actor,
-            )
-        except grpc.aio.AioRpcError as exc:
-            _raise_optional_rpc_error(exc)
-            return None
-        return deserialize_ticket_summary(result)
+        return await self._call_unary_optional(
+            self.stub.CloseTicket,
+            helpdesk_pb2.CloseTicketRequest(ticket_public_id=str(ticket_public_id)),
+            actor=actor,
+            deserialize=deserialize_ticket_summary,
+        )
 
     async def close_ticket_as_operator(
         self,
@@ -1023,6 +1010,62 @@ class GrpcHelpdeskBackendClient(HelpdeskBackendClient):
 
         raise RuntimeError("unreachable")
 
+    async def _call_unary_raw(
+        self,
+        call: Any,
+        request: Any,
+        *,
+        actor: RequestActor | None = None,
+        retryable: bool = False,
+    ) -> Any:
+        try:
+            return await self._invoke_unary(
+                call,
+                request,
+                actor=actor,
+                retryable=retryable,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate_rpc_error(exc) from exc
+
+    async def _call_unary_required(
+        self,
+        call: Any,
+        request: Any,
+        *,
+        actor: RequestActor | None = None,
+        retryable: bool = False,
+        deserialize: Callable[[Any], ResultT],
+    ) -> ResultT:
+        result = await self._call_unary_raw(
+            call,
+            request,
+            actor=actor,
+            retryable=retryable,
+        )
+        return deserialize(result)
+
+    async def _call_unary_optional(
+        self,
+        call: Any,
+        request: Any,
+        *,
+        actor: RequestActor | None = None,
+        retryable: bool = False,
+        deserialize: Callable[[Any], ResultT],
+    ) -> ResultT | None:
+        try:
+            result = await self._invoke_unary(
+                call,
+                request,
+                actor=actor,
+                retryable=retryable,
+            )
+        except grpc.aio.AioRpcError as exc:
+            _raise_optional_rpc_error(exc)
+            return None
+        return deserialize(result)
+
     async def _collect_stream(
         self,
         call_factory: Any,
@@ -1130,18 +1173,8 @@ def _raise_optional_rpc_error(exc: grpc.aio.AioRpcError) -> None:
 
 def _translate_rpc_error(exc: grpc.aio.AioRpcError) -> Exception:
     details = exc.details() or ""
-    if exc.code() == grpc.StatusCode.NOT_FOUND:
-        return NotFoundError(details or "Ресурс не найден.")
-    if exc.code() == grpc.StatusCode.FAILED_PRECONDITION:
-        return InvalidTicketTransitionError(details or "Недопустимый переход заявки.")
-    if exc.code() == grpc.StatusCode.PERMISSION_DENIED:
-        return ForbiddenError(details or "Недостаточно прав.")
-    if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
-        return ValidationAppError(details or "Некорректный запрос.")
-    if exc.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
-        return RateLimitError(details or "Слишком много запросов.")
-    if exc.code() == grpc.StatusCode.UNAVAILABLE:
-        return BackendUnavailableError(details or "Backend сервис временно недоступен.")
-    if exc.code() == grpc.StatusCode.ABORTED:
-        return ConcurrencyConflictError(details or "Операция конфликтует с другим изменением.")
+    mapped = _RPC_ERROR_MAP.get(exc.code())
+    if mapped is not None:
+        error_cls, fallback_message = mapped
+        return error_cls(details or fallback_message)
     return InternalApplicationError(details or "Внутренняя ошибка backend gRPC.")

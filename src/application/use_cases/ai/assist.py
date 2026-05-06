@@ -55,6 +55,22 @@ class _SummaryFreshness:
     note: str | None = None
 
 
+@dataclass(slots=True)
+class _AssistSnapshotSource:
+    ticket: TicketDetails
+    stored_summary: TicketAISummaryDetails | None
+    macros: tuple[MacroSummary, ...]
+    settings: RuntimeAISettings
+
+
+@dataclass(slots=True)
+class _AssistAIResults:
+    stored_summary: TicketAISummaryDetails | None
+    summary_result: GeneratedTicketSummaryResult | None = None
+    macros_result: SuggestedMacrosResult | None = None
+    status_note: str | None = None
+
+
 class BuildTicketAssistSnapshotUseCase:
     def __init__(
         self,
@@ -77,131 +93,183 @@ class BuildTicketAssistSnapshotUseCase:
         ticket_public_id: UUID,
         refresh_summary: bool = False,
     ) -> TicketAssistSnapshot | None:
+        source = await self._load_snapshot_source(ticket_public_id=ticket_public_id)
+        if source is None:
+            return None
+
+        results = await self._build_ai_results(source=source, refresh_summary=refresh_summary)
+        return self._assemble_snapshot(
+            source=source, results=results, refresh_summary=refresh_summary
+        )
+
+    async def _load_snapshot_source(
+        self,
+        *,
+        ticket_public_id: UUID,
+    ) -> _AssistSnapshotSource | None:
         ticket = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
         if ticket is None:
             return None
         stored_summary = await self.ticket_ai_summary_repository.get_by_ticket_id(
             ticket_id=ticket.id
         )
+        return _AssistSnapshotSource(
+            ticket=ticket,
+            stored_summary=stored_summary,
+            macros=await self._list_macros(),
+            settings=self.ai_settings_provider.get(),
+        )
 
-        macros = await self._list_macros()
-        summary_result = None
-        macros_result = None
-        status_note: str | None = None
-        settings = self.ai_settings_provider.get()
-
+    async def _build_ai_results(
+        self,
+        *,
+        source: _AssistSnapshotSource,
+        refresh_summary: bool,
+    ) -> _AssistAIResults:
+        results = _AssistAIResults(stored_summary=source.stored_summary)
         try:
             async with self.ai_client_factory() as ai_client:
-                if refresh_summary and settings.ai_summaries_enabled:
+                if refresh_summary and source.settings.ai_summaries_enabled:
                     summary_result = await ai_client.generate_ticket_summary(
                         _build_generate_ticket_summary_command(
-                            ticket,
-                            settings=settings,
+                            source.ticket,
+                            settings=source.settings,
                         )
                     )
+                    results.summary_result = summary_result
                     if not summary_result.available or summary_result.summary is None:
-                        status_note = (
+                        results.status_note = (
                             "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
-                            if stored_summary is not None
+                            if results.stored_summary is not None
                             else "Сводку сейчас подготовить не удалось."
                         )
                     else:
-                        generated_summary = summary_result.summary
-                        stored_summary = await self.ticket_ai_summary_repository.upsert(
-                            ticket_id=ticket.id,
-                            short_summary=generated_summary.short_summary,
-                            user_goal=generated_summary.user_goal,
-                            actions_taken=generated_summary.actions_taken,
-                            current_status=generated_summary.current_status,
-                            generated_at=datetime.now(UTC),
-                            source_ticket_updated_at=ticket.updated_at,
-                            source_message_count=len(ticket.message_history),
-                            source_internal_note_count=len(ticket.internal_notes),
-                            model_id=summary_result.model_id,
+                        results.stored_summary = await self._persist_generated_summary(
+                            ticket=source.ticket,
+                            summary_result=summary_result,
                         )
-                        status_note = "Сводка обновлена по сохранённой переписке."
+                        results.status_note = "Сводка обновлена по сохранённой переписке."
                 elif refresh_summary:
-                    status_note = "AI-сводки отключены в настройках администратора."
+                    results.status_note = "AI-сводки отключены в настройках администратора."
 
-                if settings.ai_macro_suggestions_enabled:
-                    macros_result = await ai_client.suggest_macros(
+                if source.settings.ai_macro_suggestions_enabled:
+                    results.macros_result = await ai_client.suggest_macros(
                         _build_suggest_macros_command(
-                            ticket=ticket,
-                            macros=macros,
-                            settings=settings,
+                            ticket=source.ticket,
+                            macros=source.macros,
+                            settings=source.settings,
                         )
                     )
                 else:
-                    status_note = status_note or "AI-подсказки макросов отключены."
+                    results.status_note = results.status_note or "AI-подсказки макросов отключены."
         except _AI_GRPC_FAILURES:
-            if refresh_summary and settings.ai_summaries_enabled:
-                summary_result = GeneratedTicketSummaryResult(
-                    available=False,
-                    unavailable_reason=(
-                        "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
-                        if stored_summary is not None
-                        else "Сводку сейчас подготовить не удалось."
-                    ),
-                    failure_reason="grpc_unavailable",
-                    model_id=settings.default_model_id,
-                )
-            if settings.ai_macro_suggestions_enabled:
-                macros_result = SuggestedMacrosResult(
-                    available=False,
-                    unavailable_reason="Новые AI-подсказки временно недоступны.",
-                    failure_reason="grpc_unavailable",
-                    model_id=settings.default_model_id,
-                )
-            status_note = status_note or (
-                "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
-                if stored_summary is not None
-                else "Сводку сейчас подготовить не удалось."
+            self._apply_ai_failure_fallback(
+                results=results, source=source, refresh_summary=refresh_summary
             )
+        return results
 
-        macro_suggestions = _resolve_macro_suggestions(
-            macros=macros,
-            suggestions=(() if macros_result is None else macros_result.suggestions),
+    async def _persist_generated_summary(
+        self,
+        *,
+        ticket: TicketDetails,
+        summary_result: GeneratedTicketSummaryResult,
+    ) -> TicketAISummaryDetails:
+        generated_summary = summary_result.summary
+        assert generated_summary is not None
+        return await self.ticket_ai_summary_repository.upsert(
+            ticket_id=ticket.id,
+            short_summary=generated_summary.short_summary,
+            user_goal=generated_summary.user_goal,
+            actions_taken=generated_summary.actions_taken,
+            current_status=generated_summary.current_status,
+            generated_at=datetime.now(UTC),
+            source_ticket_updated_at=ticket.updated_at,
+            source_message_count=len(ticket.message_history),
+            source_internal_note_count=len(ticket.internal_notes),
+            model_id=summary_result.model_id,
         )
 
-        if stored_summary is None and _ai_unavailable(summary_result, macros_result):
+    def _apply_ai_failure_fallback(
+        self,
+        *,
+        results: _AssistAIResults,
+        source: _AssistSnapshotSource,
+        refresh_summary: bool,
+    ) -> None:
+        if refresh_summary and source.settings.ai_summaries_enabled:
+            results.summary_result = GeneratedTicketSummaryResult(
+                available=False,
+                unavailable_reason=(
+                    "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
+                    if results.stored_summary is not None
+                    else "Сводку сейчас подготовить не удалось."
+                ),
+                failure_reason="grpc_unavailable",
+                model_id=source.settings.default_model_id,
+            )
+        if source.settings.ai_macro_suggestions_enabled:
+            results.macros_result = SuggestedMacrosResult(
+                available=False,
+                unavailable_reason="Новые AI-подсказки временно недоступны.",
+                failure_reason="grpc_unavailable",
+                model_id=source.settings.default_model_id,
+            )
+        results.status_note = results.status_note or (
+            "Не удалось обновить сводку. Показываю последнюю сохранённую версию."
+            if results.stored_summary is not None
+            else "Сводку сейчас подготовить не удалось."
+        )
+
+    def _assemble_snapshot(
+        self,
+        *,
+        source: _AssistSnapshotSource,
+        results: _AssistAIResults,
+        refresh_summary: bool,
+    ) -> TicketAssistSnapshot:
+        macro_suggestions = _resolve_macro_suggestions(
+            macros=source.macros,
+            suggestions=(
+                () if results.macros_result is None else results.macros_result.suggestions
+            ),
+        )
+
+        if results.stored_summary is None and _ai_unavailable(
+            results.summary_result,
+            results.macros_result,
+        ):
             return TicketAssistSnapshot(
                 available=False,
-                unavailable_reason=_resolve_unavailable_reason(summary_result, macros_result),
-                failure_reason=_resolve_failure_reason(summary_result, macros_result),
-                model_id=_resolve_model_id(summary_result, macros_result, stored_summary),
+                unavailable_reason=_resolve_unavailable_reason(
+                    results.summary_result,
+                    results.macros_result,
+                ),
+                failure_reason=_resolve_failure_reason(
+                    results.summary_result,
+                    results.macros_result,
+                ),
+                model_id=_resolve_model_id(
+                    results.summary_result,
+                    results.macros_result,
+                    results.stored_summary,
+                ),
             )
 
-        freshness = _resolve_summary_freshness(ticket=ticket, stored_summary=stored_summary)
-        if stored_summary is not None and freshness.note is not None:
-            if refresh_summary and status_note is not None:
-                status_note = f"{status_note} {freshness.note}"
-            elif status_note is None:
-                status_note = freshness.note
-        if (
-            stored_summary is None
-            and macros_result is not None
-            and macros_result.available
-            and status_note is None
-        ):
-            status_note = "Сводка ещё не собрана. При необходимости её можно подготовить вручную."
-        if (
-            macros_result is not None
-            and macros_result.available
-            and not macro_suggestions
-            and status_note is None
-        ):
-            status_note = (
-                "Точных AI-подсказок по макросам сейчас нет. "
-                "Библиотека макросов доступна как обычно."
-            )
-        if (
-            stored_summary is not None
-            and macros_result is not None
-            and not macros_result.available
-            and status_note is None
-        ):
-            status_note = "Новые AI-подсказки временно недоступны."
-
+        freshness = _resolve_summary_freshness(
+            ticket=source.ticket,
+            stored_summary=results.stored_summary,
+        )
+        status_note = self._resolve_status_note(
+            stored_summary=results.stored_summary,
+            macros_result=results.macros_result,
+            macro_suggestions=macro_suggestions,
+            freshness=freshness,
+            refresh_summary=refresh_summary,
+            status_note=results.status_note,
+        )
+        stored_summary = results.stored_summary
+        macros_result = results.macros_result
+        summary_result = results.summary_result
         return TicketAssistSnapshot(
             available=True,
             summary_status=freshness.status,
@@ -227,6 +295,47 @@ class BuildTicketAssistSnapshotUseCase:
             ),
             model_id=_resolve_model_id(summary_result, macros_result, stored_summary),
         )
+
+    def _resolve_status_note(
+        self,
+        *,
+        stored_summary: TicketAISummaryDetails | None,
+        macros_result: SuggestedMacrosResult | None,
+        macro_suggestions: tuple[TicketMacroSuggestion, ...],
+        freshness: _SummaryFreshness,
+        refresh_summary: bool,
+        status_note: str | None,
+    ) -> str | None:
+        if stored_summary is not None and freshness.note is not None:
+            if refresh_summary and status_note is not None:
+                return f"{status_note} {freshness.note}"
+            if status_note is None:
+                return freshness.note
+        if (
+            stored_summary is None
+            and macros_result is not None
+            and macros_result.available
+            and status_note is None
+        ):
+            status_note = "Сводка ещё не собрана. При необходимости её можно подготовить вручную."
+        if (
+            macros_result is not None
+            and macros_result.available
+            and not macro_suggestions
+            and status_note is None
+        ):
+            status_note = (
+                "Точных AI-подсказок по макросам сейчас нет. "
+                "Библиотека макросов доступна как обычно."
+            )
+        if (
+            stored_summary is not None
+            and macros_result is not None
+            and not macros_result.available
+            and status_note is None
+        ):
+            status_note = "Новые AI-подсказки временно недоступны."
+        return status_note
 
     async def _list_macros(self) -> tuple[MacroSummary, ...]:
         return tuple(

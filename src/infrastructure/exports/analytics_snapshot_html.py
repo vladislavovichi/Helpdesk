@@ -22,7 +22,7 @@ def render_analytics_snapshot_html(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Analytics report · {escape(title)}</title>
   <style>
-{_document_css()}
+{_DOCUMENT_CSS}
   </style>
 </head>
 <body>
@@ -111,8 +111,7 @@ def render_analytics_snapshot_html(
     return html.encode("utf-8")
 
 
-def _document_css() -> str:
-    return """
+_DOCUMENT_CSS = """
     :root {
       color-scheme: light;
       --bg: #f3eee7;
@@ -392,7 +391,7 @@ def _document_css() -> str:
       }
       .report-footer { border-top: 1px solid #d6d3ce; margin-top: 10mm; }
     }
-    """
+"""
 
 
 def _hero_copy(section: AnalyticsSection) -> str:

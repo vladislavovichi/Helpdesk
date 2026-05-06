@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from typing import Any
 
 from domain.contracts.repositories import (
     CategoryFeedbackStatsRecord,
@@ -98,6 +99,37 @@ class HelpdeskAnalyticsSnapshot:
     sla_categories: tuple[AnalyticsCategorySnapshot, ...]
 
 
+@dataclass(slots=True, frozen=True)
+class _AnalyticsSnapshotQueries:
+    operational: HelpdeskOperationalStats
+    period_created_tickets_count: int
+    period_closed_tickets_count: int
+    average_first_response_seconds: float | None
+    average_resolution_seconds: float | None
+    satisfaction_average: float | None
+    feedback_count: int
+    rating_distribution: Sequence[Any]
+    operator_stats: Sequence[OperatorClosureStatsRecord]
+    created_by_category: Sequence[CategoryTicketCountRecord]
+    open_by_category: Sequence[CategoryTicketCountRecord]
+    closed_by_category: Sequence[CategoryTicketCountRecord]
+    feedback_by_category: Sequence[CategoryFeedbackStatsRecord]
+    sla_breaches: Mapping[str, int]
+    sla_by_category: Sequence[SLABreachCountRecord]
+
+
+@dataclass(slots=True, frozen=True)
+class _AnalyticsSnapshotAggregates:
+    tickets_per_operator: tuple[OperatorTicketLoad, ...]
+    operator_snapshots: tuple[AnalyticsOperatorSnapshot, ...]
+    category_snapshots: tuple[AnalyticsCategorySnapshot, ...]
+    best_operators_by_closures: tuple[AnalyticsOperatorSnapshot, ...]
+    best_operators_by_satisfaction: tuple[AnalyticsOperatorSnapshot, ...]
+    top_categories: tuple[AnalyticsCategorySnapshot, ...]
+    sla_categories: tuple[AnalyticsCategorySnapshot, ...]
+    feedback_coverage_percent: int | None
+
+
 def utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -187,57 +219,80 @@ class HelpdeskStatsService:
         *,
         window: AnalyticsWindow,
     ) -> HelpdeskAnalyticsSnapshot:
-        operational = await self.get_operational_stats()
         since = _resolve_window_start(window, now=self.now_provider())
-
-        period_created_tickets_count = await self.analytics_repository.count_created_tickets(
-            since=since
-        )
-        period_closed_tickets_count = await self.analytics_repository.count_closed_tickets(
-            since=since
-        )
-        average_first_response_seconds = (
-            await self.analytics_repository.get_average_first_response_time_seconds(since=since)
-        )
-        average_resolution_seconds = (
-            await self.analytics_repository.get_average_resolution_time_seconds(since=since)
-        )
-        satisfaction_average = await self.analytics_repository.get_average_feedback_rating(
-            since=since
-        )
-        feedback_count = await self.analytics_repository.count_feedback_submissions(since=since)
-        rating_distribution = await self.analytics_repository.get_feedback_rating_distribution(
-            since=since
-        )
-        operator_stats = await self.analytics_repository.list_closed_ticket_stats_by_operator(
-            since=since
-        )
-        created_by_category = (
-            await self.analytics_repository.list_created_ticket_counts_by_category(since=since)
-        )
-        open_by_category = await self.analytics_repository.list_open_ticket_counts_by_category()
-        closed_by_category = await self.analytics_repository.list_closed_ticket_counts_by_category(
-            since=since
-        )
-        feedback_by_category = await self.analytics_repository.list_feedback_stats_by_category(
-            since=since
-        )
-        sla_breaches = await self.analytics_repository.count_sla_breaches(since=since)
-        sla_by_category = await self.analytics_repository.list_sla_breach_counts_by_category(
-            since=since
+        queries = await self._query_analytics_snapshot(since=since)
+        aggregates = self._aggregate_analytics_snapshot(queries)
+        return self._assemble_analytics_snapshot(
+            window=window,
+            queries=queries,
+            aggregates=aggregates,
         )
 
-        tickets_per_operator = operational.tickets_per_operator
+    async def _query_analytics_snapshot(
+        self,
+        *,
+        since: datetime | None,
+    ) -> _AnalyticsSnapshotQueries:
+        operational = await self.get_operational_stats()
+        return _AnalyticsSnapshotQueries(
+            operational=operational,
+            period_created_tickets_count=(
+                await self.analytics_repository.count_created_tickets(since=since)
+            ),
+            period_closed_tickets_count=(
+                await self.analytics_repository.count_closed_tickets(since=since)
+            ),
+            average_first_response_seconds=(
+                await self.analytics_repository.get_average_first_response_time_seconds(since=since)
+            ),
+            average_resolution_seconds=(
+                await self.analytics_repository.get_average_resolution_time_seconds(since=since)
+            ),
+            satisfaction_average=(
+                await self.analytics_repository.get_average_feedback_rating(since=since)
+            ),
+            feedback_count=(
+                await self.analytics_repository.count_feedback_submissions(since=since)
+            ),
+            rating_distribution=(
+                await self.analytics_repository.get_feedback_rating_distribution(since=since)
+            ),
+            operator_stats=(
+                await self.analytics_repository.list_closed_ticket_stats_by_operator(since=since)
+            ),
+            created_by_category=(
+                await self.analytics_repository.list_created_ticket_counts_by_category(since=since)
+            ),
+            open_by_category=(
+                await self.analytics_repository.list_open_ticket_counts_by_category()
+            ),
+            closed_by_category=(
+                await self.analytics_repository.list_closed_ticket_counts_by_category(since=since)
+            ),
+            feedback_by_category=(
+                await self.analytics_repository.list_feedback_stats_by_category(since=since)
+            ),
+            sla_breaches=await self.analytics_repository.count_sla_breaches(since=since),
+            sla_by_category=(
+                await self.analytics_repository.list_sla_breach_counts_by_category(since=since)
+            ),
+        )
+
+    def _aggregate_analytics_snapshot(
+        self,
+        queries: _AnalyticsSnapshotQueries,
+    ) -> _AnalyticsSnapshotAggregates:
+        tickets_per_operator = queries.operational.tickets_per_operator
         operator_snapshots = _merge_operator_snapshots(
             active_loads=tickets_per_operator,
-            operator_stats=operator_stats,
+            operator_stats=queries.operator_stats,
         )
         category_snapshots = _merge_category_snapshots(
-            created_counts=created_by_category,
-            open_counts=open_by_category,
-            closed_counts=closed_by_category,
-            feedback_stats=feedback_by_category,
-            sla_counts=sla_by_category,
+            created_counts=queries.created_by_category,
+            open_counts=queries.open_by_category,
+            closed_counts=queries.closed_by_category,
+            feedback_stats=queries.feedback_by_category,
+            sla_counts=queries.sla_by_category,
         )
 
         best_operators_by_closures = tuple(
@@ -287,11 +342,30 @@ class HelpdeskStatsService:
         )
 
         feedback_coverage_percent: int | None = None
-        if period_closed_tickets_count > 0:
+        if queries.period_closed_tickets_count > 0:
             feedback_coverage_percent = int(
-                round((feedback_count / period_closed_tickets_count) * 100)
+                round((queries.feedback_count / queries.period_closed_tickets_count) * 100)
             )
 
+        return _AnalyticsSnapshotAggregates(
+            tickets_per_operator=tickets_per_operator,
+            operator_snapshots=operator_snapshots,
+            category_snapshots=category_snapshots,
+            best_operators_by_closures=best_operators_by_closures,
+            best_operators_by_satisfaction=best_operators_by_satisfaction,
+            top_categories=top_categories,
+            sla_categories=sla_categories,
+            feedback_coverage_percent=feedback_coverage_percent,
+        )
+
+    def _assemble_analytics_snapshot(
+        self,
+        *,
+        window: AnalyticsWindow,
+        queries: _AnalyticsSnapshotQueries,
+        aggregates: _AnalyticsSnapshotAggregates,
+    ) -> HelpdeskAnalyticsSnapshot:
+        operational = queries.operational
         return HelpdeskAnalyticsSnapshot(
             window=window,
             total_open_tickets=operational.total_open_tickets,
@@ -299,28 +373,33 @@ class HelpdeskStatsService:
             assigned_tickets_count=operational.assigned_tickets_count,
             escalated_tickets_count=operational.escalated_tickets_count,
             closed_tickets_count=operational.closed_tickets_count,
-            tickets_per_operator=tickets_per_operator,
-            period_created_tickets_count=period_created_tickets_count,
-            period_closed_tickets_count=period_closed_tickets_count,
+            tickets_per_operator=aggregates.tickets_per_operator,
+            period_created_tickets_count=queries.period_created_tickets_count,
+            period_closed_tickets_count=queries.period_closed_tickets_count,
             average_first_response_time_seconds=_normalize_average_seconds(
-                average_first_response_seconds
+                queries.average_first_response_seconds
             ),
-            average_resolution_time_seconds=_normalize_average_seconds(average_resolution_seconds),
-            satisfaction_average=_normalize_average_rating(satisfaction_average),
-            feedback_count=feedback_count,
-            feedback_coverage_percent=feedback_coverage_percent,
+            average_resolution_time_seconds=_normalize_average_seconds(
+                queries.average_resolution_seconds
+            ),
+            satisfaction_average=_normalize_average_rating(queries.satisfaction_average),
+            feedback_count=queries.feedback_count,
+            feedback_coverage_percent=aggregates.feedback_coverage_percent,
             rating_distribution=tuple(
                 AnalyticsRatingBucket(rating=item.rating, count=item.count)
-                for item in rating_distribution
+                for item in queries.rating_distribution
             ),
-            operator_snapshots=operator_snapshots,
-            category_snapshots=category_snapshots,
-            best_operators_by_closures=best_operators_by_closures,
-            best_operators_by_satisfaction=best_operators_by_satisfaction,
-            top_categories=top_categories,
-            first_response_breach_count=sla_breaches.get("sla_breached_first_response", 0),
-            resolution_breach_count=sla_breaches.get("sla_breached_resolution", 0),
-            sla_categories=sla_categories,
+            operator_snapshots=aggregates.operator_snapshots,
+            category_snapshots=aggregates.category_snapshots,
+            best_operators_by_closures=aggregates.best_operators_by_closures,
+            best_operators_by_satisfaction=aggregates.best_operators_by_satisfaction,
+            top_categories=aggregates.top_categories,
+            first_response_breach_count=queries.sla_breaches.get(
+                "sla_breached_first_response",
+                0,
+            ),
+            resolution_breach_count=queries.sla_breaches.get("sla_breached_resolution", 0),
+            sla_categories=aggregates.sla_categories,
         )
 
 

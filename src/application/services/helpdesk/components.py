@@ -112,6 +112,59 @@ class HelpdeskExportRenderers:
 
 
 @dataclass(slots=True, frozen=True)
+class HelpdeskTicketDependencies:
+    ticket_repository: TicketRepository
+    ticket_analytics_repository: TicketAnalyticsRepository
+    ticket_feedback_repository: TicketFeedbackRepository
+    ticket_ai_summary_repository: TicketAISummaryRepository
+    ticket_message_repository: TicketMessageRepository
+    ticket_internal_note_repository: TicketInternalNoteRepository
+    ticket_event_repository: TicketEventRepository
+    ticket_tag_repository: TicketTagRepository
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskCatalogDependencies:
+    macro_repository: MacroRepository
+    tag_repository: TagRepository
+    ticket_category_repository: TicketCategoryRepository
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskOperatorDependencies:
+    operator_repository: OperatorRepository
+    operator_invite_repository: OperatorInviteCodeRepository
+    super_admin_telegram_user_ids: frozenset[int]
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskSLADependencies:
+    sla_policy_repository: SLAPolicyRepository
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskAIDependencies:
+    ai_client_factory: AIServiceClientFactory
+    ai_settings_provider: AISettingsProvider
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskFeedbackAuditStatsDependencies:
+    export_renderers: HelpdeskExportRenderers
+    include_internal_notes_in_ticket_reports: bool = True
+
+
+@dataclass(slots=True, frozen=True)
+class HelpdeskComponentDependencies:
+    tickets: HelpdeskTicketDependencies
+    catalog: HelpdeskCatalogDependencies
+    operators: HelpdeskOperatorDependencies
+    sla: HelpdeskSLADependencies
+    ai: HelpdeskAIDependencies
+    feedback_audit_stats: HelpdeskFeedbackAuditStatsDependencies
+
+
+@dataclass(slots=True, frozen=True)
 class HelpdeskTicketUseCases:
     create_from_client_message: CreateTicketFromClientMessageUseCase
     get_active_client_ticket: GetActiveClientTicketUseCase
@@ -191,7 +244,28 @@ class HelpdeskComponents:
     stats: HelpdeskStatsService
 
 
-def build_helpdesk_components(
+def build_helpdesk_components(deps: HelpdeskComponentDependencies) -> HelpdeskComponents:
+    ticket_deps = deps.tickets
+    catalog_deps = deps.catalog
+    operator_deps = deps.operators
+    sla_deps = deps.sla
+    ai_deps = deps.ai
+    feedback_deps = deps.feedback_audit_stats
+    stats_service = HelpdeskStatsService(
+        analytics_repository=ticket_deps.ticket_analytics_repository
+    )
+    return _build_helpdesk_components(
+        ticket_deps=ticket_deps,
+        catalog_deps=catalog_deps,
+        operator_deps=operator_deps,
+        sla_deps=sla_deps,
+        ai_deps=ai_deps,
+        feedback_deps=feedback_deps,
+        stats_service=stats_service,
+    )
+
+
+def build_helpdesk_component_dependencies(
     *,
     ticket_repository: TicketRepository,
     ticket_analytics_repository: TicketAnalyticsRepository,
@@ -212,204 +286,257 @@ def build_helpdesk_components(
     export_renderers: HelpdeskExportRenderers,
     include_internal_notes_in_ticket_reports: bool = True,
     ai_settings_provider: AISettingsProvider | None = None,
+) -> HelpdeskComponentDependencies:
+    return HelpdeskComponentDependencies(
+        tickets=HelpdeskTicketDependencies(
+            ticket_repository=ticket_repository,
+            ticket_analytics_repository=ticket_analytics_repository,
+            ticket_feedback_repository=ticket_feedback_repository,
+            ticket_ai_summary_repository=ticket_ai_summary_repository,
+            ticket_message_repository=ticket_message_repository,
+            ticket_internal_note_repository=ticket_internal_note_repository,
+            ticket_event_repository=ticket_event_repository,
+            ticket_tag_repository=ticket_tag_repository,
+        ),
+        catalog=HelpdeskCatalogDependencies(
+            macro_repository=macro_repository,
+            tag_repository=tag_repository,
+            ticket_category_repository=ticket_category_repository,
+        ),
+        operators=HelpdeskOperatorDependencies(
+            operator_repository=operator_repository,
+            operator_invite_repository=operator_invite_repository,
+            super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+        ),
+        sla=HelpdeskSLADependencies(sla_policy_repository=sla_policy_repository),
+        ai=HelpdeskAIDependencies(
+            ai_client_factory=ai_client_factory,
+            ai_settings_provider=ai_settings_provider or InMemoryAISettingsRepository(),
+        ),
+        feedback_audit_stats=HelpdeskFeedbackAuditStatsDependencies(
+            export_renderers=export_renderers,
+            include_internal_notes_in_ticket_reports=include_internal_notes_in_ticket_reports,
+        ),
+    )
+
+
+def _build_helpdesk_components(
+    *,
+    ticket_deps: HelpdeskTicketDependencies,
+    catalog_deps: HelpdeskCatalogDependencies,
+    operator_deps: HelpdeskOperatorDependencies,
+    sla_deps: HelpdeskSLADependencies,
+    ai_deps: HelpdeskAIDependencies,
+    feedback_deps: HelpdeskFeedbackAuditStatsDependencies,
+    stats_service: HelpdeskStatsService,
 ) -> HelpdeskComponents:
-    stats_service = HelpdeskStatsService(analytics_repository=ticket_analytics_repository)
-    resolved_ai_settings_provider = ai_settings_provider or InMemoryAISettingsRepository()
     return HelpdeskComponents(
         permissions=HelpdeskPermissionGuard(
-            operator_repository=operator_repository,
-            super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+            operator_repository=operator_deps.operator_repository,
+            super_admin_telegram_user_ids=operator_deps.super_admin_telegram_user_ids,
         ),
         tickets=HelpdeskTicketUseCases(
             create_from_client_message=CreateTicketFromClientMessageUseCase(
-                ticket_repository=ticket_repository,
-                ticket_message_repository=ticket_message_repository,
-                ticket_event_repository=ticket_event_repository,
-                ai_client_factory=ai_client_factory,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_message_repository=ticket_deps.ticket_message_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                ai_client_factory=ai_deps.ai_client_factory,
             ),
             get_active_client_ticket=GetActiveClientTicketUseCase(
-                ticket_repository=ticket_repository
+                ticket_repository=ticket_deps.ticket_repository
             ),
             get_feedback=GetTicketFeedbackUseCase(
-                ticket_repository=ticket_repository,
-                ticket_feedback_repository=ticket_feedback_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_feedback_repository=ticket_deps.ticket_feedback_repository,
             ),
             submit_feedback_rating=SubmitTicketFeedbackRatingUseCase(
-                ticket_repository=ticket_repository,
-                ticket_feedback_repository=ticket_feedback_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_feedback_repository=ticket_deps.ticket_feedback_repository,
             ),
             add_feedback_comment=AddTicketFeedbackCommentUseCase(
-                ticket_repository=ticket_repository,
-                ticket_feedback_repository=ticket_feedback_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_feedback_repository=ticket_deps.ticket_feedback_repository,
             ),
             add_message=AddMessageToTicketUseCase(
-                ticket_repository=ticket_repository,
-                ticket_message_repository=ticket_message_repository,
-                ticket_event_repository=ticket_event_repository,
-                ai_client_factory=ai_client_factory,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_message_repository=ticket_deps.ticket_message_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                ai_client_factory=ai_deps.ai_client_factory,
             ),
             add_internal_note=AddInternalNoteToTicketUseCase(
-                ticket_repository=ticket_repository,
-                ticket_internal_note_repository=ticket_internal_note_repository,
-                operator_repository=operator_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_internal_note_repository=ticket_deps.ticket_internal_note_repository,
+                operator_repository=operator_deps.operator_repository,
             ),
             assign_ticket=AssignTicketToOperatorUseCase(
-                ticket_repository=ticket_repository,
-                ticket_event_repository=ticket_event_repository,
-                operator_repository=operator_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                operator_repository=operator_deps.operator_repository,
             ),
-            get_next_queued=GetNextQueuedTicketUseCase(ticket_repository=ticket_repository),
-            list_queued=ListQueuedTicketsUseCase(ticket_repository=ticket_repository),
-            list_operator_tickets=ListOperatorTicketsUseCase(ticket_repository=ticket_repository),
-            list_archived_tickets=ListArchivedTicketsUseCase(ticket_repository=ticket_repository),
+            get_next_queued=GetNextQueuedTicketUseCase(
+                ticket_repository=ticket_deps.ticket_repository
+            ),
+            list_queued=ListQueuedTicketsUseCase(ticket_repository=ticket_deps.ticket_repository),
+            list_operator_tickets=ListOperatorTicketsUseCase(
+                ticket_repository=ticket_deps.ticket_repository
+            ),
+            list_archived_tickets=ListArchivedTicketsUseCase(
+                ticket_repository=ticket_deps.ticket_repository
+            ),
             assign_next_queued=AssignNextQueuedTicketUseCase(
-                ticket_repository=ticket_repository,
-                ticket_event_repository=ticket_event_repository,
-                operator_repository=operator_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                operator_repository=operator_deps.operator_repository,
             ),
-            get_details=GetTicketDetailsUseCase(ticket_repository=ticket_repository),
+            get_details=GetTicketDetailsUseCase(ticket_repository=ticket_deps.ticket_repository),
             export_report=ExportTicketReportUseCase(
-                ticket_repository=ticket_repository,
-                ticket_feedback_repository=ticket_feedback_repository,
-                ticket_event_repository=ticket_event_repository,
-                csv_renderer=export_renderers.ticket_report_csv,
-                html_renderer=export_renderers.ticket_report_html,
-                include_internal_notes=include_internal_notes_in_ticket_reports,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_feedback_repository=ticket_deps.ticket_feedback_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                csv_renderer=feedback_deps.export_renderers.ticket_report_csv,
+                html_renderer=feedback_deps.export_renderers.ticket_report_html,
+                include_internal_notes=feedback_deps.include_internal_notes_in_ticket_reports,
             ),
             reply_as_operator=ReplyToTicketAsOperatorUseCase(
-                ticket_repository=ticket_repository,
-                ticket_message_repository=ticket_message_repository,
-                ticket_event_repository=ticket_event_repository,
-                operator_repository=operator_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_message_repository=ticket_deps.ticket_message_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                operator_repository=operator_deps.operator_repository,
             ),
             close_ticket=CloseTicketUseCase(
-                ticket_repository=ticket_repository,
-                ticket_event_repository=ticket_event_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
             ),
             escalate_ticket=EscalateTicketUseCase(
-                ticket_repository=ticket_repository,
-                ticket_event_repository=ticket_event_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
             ),
-            basic_stats=BasicStatsUseCase(ticket_repository=ticket_repository),
+            basic_stats=BasicStatsUseCase(ticket_repository=ticket_deps.ticket_repository),
         ),
         operators=HelpdeskOperatorUseCases(
             list_operators=ListOperatorsUseCase(
-                operator_repository=operator_repository,
-                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+                operator_repository=operator_deps.operator_repository,
+                super_admin_telegram_user_ids=operator_deps.super_admin_telegram_user_ids,
             ),
             promote_operator=PromoteOperatorUseCase(
-                operator_repository=operator_repository,
-                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+                operator_repository=operator_deps.operator_repository,
+                super_admin_telegram_user_ids=operator_deps.super_admin_telegram_user_ids,
             ),
             revoke_operator=RevokeOperatorUseCase(
-                operator_repository=operator_repository,
-                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+                operator_repository=operator_deps.operator_repository,
+                super_admin_telegram_user_ids=operator_deps.super_admin_telegram_user_ids,
             ),
             create_operator_invite=CreateOperatorInviteCodeUseCase(
-                operator_invite_repository=operator_invite_repository
+                operator_invite_repository=operator_deps.operator_invite_repository
             ),
             preview_operator_invite=PreviewOperatorInviteCodeUseCase(
-                operator_invite_repository=operator_invite_repository
+                operator_invite_repository=operator_deps.operator_invite_repository
             ),
             redeem_operator_invite=RedeemOperatorInviteCodeUseCase(
-                operator_invite_repository=operator_invite_repository,
-                operator_repository=operator_repository,
-                super_admin_telegram_user_ids=super_admin_telegram_user_ids,
+                operator_invite_repository=operator_deps.operator_invite_repository,
+                operator_repository=operator_deps.operator_repository,
+                super_admin_telegram_user_ids=operator_deps.super_admin_telegram_user_ids,
             ),
             export_analytics_snapshot=ExportAnalyticsSnapshotUseCase(
                 stats_service=stats_service,
-                csv_renderer=export_renderers.analytics_snapshot_csv,
-                html_renderer=export_renderers.analytics_snapshot_html,
+                csv_renderer=feedback_deps.export_renderers.analytics_snapshot_csv,
+                html_renderer=feedback_deps.export_renderers.analytics_snapshot_html,
             ),
         ),
         catalog=HelpdeskCatalogUseCases(
             list_ticket_categories=ListTicketCategoriesUseCase(
-                ticket_category_repository=ticket_category_repository
+                ticket_category_repository=catalog_deps.ticket_category_repository
             ),
             get_ticket_category=GetTicketCategoryUseCase(
-                ticket_category_repository=ticket_category_repository
+                ticket_category_repository=catalog_deps.ticket_category_repository
             ),
             create_ticket_category=CreateTicketCategoryUseCase(
-                ticket_category_repository=ticket_category_repository
+                ticket_category_repository=catalog_deps.ticket_category_repository
             ),
             update_ticket_category_title=UpdateTicketCategoryTitleUseCase(
-                ticket_category_repository=ticket_category_repository
+                ticket_category_repository=catalog_deps.ticket_category_repository
             ),
             set_ticket_category_active=SetTicketCategoryActiveUseCase(
-                ticket_category_repository=ticket_category_repository
+                ticket_category_repository=catalog_deps.ticket_category_repository
             ),
-            list_macros=ListMacrosUseCase(macro_repository=macro_repository),
-            get_macro=GetMacroUseCase(macro_repository=macro_repository),
-            create_macro=CreateMacroUseCase(macro_repository=macro_repository),
-            update_macro_title=UpdateMacroTitleUseCase(macro_repository=macro_repository),
-            update_macro_body=UpdateMacroBodyUseCase(macro_repository=macro_repository),
-            delete_macro=DeleteMacroUseCase(macro_repository=macro_repository),
+            list_macros=ListMacrosUseCase(macro_repository=catalog_deps.macro_repository),
+            get_macro=GetMacroUseCase(macro_repository=catalog_deps.macro_repository),
+            create_macro=CreateMacroUseCase(macro_repository=catalog_deps.macro_repository),
+            update_macro_title=UpdateMacroTitleUseCase(
+                macro_repository=catalog_deps.macro_repository
+            ),
+            update_macro_body=UpdateMacroBodyUseCase(
+                macro_repository=catalog_deps.macro_repository
+            ),
+            delete_macro=DeleteMacroUseCase(macro_repository=catalog_deps.macro_repository),
             apply_macro=ApplyMacroToTicketUseCase(
-                ticket_repository=ticket_repository,
-                ticket_message_repository=ticket_message_repository,
-                ticket_event_repository=ticket_event_repository,
-                operator_repository=operator_repository,
-                macro_repository=macro_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_message_repository=ticket_deps.ticket_message_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                operator_repository=operator_deps.operator_repository,
+                macro_repository=catalog_deps.macro_repository,
             ),
             list_ticket_tags=ListTicketTagsUseCase(
-                ticket_repository=ticket_repository,
-                ticket_tag_repository=ticket_tag_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_tag_repository=ticket_deps.ticket_tag_repository,
             ),
-            list_available_tags=ListAvailableTagsUseCase(tag_repository=tag_repository),
+            list_available_tags=ListAvailableTagsUseCase(
+                tag_repository=catalog_deps.tag_repository
+            ),
             add_tag=AddTagToTicketUseCase(
-                ticket_repository=ticket_repository,
-                tag_repository=tag_repository,
-                ticket_tag_repository=ticket_tag_repository,
-                ticket_event_repository=ticket_event_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                tag_repository=catalog_deps.tag_repository,
+                ticket_tag_repository=ticket_deps.ticket_tag_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
             ),
             remove_tag=RemoveTagFromTicketUseCase(
-                ticket_repository=ticket_repository,
-                tag_repository=tag_repository,
-                ticket_tag_repository=ticket_tag_repository,
-                ticket_event_repository=ticket_event_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                tag_repository=catalog_deps.tag_repository,
+                ticket_tag_repository=ticket_deps.ticket_tag_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
             ),
         ),
         sla=HelpdeskSLAUseCases(
             evaluate_ticket_state=EvaluateTicketSLAStateUseCase(
-                ticket_repository=ticket_repository,
-                sla_policy_repository=sla_policy_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                sla_policy_repository=sla_deps.sla_policy_repository,
             ),
             auto_escalate_ticket=AutoEscalateTicketBySLAUseCase(
-                ticket_repository=ticket_repository,
-                ticket_event_repository=ticket_event_repository,
-                sla_policy_repository=sla_policy_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                sla_policy_repository=sla_deps.sla_policy_repository,
             ),
             auto_reassign_ticket=AutoReassignTicketBySLAUseCase(
-                ticket_repository=ticket_repository,
-                ticket_event_repository=ticket_event_repository,
-                operator_repository=operator_repository,
-                sla_policy_repository=sla_policy_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                operator_repository=operator_deps.operator_repository,
+                sla_policy_repository=sla_deps.sla_policy_repository,
             ),
             run_checks=RunTicketSLAChecksUseCase(
-                ticket_repository=ticket_repository,
-                ticket_event_repository=ticket_event_repository,
-                operator_repository=operator_repository,
-                sla_policy_repository=sla_policy_repository,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_event_repository=ticket_deps.ticket_event_repository,
+                operator_repository=operator_deps.operator_repository,
+                sla_policy_repository=sla_deps.sla_policy_repository,
             ),
         ),
         ai=HelpdeskAIUseCases(
             build_ticket_assist_snapshot=BuildTicketAssistSnapshotUseCase(
-                ticket_repository=ticket_repository,
-                ticket_ai_summary_repository=ticket_ai_summary_repository,
-                macro_repository=macro_repository,
-                ai_client_factory=ai_client_factory,
-                ai_settings_provider=resolved_ai_settings_provider,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_ai_summary_repository=ticket_deps.ticket_ai_summary_repository,
+                macro_repository=catalog_deps.macro_repository,
+                ai_client_factory=ai_deps.ai_client_factory,
+                ai_settings_provider=ai_deps.ai_settings_provider,
             ),
             generate_ticket_reply_draft=GenerateTicketReplyDraftUseCase(
-                ticket_repository=ticket_repository,
-                ticket_ai_summary_repository=ticket_ai_summary_repository,
-                ai_client_factory=ai_client_factory,
-                ai_settings_provider=resolved_ai_settings_provider,
+                ticket_repository=ticket_deps.ticket_repository,
+                ticket_ai_summary_repository=ticket_deps.ticket_ai_summary_repository,
+                ai_client_factory=ai_deps.ai_client_factory,
+                ai_settings_provider=ai_deps.ai_settings_provider,
             ),
             predict_ticket_category=PredictTicketCategoryUseCase(
-                ticket_category_repository=ticket_category_repository,
-                ai_client_factory=ai_client_factory,
-                ai_settings_provider=resolved_ai_settings_provider,
+                ticket_category_repository=catalog_deps.ticket_category_repository,
+                ai_client_factory=ai_deps.ai_client_factory,
+                ai_settings_provider=ai_deps.ai_settings_provider,
             ),
         ),
         stats=stats_service,
