@@ -1,0 +1,217 @@
+{%- macro asset_card(attachment) -%}
+  <article class="asset-card">
+    {% if attachment.embedded_photo %}
+      <div class="asset-media">
+        <img class="asset-image" src="{{ attachment.embedded_photo }}" alt="{{ attachment.alt }}">
+      </div>
+    {% endif %}
+    <div class="asset-body">
+      <div class="asset-title">{{ attachment.title }}</div>
+      {% if attachment.timestamp %}
+        <div class="asset-meta">{{ attachment.timestamp }}</div>
+      {% endif %}
+      <div class="asset-meta">{{ attachment.meta }}</div>
+    </div>
+  </article>
+{%- endmacro -%}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ticket case file · {{ report.public_number }}</title>
+  <style>
+{{ css | safe }}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="cover">
+      <div class="cover-grid">
+        <div>
+          <p class="eyebrow">Карточка заявки</p>
+          <h1>{{ report.public_number }}</h1>
+          <p class="subject">{{ report.subject }}</p>
+          <div class="chip-row">
+            <span class="status-chip {{ report.status_css }}">{{ report.status_label }}</span>
+            <span class="priority-chip {{ report.priority_css }}">Priority: {{ report.priority_label }}</span>
+            <span class="chip">Generated: {{ generated_at }}</span>
+            <span class="chip">Messages: {{ report.message_count }}</span>
+            <span class="chip">Attachments: {{ report.attachment_count }}</span>
+            <span class="chip">Duplicates: {{ report.duplicate_count }}</span>
+          </div>
+        </div>
+        <aside class="cover-aside">
+          <div class="meta-grid">
+            {% for item in report.metadata %}
+              <div class="meta-item">
+                <div class="meta-label">{{ item.label }}</div>
+                <div class="meta-value">
+                  {% if item.label == "Assigned operator" and report.operator_href %}
+                    <a href="{{ report.operator_href }}">{{ item.value }}</a>
+                  {% else %}
+                    {{ item.value }}
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="report-section" aria-labelledby="executive-summary-title">
+      <div class="section-head"><div>
+        <p class="eyebrow">Executive summary</p>
+        <h2 id="executive-summary-title">Краткий обзор</h2>
+      </div></div>
+      <div class="summary-grid">
+        {% for card in report.summary_cards %}
+          <article class="summary-card">
+            <div class="summary-label">{{ card.label }}</div>
+            <div class="summary-value">{{ card.value }}</div>
+            <div class="summary-note">{{ card.note }}</div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="report-section" aria-labelledby="customer-context-title">
+      <div class="section-head"><div>
+        <p class="eyebrow">Customer context</p>
+        <h2 id="customer-context-title">Контекст клиента</h2>
+      </div></div>
+      <div class="context-grid">
+        {% for card in report.context_cards %}
+          <article class="context-card"><h3>{{ card.title }}</h3><p>{{ card.text }}</p></article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="report-section" aria-labelledby="conversation-timeline-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Conversation timeline</p>
+          <h2 id="conversation-timeline-title">Переписка</h2>
+        </div>
+        <span class="chip">{{ report.message_count }} сообщений</span>
+      </div>
+      {% if report.messages %}
+        <div class="transcript">
+          {% for message in report.messages %}
+            <article class="message {{ message.css }}">
+              <div class="message-head">
+                <div class="message-role">{{ message.sender_label }}</div>
+                <div class="message-time">{{ message.time }}</div>
+              </div>
+              <div class="message-body">
+                {% if message.text %}
+                  {{ message.text }}
+                {% else %}
+                  <span class="muted">Без текста</span>
+                {% endif %}
+              </div>
+              {% if message.flags %}
+                <div class="message-flags">
+                  {% for flag in message.flags %}
+                    <span class="flag">{{ flag }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if message.attachment %}
+                <div class="message-attachment">
+                  {{ asset_card(message.attachment) }}
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">Сообщений в переписке нет.</div>
+      {% endif %}
+    </section>
+
+    <section class="report-section" aria-labelledby="materials-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Evidence</p>
+          <h2 id="materials-title">Материалы дела</h2>
+        </div>
+        <span class="chip">{{ report.attachment_count }} вложений</span>
+      </div>
+      <p class="section-copy">
+        Фотографии встраиваются прямо в отчёт. Остальные вложения показаны как
+        структурированные карточки материалов.
+      </p>
+      {% if report.attachments %}
+        <div class="gallery">
+          {% for attachment in report.attachments %}
+            {{ asset_card(attachment) }}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">Вложений в деле нет.</div>
+      {% endif %}
+    </section>
+
+    <section class="report-section internal-section" aria-labelledby="internal-notes-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Internal</p>
+          <h2 id="internal-notes-title">Внутренние заметки</h2>
+        </div>
+        <span class="chip chip-internal">{{ report.internal_note_count }} заметок</span>
+      </div>
+      {% if report.internal_notes %}
+        <div class="notes">
+          {% for note in report.internal_notes %}
+            <article class="note">
+              <div class="note-head">
+                <div class="note-role">{{ note.author }}</div>
+                <div class="note-time">{{ note.time }}</div>
+              </div>
+              <div class="note-body">{{ note.text }}</div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">Выгрузка внутренних заметок пуста.</div>
+      {% endif %}
+    </section>
+
+    <section class="report-section" aria-labelledby="events-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Event history</p>
+          <h2 id="events-title">Ход заявки</h2>
+        </div>
+        <span class="chip">{{ report.event_count }} событий</span>
+      </div>
+      {% if report.events %}
+        <div class="event-timeline">
+          {% for event in report.events %}
+            <article class="event {{ event.css }}">
+              <div class="event-head">
+                <div class="event-title">{{ event.title }}</div>
+                <div class="event-time">{{ event.time }}</div>
+              </div>
+              {% if event.detail is not none %}
+                <div class="event-detail">{{ event.detail }}</div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">Значимых событий по делу не найдено.</div>
+      {% endif %}
+    </section>
+
+    <footer class="report-footer">
+      <span>Generated by Reliora</span>
+      <span>{{ generated_at }}</span>
+      <span>{{ report.public_number }}</span>
+      <span>Static export file</span>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,39 +1,43 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 from redis.asyncio import Redis
+from redis.asyncio.lock import Lock
+from redis.exceptions import LockError
 
 from application.contracts.runtime import TicketLock, TicketLockManager
-from infrastructure.redis.async_support import resolve_redis_result
 from infrastructure.redis.keys import ticket_lock_key
-
-_RELEASE_LOCK_SCRIPT = """
-if redis.call("get", KEYS[1]) == ARGV[1] then
-    return redis.call("del", KEYS[1])
-end
-return 0
-"""
 
 
 class RedisTicketLock(TicketLock):
     def __init__(self, redis: Redis, *, key: str) -> None:
         self.redis = redis
         self.key = key
-        self.token = uuid4().hex
+        self._lock: Lock | None = None
         self._is_acquired = False
 
     async def acquire(self, *, ttl_seconds: int = 30) -> bool:
-        acquired = await self.redis.set(self.key, self.token, ex=ttl_seconds, nx=True)
-        self._is_acquired = bool(acquired)
+        self._lock = self.redis.lock(
+            self.key,
+            timeout=ttl_seconds,
+            blocking=False,
+            thread_local=False,
+        )
+        self._is_acquired = bool(await self._lock.acquire(blocking=False))
+        if not self._is_acquired:
+            self._lock = None
         return self._is_acquired
 
     async def release(self) -> None:
-        if not self._is_acquired:
+        if not self._is_acquired or self._lock is None:
             return
 
-        await resolve_redis_result(self.redis.eval(_RELEASE_LOCK_SCRIPT, 1, self.key, self.token))
-        self._is_acquired = False
+        try:
+            await self._lock.release()
+        except LockError:
+            pass
+        finally:
+            self._is_acquired = False
+            self._lock = None
 
 
 class RedisTicketLockManager(TicketLockManager):

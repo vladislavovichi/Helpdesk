@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl
+
+from aiogram.utils.web_app import check_webapp_signature
 
 
 class TelegramMiniAppAuthError(ValueError):
@@ -49,7 +49,6 @@ class _ParsedInitData:
     raw_init_data: str
     bot_token: str
     values: dict[str, str]
-    provided_hash: str
 
 
 def validate_telegram_mini_app_init_data(
@@ -115,23 +114,11 @@ def _parse_init_data(*, init_data: str, bot_token: str) -> _ParsedInitData:
         raw_init_data=normalized_init_data,
         bot_token=normalized_bot_token,
         values=values,
-        provided_hash=provided_hash,
     )
 
 
 def _validate_init_data_hash(parsed: _ParsedInitData) -> None:
-    data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed.values.items()))
-    secret_key = hmac.new(
-        b"WebAppData",
-        parsed.bot_token.encode("utf-8"),
-        hashlib.sha256,
-    ).digest()
-    expected_hash = hmac.new(
-        secret_key,
-        data_check_string.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-    if not hmac.compare_digest(expected_hash, parsed.provided_hash):
+    if not check_webapp_signature(parsed.bot_token, parsed.raw_init_data):
         raise TelegramMiniAppAuthError(
             "Не удалось подтвердить запуск. Откройте рабочее место заново.",
             code="invalid_signature",

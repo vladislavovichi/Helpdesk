@@ -289,11 +289,12 @@ def test_render_ticket_report_html_escapes_dynamic_content(
     )
     report = _build_ticket_report(
         subject="<b>broken</b>",
+        assigned_operator_name="<Lead>",
         messages=(
             TicketReportMessage(
                 sender_type=TicketMessageSenderType.CLIENT,
                 sender_operator_name=None,
-                text="<script>alert(1)</script>",
+                text="Customer typed <script>alert(1)</script>",
                 created_at=datetime(2026, 4, 7, 12, 1, tzinfo=UTC),
                 attachment=TicketReportAttachment(
                     kind=TicketAttachmentKind.DOCUMENT,
@@ -303,6 +304,13 @@ def test_render_ticket_report_html_escapes_dynamic_content(
                     mime_type="application/pdf",
                     storage_path="document/unique-unsafe.pdf",
                 ),
+            ),
+            TicketReportMessage(
+                sender_type=TicketMessageSenderType.OPERATOR,
+                sender_operator_name="<Agent>",
+                text="Use <b>literal tags</b> as text",
+                created_at=datetime(2026, 4, 7, 12, 2, tzinfo=UTC),
+                attachment=None,
             ),
         ),
         internal_notes=(
@@ -318,11 +326,16 @@ def test_render_ticket_report_html_escapes_dynamic_content(
     html = render_ticket_report_html(report).decode("utf-8")
 
     assert "&lt;b&gt;broken&lt;/b&gt;" in html
+    assert "&lt;Lead&gt;" in html
+    assert "Оператор · &lt;Agent&gt;" in html
+    assert "Use &lt;b&gt;literal tags&lt;/b&gt; as text" in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "&lt;img src=x onerror=alert(1)&gt;.pdf" in html
     assert "&lt;b&gt;internal&lt;/b&gt;" in html
     assert "<script>alert(1)</script>" not in html
     assert "<b>internal</b>" not in html
+    assert "<Lead>" not in html
+    assert "<Agent>" not in html
 
 
 def test_render_ticket_report_html_non_photo_attachment_is_file_card() -> None:
@@ -423,6 +436,7 @@ def _build_ticket_report(
     *,
     public_number: str = "HD-ARCH9999",
     subject: str = "Базовая заявка",
+    assigned_operator_name: str = "Иван Петров",
     messages: tuple[TicketReportMessage, ...] = (),
     events: tuple[TicketReportEvent, ...] = (),
     internal_notes: tuple[TicketReportInternalNote, ...] = (),
@@ -435,7 +449,7 @@ def _build_ticket_report(
         priority="high",
         subject=subject,
         assigned_operator_id=7,
-        assigned_operator_name="Иван Петров",
+        assigned_operator_name=assigned_operator_name,
         assigned_operator_telegram_user_id=1001,
         assigned_operator_username="ivan_petrov",
         created_at=datetime(2026, 4, 7, 12, 0, tzinfo=UTC),

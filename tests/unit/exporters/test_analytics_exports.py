@@ -167,12 +167,12 @@ def test_render_analytics_snapshot_html_empty_data_is_graceful() -> None:
 def test_render_analytics_snapshot_html_escapes_dynamic_labels() -> None:
     snapshot = _build_analytics_snapshot(
         tickets_per_operator=(
-            OperatorTicketLoad(operator_id=7, display_name="<Operator>", ticket_count=3),
+            OperatorTicketLoad(operator_id=7, display_name="<Operator & Lead>", ticket_count=3),
         ),
         top_categories=(
             AnalyticsCategorySnapshot(
                 category_id=2,
-                category_title="<Billing>",
+                category_title="<Billing & refunds>",
                 created_ticket_count=6,
                 open_ticket_count=2,
                 closed_ticket_count=4,
@@ -184,7 +184,7 @@ def test_render_analytics_snapshot_html_escapes_dynamic_labels() -> None:
         category_snapshots=(
             AnalyticsCategorySnapshot(
                 category_id=2,
-                category_title="<Billing>",
+                category_title="<Billing & refunds>",
                 created_ticket_count=6,
                 open_ticket_count=2,
                 closed_ticket_count=4,
@@ -197,10 +197,10 @@ def test_render_analytics_snapshot_html_escapes_dynamic_labels() -> None:
 
     html = render_analytics_snapshot_html(snapshot, AnalyticsSection.OVERVIEW).decode("utf-8")
 
-    assert "&lt;Operator&gt;" in html
-    assert "&lt;Billing&gt;" in html
-    assert "<Operator>" not in html
-    assert "<Billing>" not in html
+    assert "&lt;Operator &amp; Lead&gt;" in html
+    assert "&lt;Billing &amp; refunds&gt;" in html
+    assert "<Operator & Lead>" not in html
+    assert "<Billing & refunds>" not in html
 
 
 def _build_analytics_snapshot(

@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 
+from redis.exceptions import LockError
+
 from application.contracts.runtime import TicketStreamMessage
 from infrastructure.redis.keys import SLA_DEADLINES_KEY
 from infrastructure.redis.locks import RedisTicketLock
@@ -68,30 +70,52 @@ async def test_sla_timeout_processor_claims_due_ticket_ids_before_counting() -> 
 
 
 async def test_ticket_lock_uses_ttl_and_owner_token_for_safe_release() -> None:
+    redis_lock = Mock()
+    redis_lock.acquire = AsyncMock(return_value=True)
+    redis_lock.release = AsyncMock()
     redis = Mock()
-    redis.set = AsyncMock(return_value=True)
-    redis.eval = AsyncMock(return_value=1)
+    redis.lock = Mock(return_value=redis_lock)
     lock = RedisTicketLock(redis, key="ticket-lock:1")
 
     acquired = await lock.acquire(ttl_seconds=45)
     await lock.release()
 
     assert acquired is True
-    redis.set.assert_awaited_once_with("ticket-lock:1", lock.token, ex=45, nx=True)
-    redis.eval.assert_awaited_once()
-    script, key_count, key, token = redis.eval.await_args.args
-    assert 'redis.call("get", KEYS[1]) == ARGV[1]' in script
-    assert (key_count, key, token) == (1, "ticket-lock:1", lock.token)
+    redis.lock.assert_called_once_with(
+        "ticket-lock:1",
+        timeout=45,
+        blocking=False,
+        thread_local=False,
+    )
+    redis_lock.acquire.assert_awaited_once_with(blocking=False)
+    redis_lock.release.assert_awaited_once()
 
 
 async def test_ticket_lock_does_not_release_when_acquire_failed() -> None:
+    redis_lock = Mock()
+    redis_lock.acquire = AsyncMock(return_value=False)
+    redis_lock.release = AsyncMock()
     redis = Mock()
-    redis.set = AsyncMock(return_value=False)
-    redis.eval = AsyncMock()
+    redis.lock = Mock(return_value=redis_lock)
     lock = RedisTicketLock(redis, key="ticket-lock:1")
 
     acquired = await lock.acquire(ttl_seconds=10)
     await lock.release()
 
     assert acquired is False
-    redis.eval.assert_not_awaited()
+    redis_lock.release.assert_not_awaited()
+
+
+async def test_ticket_lock_ignores_release_after_ttl_expiry() -> None:
+    redis_lock = Mock()
+    redis_lock.acquire = AsyncMock(return_value=True)
+    redis_lock.release = AsyncMock(side_effect=LockError("no longer owned"))
+    redis = Mock()
+    redis.lock = Mock(return_value=redis_lock)
+    lock = RedisTicketLock(redis, key="ticket-lock:1")
+
+    acquired = await lock.acquire(ttl_seconds=10)
+    await lock.release()
+
+    assert acquired is True
+    redis_lock.release.assert_awaited_once()
