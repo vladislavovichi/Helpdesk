@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -19,6 +17,9 @@ from domain.contracts.repositories import (
 from domain.entities.ticket import Ticket
 from domain.enums.tickets import TicketEventType, TicketStatus
 
+MINIMUM_STALE_ASSIGNMENT_WINDOW_MINUTES = 15
+STALE_ASSIGNMENT_RESOLUTION_FRACTION = 4
+
 
 def build_sla_approaching_window(*, total_minutes: int) -> timedelta:
     approaching_minutes = max(5, min(30, (total_minutes + 4) // 5))
@@ -26,13 +27,20 @@ def build_sla_approaching_window(*, total_minutes: int) -> timedelta:
 
 
 def build_stale_assignment_window(policy: SLAPolicyRecord) -> timedelta:
-    stale_minutes = min(
-        policy.resolution_minutes,
-        max(
-            policy.first_response_minutes,
-            max(15, policy.resolution_minutes // 4),
-        ),
+    minimum_window_minutes = MINIMUM_STALE_ASSIGNMENT_WINDOW_MINUTES
+    resolution_based_window_minutes = (
+        policy.resolution_minutes // STALE_ASSIGNMENT_RESOLUTION_FRACTION
     )
+    first_response_floor_minutes = policy.first_response_minutes
+
+    # The stale-assignment window never drops below the minimum, should be at
+    # least as long as the first-response SLA, and cannot exceed resolution SLA.
+    uncapped_stale_minutes = max(
+        first_response_floor_minutes,
+        minimum_window_minutes,
+        resolution_based_window_minutes,
+    )
+    stale_minutes = min(policy.resolution_minutes, uncapped_stale_minutes)
     return timedelta(minutes=stale_minutes)
 
 

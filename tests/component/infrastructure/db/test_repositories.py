@@ -127,6 +127,23 @@ async def test_enqueue_updates_ticket_status() -> None:
     assert session.flush_count == 1
 
 
+async def test_update_persists_mutated_ticket() -> None:
+    ticket = Ticket(
+        client_chat_id=100,
+        subject="Need access",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+    )
+    session = build_session()
+    repository = SqlAlchemyTicketRepository(session)
+
+    result = await repository.update(ticket)
+
+    assert result is ticket
+    assert session.added == [ticket]
+    assert session.flush_count == 1
+
+
 async def test_assign_queued_to_operator_only_updates_queued_tickets() -> None:
     ticket = Ticket(
         client_chat_id=100,
@@ -202,6 +219,27 @@ async def test_close_sets_closed_status_and_timestamp() -> None:
     assert ticket.status == TicketStatus.CLOSED
     assert ticket.closed_at is not None
     assert session.flush_count == 1
+
+
+async def test_close_does_not_overwrite_existing_closed_timestamp() -> None:
+    closed_at = datetime(2026, 4, 7, 12, 0, tzinfo=UTC)
+    ticket = Ticket(
+        client_chat_id=100,
+        subject="Need access",
+        priority=TicketPriority.NORMAL,
+        public_id=uuid4(),
+        status=TicketStatus.CLOSED,
+        closed_at=closed_at,
+    )
+    session = build_session(result=build_result(scalar=ticket))
+    repository = SqlAlchemyTicketRepository(session)
+
+    result = await repository.close(ticket_public_id=ticket.public_id)
+
+    assert result is ticket
+    assert ticket.status == TicketStatus.CLOSED
+    assert ticket.closed_at == closed_at
+    assert session.flush_count == 0
 
 
 async def test_create_ticket_feedback_adds_feedback_to_session() -> None:

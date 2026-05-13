@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from application.contracts.ai import AIServiceClientFactory
+from typing import Protocol
+from uuid import UUID
+
 from application.contracts.tickets import ClientTicketMessageCommand
 from application.errors import InternalApplicationError
 from application.use_cases.tickets.common import (
@@ -8,33 +10,37 @@ from application.use_cases.tickets.common import (
     build_ticket_subject,
     build_ticket_summary,
 )
-from application.use_cases.tickets.messaging import AddMessageToTicketUseCase
 from application.use_cases.tickets.summaries import TicketSummary
 from domain.contracts.repositories import (
     TicketEventRepository,
-    TicketMessageRepository,
     TicketRepository,
 )
+from domain.entities.ticket import TicketAttachmentDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus
+
+
+class AddMessageToTicketDependency(Protocol):
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        telegram_message_id: int,
+        sender_type: TicketMessageSenderType,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
+    ) -> TicketSummary | None: ...
 
 
 class CreateTicketFromClientMessageUseCase:
     def __init__(
         self,
         ticket_repository: TicketRepository,
-        ticket_message_repository: TicketMessageRepository,
         ticket_event_repository: TicketEventRepository,
-        ai_client_factory: AIServiceClientFactory | None = None,
+        add_message_to_ticket: AddMessageToTicketDependency,
     ) -> None:
         self.ticket_repository = ticket_repository
-        self.ticket_message_repository = ticket_message_repository
         self.ticket_event_repository = ticket_event_repository
-        self._add_message_to_ticket = AddMessageToTicketUseCase(
-            ticket_repository=ticket_repository,
-            ticket_message_repository=ticket_message_repository,
-            ticket_event_repository=ticket_event_repository,
-            ai_client_factory=ai_client_factory,
-        )
+        self._add_message_to_ticket = add_message_to_ticket
 
     async def __call__(
         self,

@@ -34,6 +34,11 @@ class SqlAlchemyTicketWriteRepository:
         await self.session.flush()
         return ticket
 
+    async def update(self, ticket: TicketEntity) -> TicketEntity:
+        self.session.add(ticket)
+        await self.session.flush()
+        return ticket
+
     async def enqueue(self, *, ticket_public_id: UUID) -> TicketEntity | None:
         ticket = await self._get_ticket_for_update(ticket_public_id)
         if ticket is None:
@@ -86,6 +91,8 @@ class SqlAlchemyTicketWriteRepository:
         ticket = await self._get_ticket_for_update(ticket_public_id)
         if ticket is None:
             return None
+        if ticket.status == TicketStatus.CLOSED:
+            return ticket
 
         ticket.status = TicketStatus.CLOSED
         ticket.closed_at = utcnow()

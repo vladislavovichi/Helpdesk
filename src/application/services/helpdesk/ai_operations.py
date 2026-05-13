@@ -40,6 +40,8 @@ class HelpdeskAIOperations:
         *,
         actor: RequestActor | None = None,
     ) -> TicketCategoryPrediction:
+        # Category prediction is client-intake assistance, so actor is accepted
+        # for transport symmetry but intentionally does not gate access.
         del actor
         return await self._components.ai.predict_ticket_category(command)
 

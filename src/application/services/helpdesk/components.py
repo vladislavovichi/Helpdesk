@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from application.contracts.ai import AIServiceClientFactory
@@ -287,6 +285,9 @@ def build_helpdesk_component_dependencies(
     include_internal_notes_in_ticket_reports: bool = True,
     ai_settings_provider: AISettingsProvider | None = None,
 ) -> HelpdeskComponentDependencies:
+    # TODO: The service still fans repository fields out into these grouped dependency
+    # objects. A future pass should introduce a repository bundle at the service boundary
+    # before removing more forwarding here.
     return HelpdeskComponentDependencies(
         tickets=HelpdeskTicketDependencies(
             ticket_repository=ticket_repository,
@@ -330,6 +331,12 @@ def _build_helpdesk_components(
     feedback_deps: HelpdeskFeedbackAuditStatsDependencies,
     stats_service: HelpdeskStatsService,
 ) -> HelpdeskComponents:
+    add_message_to_ticket = AddMessageToTicketUseCase(
+        ticket_repository=ticket_deps.ticket_repository,
+        ticket_message_repository=ticket_deps.ticket_message_repository,
+        ticket_event_repository=ticket_deps.ticket_event_repository,
+        ai_client_factory=ai_deps.ai_client_factory,
+    )
     return HelpdeskComponents(
         permissions=HelpdeskPermissionGuard(
             operator_repository=operator_deps.operator_repository,
@@ -338,9 +345,8 @@ def _build_helpdesk_components(
         tickets=HelpdeskTicketUseCases(
             create_from_client_message=CreateTicketFromClientMessageUseCase(
                 ticket_repository=ticket_deps.ticket_repository,
-                ticket_message_repository=ticket_deps.ticket_message_repository,
                 ticket_event_repository=ticket_deps.ticket_event_repository,
-                ai_client_factory=ai_deps.ai_client_factory,
+                add_message_to_ticket=add_message_to_ticket,
             ),
             get_active_client_ticket=GetActiveClientTicketUseCase(
                 ticket_repository=ticket_deps.ticket_repository
@@ -357,12 +363,7 @@ def _build_helpdesk_components(
                 ticket_repository=ticket_deps.ticket_repository,
                 ticket_feedback_repository=ticket_deps.ticket_feedback_repository,
             ),
-            add_message=AddMessageToTicketUseCase(
-                ticket_repository=ticket_deps.ticket_repository,
-                ticket_message_repository=ticket_deps.ticket_message_repository,
-                ticket_event_repository=ticket_deps.ticket_event_repository,
-                ai_client_factory=ai_deps.ai_client_factory,
-            ),
+            add_message=add_message_to_ticket,
             add_internal_note=AddInternalNoteToTicketUseCase(
                 ticket_repository=ticket_deps.ticket_repository,
                 ticket_internal_note_repository=ticket_deps.ticket_internal_note_repository,
@@ -399,9 +400,8 @@ def _build_helpdesk_components(
             ),
             reply_as_operator=ReplyToTicketAsOperatorUseCase(
                 ticket_repository=ticket_deps.ticket_repository,
-                ticket_message_repository=ticket_deps.ticket_message_repository,
-                ticket_event_repository=ticket_deps.ticket_event_repository,
                 operator_repository=operator_deps.operator_repository,
+                add_message_to_ticket=add_message_to_ticket,
             ),
             close_ticket=CloseTicketUseCase(
                 ticket_repository=ticket_deps.ticket_repository,

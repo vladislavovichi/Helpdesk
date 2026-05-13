@@ -56,6 +56,7 @@ class HelpdeskTicketOperations(HelpdeskSLASync):
         self,
         command: ClientTicketMessageCommand,
     ) -> TicketSummary:
+        """Public API alias kept for explicit client-intake call sites."""
         return await self._create_ticket_from_client_command(command)
 
     async def _create_ticket_from_client_command(
@@ -183,6 +184,10 @@ class HelpdeskTicketOperations(HelpdeskSLASync):
         ticket_public_id: UUID,
         actor: RequestActor | None = None,
     ) -> TicketSummary | None:
+        await self._ensure_permission(
+            permission=Permission.ACCESS_OPERATOR,
+            telegram_user_id=actor_telegram_user_id(actor),
+        )
         result = await self._components.tickets.close_ticket(ticket_public_id=ticket_public_id)
         if result is not None:
             await self._sync_sla_deadline(ticket_public_id=result.public_id)
@@ -391,6 +396,10 @@ class HelpdeskTicketOperations(HelpdeskSLASync):
         ticket_public_id: UUID,
         actor: RequestActor | None = None,
     ) -> TicketSummary | None:
+        await self._ensure_permission(
+            permission=Permission.ACCESS_OPERATOR,
+            telegram_user_id=actor_telegram_user_id(actor),
+        )
         result = await self._components.tickets.escalate_ticket(ticket_public_id=ticket_public_id)
         if result is not None:
             await self._sync_sla_deadline(ticket_public_id=result.public_id)

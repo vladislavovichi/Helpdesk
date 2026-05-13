@@ -8,13 +8,19 @@ from application.use_cases.tickets.sla_evaluation import (
     evaluate_ticket_sla,
     persist_sla_breach_events,
 )
-from application.use_cases.tickets.summaries import SLADeadlineStatus, TicketSummary
+from application.use_cases.tickets.summaries import (
+    SLADeadlineStatus,
+    TicketSLAEvaluationSummary,
+    TicketSummary,
+)
 from domain.contracts.repositories import (
     OperatorRepository,
+    SLAPolicyRecord,
     SLAPolicyRepository,
     TicketEventRepository,
     TicketRepository,
 )
+from domain.entities.ticket import Ticket as TicketEntity
 from domain.enums.tickets import TicketEventType
 
 
@@ -34,24 +40,31 @@ class AutoEscalateTicketBySLAUseCase:
         *,
         ticket_public_id: UUID,
         now: datetime | None = None,
+        ticket: TicketEntity | None = None,
+        policy: SLAPolicyRecord | None = None,
+        evaluation: TicketSLAEvaluationSummary | None = None,
+        persist_breaches: bool = True,
     ) -> TicketSummary | None:
-        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        if ticket is None:
+            ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
         if ticket is None or ticket.id is None:
             return None
 
         checked_at = now or utcnow()
-        policy = await self.sla_policy_repository.get_for_priority(priority=ticket.priority)
-        evaluation = evaluate_ticket_sla(ticket=ticket, policy=policy, now=checked_at)
+        if evaluation is None:
+            policy = await self.sla_policy_repository.get_for_priority(priority=ticket.priority)
+            evaluation = evaluate_ticket_sla(ticket=ticket, policy=policy, now=checked_at)
         if not evaluation.should_auto_escalate:
             return None
 
-        await persist_sla_breach_events(
-            ticket=ticket,
-            evaluation=evaluation,
-            policy=policy,
-            checked_at=checked_at,
-            ticket_event_repository=self.ticket_event_repository,
-        )
+        if persist_breaches:
+            await persist_sla_breach_events(
+                ticket=ticket,
+                evaluation=evaluation,
+                policy=policy,
+                checked_at=checked_at,
+                ticket_event_repository=self.ticket_event_repository,
+            )
 
         previous_status = ticket.status
         escalated_ticket = await self.ticket_repository.escalate(ticket_public_id=ticket_public_id)
@@ -103,14 +116,19 @@ class AutoReassignTicketBySLAUseCase:
         display_name: str,
         username: str | None = None,
         now: datetime | None = None,
+        ticket: TicketEntity | None = None,
+        policy: SLAPolicyRecord | None = None,
+        evaluation: TicketSLAEvaluationSummary | None = None,
     ) -> TicketSummary | None:
-        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        if ticket is None:
+            ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
         if ticket is None or ticket.id is None:
             return None
 
         checked_at = now or utcnow()
-        policy = await self.sla_policy_repository.get_for_priority(priority=ticket.priority)
-        evaluation = evaluate_ticket_sla(ticket=ticket, policy=policy, now=checked_at)
+        if evaluation is None:
+            policy = await self.sla_policy_repository.get_for_priority(priority=ticket.priority)
+            evaluation = evaluate_ticket_sla(ticket=ticket, policy=policy, now=checked_at)
         if not evaluation.should_auto_reassign:
             return None
 

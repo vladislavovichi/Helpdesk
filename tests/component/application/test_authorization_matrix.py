@@ -6,14 +6,17 @@ from uuid import uuid4
 import pytest
 
 from application.contracts.actors import OperatorIdentity, RequestActor
+from application.contracts.ai import PredictTicketCategoryCommand
 from application.contracts.tickets import (
     AssignNextQueuedTicketCommand,
     OperatorTicketReplyCommand,
     TicketAssignmentCommand,
 )
+from application.errors import ForbiddenError
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.service import HelpdeskService
 from application.use_cases.tickets.exports import TicketReportFormat
+from domain.enums.roles import UserRole
 from domain.enums.tickets import TicketStatus
 from tests.component.application.test_helpdesk_service import (
     StubOperatorManagementRepository,
@@ -49,6 +52,27 @@ async def test_user_cannot_view_operator_queue(queued_ticket_service: ServiceFix
         await service.list_queued_tickets(actor=USER_ACTOR)
 
 
+async def test_get_access_context_resolves_roles_from_permission_component(
+    queued_ticket_service: ServiceFixture,
+) -> None:
+    service, _ticket = queued_ticket_service
+
+    user_context = await service.get_access_context(actor=USER_ACTOR)
+    operator_context = await service.get_access_context(actor=OPERATOR_ACTOR)
+    super_admin_context = await service.get_access_context(actor=RequestActor(telegram_user_id=42))
+
+    assert user_context.role == UserRole.USER
+    assert operator_context.role == UserRole.OPERATOR
+    assert super_admin_context.role == UserRole.SUPER_ADMIN
+
+
+async def test_get_access_context_requires_actor(queued_ticket_service: ServiceFixture) -> None:
+    service, _ticket = queued_ticket_service
+
+    with pytest.raises(ForbiddenError):
+        await service.get_access_context(actor=None)
+
+
 async def test_user_cannot_reply_as_operator(queued_ticket_service: ServiceFixture) -> None:
     service, ticket = queued_ticket_service
 
@@ -69,6 +93,62 @@ async def test_user_cannot_close_as_operator(queued_ticket_service: ServiceFixtu
 
     with pytest.raises(AuthorizationError):
         await service.close_ticket_as_operator(ticket_public_id=ticket.public_id, actor=USER_ACTOR)
+
+
+async def test_operator_can_close_ticket(queued_ticket_service: ServiceFixture) -> None:
+    service, ticket = queued_ticket_service
+
+    result = await service.close_ticket_as_operator(
+        ticket_public_id=ticket.public_id,
+        actor=OPERATOR_ACTOR,
+    )
+
+    assert result is not None
+    assert result.status == TicketStatus.CLOSED
+
+
+async def test_user_cannot_close_ticket_directly(queued_ticket_service: ServiceFixture) -> None:
+    service, ticket = queued_ticket_service
+
+    with pytest.raises(AuthorizationError):
+        await service.close_ticket(ticket_public_id=ticket.public_id, actor=USER_ACTOR)
+
+
+async def test_close_ticket_without_actor_cannot_bypass_authorization(
+    queued_ticket_service: ServiceFixture,
+) -> None:
+    service, ticket = queued_ticket_service
+
+    with pytest.raises(AuthorizationError):
+        await service.close_ticket(ticket_public_id=ticket.public_id)
+
+
+async def test_operator_can_escalate_ticket(queued_ticket_service: ServiceFixture) -> None:
+    service, ticket = queued_ticket_service
+
+    result = await service.escalate_ticket_as_operator(
+        ticket_public_id=ticket.public_id,
+        actor=OPERATOR_ACTOR,
+    )
+
+    assert result is not None
+    assert result.status == TicketStatus.ESCALATED
+
+
+async def test_user_cannot_escalate_ticket_directly(queued_ticket_service: ServiceFixture) -> None:
+    service, ticket = queued_ticket_service
+
+    with pytest.raises(AuthorizationError):
+        await service.escalate_ticket(ticket_public_id=ticket.public_id, actor=USER_ACTOR)
+
+
+async def test_escalate_ticket_without_actor_cannot_bypass_authorization(
+    queued_ticket_service: ServiceFixture,
+) -> None:
+    service, ticket = queued_ticket_service
+
+    with pytest.raises(AuthorizationError):
+        await service.escalate_ticket(ticket_public_id=ticket.public_id)
 
 
 async def test_user_cannot_assign_or_reassign_tickets(
@@ -116,6 +196,19 @@ async def test_user_cannot_use_ai_assist(queued_ticket_service: ServiceFixture) 
             ticket_public_id=ticket.public_id,
             actor=USER_ACTOR,
         )
+
+
+async def test_user_can_predict_ticket_category_for_intake(
+    queued_ticket_service: ServiceFixture,
+) -> None:
+    service, _ticket = queued_ticket_service
+
+    result = await service.predict_ticket_category(
+        PredictTicketCategoryCommand(text="Не могу войти в кабинет"),
+        actor=USER_ACTOR,
+    )
+
+    assert result.available is False
 
 
 async def test_operator_cannot_manage_operators_or_invites(

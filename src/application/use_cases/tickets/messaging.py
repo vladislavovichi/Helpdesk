@@ -13,7 +13,7 @@ from application.contracts.ai import (
     AnalyzeTicketSentimentCommand,
 )
 from application.contracts.tickets import AddInternalNoteCommand, OperatorTicketReplyCommand
-from application.errors import ValidationAppError
+from application.errors import InternalApplicationError, ValidationAppError
 from application.use_cases.tickets.common import (
     build_event_type_for_message,
     build_message_payload,
@@ -82,10 +82,15 @@ class AddMessageToTicketUseCase:
         attachment: TicketAttachmentDetails | None = None,
         sender_operator_id: int | None = None,
         extra_event_payload: Mapping[str, object] | None = None,
+        ticket: TicketEntity | None = None,
     ) -> TicketSummary | None:
-        ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
-        if ticket is None or ticket.id is None:
+        if ticket is None:
+            ticket = await self.ticket_repository.get_by_public_id(ticket_public_id)
+        if ticket is None:
             return None
+        if ticket.public_id != ticket_public_id:
+            raise InternalApplicationError("Передана заявка с другим публичным идентификатором.")
+        ticket_id = self._require_ticket_id(ticket)
 
         self._validate_message_transition(ticket=ticket, text=text, attachment=attachment)
         current_time = utcnow()
@@ -99,7 +104,7 @@ class AddMessageToTicketUseCase:
         if sender_type == TicketMessageSenderType.CLIENT:
             recent_messages = tuple(
                 await self.ticket_message_repository.list_recent_for_ticket(
-                    ticket_id=ticket.id,
+                    ticket_id=ticket_id,
                     limit=6,
                 )
             )
@@ -112,6 +117,7 @@ class AddMessageToTicketUseCase:
                 current_time=current_time,
             )
             if duplicate_result is not None:
+                await self.ticket_repository.update(ticket)
                 return duplicate_result
 
             await self._apply_client_sentiment_side_effects(
@@ -123,6 +129,7 @@ class AddMessageToTicketUseCase:
                 current_time=current_time,
             )
 
+        await self.ticket_repository.update(ticket)
         event_type = await self._persist_message_and_event(
             ticket=ticket,
             telegram_message_id=telegram_message_id,
@@ -139,6 +146,16 @@ class AddMessageToTicketUseCase:
             effects=effects,
         )
         return build_ticket_summary(ticket, event_type=event_type)
+
+    def _require_ticket_id(self, ticket: TicketEntity) -> int:
+        if ticket.id is None:
+            raise InternalApplicationError("Не удалось определить внутренний идентификатор заявки.")
+        return ticket.id
+
+    def _require_extra_payload(self, effects: _MessageEffects) -> dict[str, object]:
+        if effects.extra_payload is None:
+            raise InternalApplicationError("Не удалось подготовить метаданные события заявки.")
+        return effects.extra_payload
 
     def _validate_message_transition(
         self,
@@ -174,7 +191,7 @@ class AddMessageToTicketUseCase:
         recent_messages: tuple[TicketMessageDetails, ...],
         current_time: datetime,
     ) -> TicketSummary | None:
-        assert ticket.id is not None
+        ticket_id = self._require_ticket_id(ticket)
         duplicate_decision = detect_duplicate_client_message(
             recent_messages=recent_messages,
             incoming_text=text,
@@ -186,12 +203,12 @@ class AddMessageToTicketUseCase:
 
         new_duplicate_count = duplicate_decision.canonical_message.duplicate_count + 1
         await self.ticket_message_repository.mark_duplicate(
-            ticket_id=ticket.id,
+            ticket_id=ticket_id,
             telegram_message_id=duplicate_decision.canonical_message.telegram_message_id,
             occurred_at=current_time,
         )
         await self.ticket_event_repository.add(
-            ticket_id=ticket.id,
+            ticket_id=ticket_id,
             event_type=TicketEventType.CLIENT_MESSAGE_DUPLICATE_COLLAPSED,
             payload_json={
                 "sender_type": TicketMessageSenderType.CLIENT.value,
@@ -229,15 +246,15 @@ class AddMessageToTicketUseCase:
         effects.sentiment = sentiment_result.sentiment
         effects.sentiment_confidence = sentiment_result.confidence
         effects.sentiment_reason = sentiment_result.reason
-        assert effects.extra_payload is not None
-        effects.extra_payload.update(
+        extra_payload = self._require_extra_payload(effects)
+        extra_payload.update(
             {
                 "sentiment": effects.sentiment.value,
                 "sentiment_confidence": effects.sentiment_confidence.value,
             }
         )
         if effects.sentiment_reason is not None:
-            effects.extra_payload["sentiment_reason"] = effects.sentiment_reason
+            extra_payload["sentiment_reason"] = effects.sentiment_reason
         self._apply_ticket_sentiment(
             ticket=ticket,
             sentiment=effects.sentiment,
@@ -266,9 +283,9 @@ class AddMessageToTicketUseCase:
             return
         previous_priority = ticket.priority
         ticket.priority = bumped_priority
-        assert effects.extra_payload is not None
-        effects.extra_payload["priority_bumped_from"] = previous_priority.value
-        effects.extra_payload["priority_bumped_to"] = bumped_priority.value
+        extra_payload = self._require_extra_payload(effects)
+        extra_payload["priority_bumped_from"] = previous_priority.value
+        extra_payload["priority_bumped_to"] = bumped_priority.value
 
     async def _persist_message_and_event(
         self,
@@ -281,9 +298,9 @@ class AddMessageToTicketUseCase:
         sender_operator_id: int | None,
         effects: _MessageEffects,
     ) -> TicketEventType | None:
-        assert ticket.id is not None
+        ticket_id = self._require_ticket_id(ticket)
         await self.ticket_message_repository.add(
-            ticket_id=ticket.id,
+            ticket_id=ticket_id,
             telegram_message_id=telegram_message_id,
             sender_type=sender_type,
             text=text,
@@ -296,7 +313,7 @@ class AddMessageToTicketUseCase:
         event_type = build_event_type_for_message(sender_type)
         if event_type is not None:
             await self.ticket_event_repository.add(
-                ticket_id=ticket.id,
+                ticket_id=ticket_id,
                 event_type=event_type,
                 payload_json=build_message_payload(
                     telegram_message_id=telegram_message_id,
@@ -316,7 +333,7 @@ class AddMessageToTicketUseCase:
         sender_type: TicketMessageSenderType,
         effects: _MessageEffects,
     ) -> None:
-        assert ticket.id is not None
+        ticket_id = self._require_ticket_id(ticket)
         extra_payload = effects.extra_payload or {}
         message_sentiment = effects.sentiment
         message_sentiment_confidence = effects.sentiment_confidence
@@ -338,7 +355,7 @@ class AddMessageToTicketUseCase:
                 payload["priority_bumped_to"] = extra_payload["priority_bumped_to"]
                 payload["priority_bumped_from"] = extra_payload["priority_bumped_from"]
             await self.ticket_event_repository.add(
-                ticket_id=ticket.id,
+                ticket_id=ticket_id,
                 event_type=TicketEventType.CLIENT_SENTIMENT_FLAGGED,
                 payload_json=payload,
             )
@@ -400,30 +417,22 @@ class ReplyToTicketAsOperatorUseCase:
     def __init__(
         self,
         ticket_repository: TicketRepository,
-        ticket_message_repository: TicketMessageRepository,
-        ticket_event_repository: TicketEventRepository,
         operator_repository: OperatorRepository,
+        add_message_to_ticket: AddMessageToTicketUseCase,
     ) -> None:
         self.ticket_repository = ticket_repository
         self.operator_repository = operator_repository
-        self._add_message_to_ticket = AddMessageToTicketUseCase(
-            ticket_repository=ticket_repository,
-            ticket_message_repository=ticket_message_repository,
-            ticket_event_repository=ticket_event_repository,
-            ai_client_factory=None,
-        )
+        self._add_message_to_ticket = add_message_to_ticket
 
     async def __call__(
         self,
         command: OperatorTicketReplyCommand,
     ) -> OperatorReplyResult | None:
-        ticket_details = await self.ticket_repository.get_details_by_public_id(
-            command.ticket_public_id
-        )
-        if ticket_details is None:
+        ticket = await self.ticket_repository.get_by_public_id(command.ticket_public_id)
+        if ticket is None or ticket.id is None:
             return None
 
-        ensure_operator_replyable(ticket_details.status)
+        ensure_operator_replyable(ticket.status)
 
         operator_id = await self.operator_repository.get_or_create(
             telegram_user_id=command.operator.telegram_user_id,
@@ -431,25 +440,26 @@ class ReplyToTicketAsOperatorUseCase:
             username=command.operator.username,
         )
         if (
-            ticket_details.assigned_operator_id is not None
-            and ticket_details.assigned_operator_id != operator_id
+            ticket.assigned_operator_id is not None
+            and ticket.assigned_operator_id != operator_id
         ):
             raise InvalidTicketTransitionError("С этой заявкой уже работает другой оператор.")
 
-        ticket = await self._add_message_to_ticket(
+        ticket_summary = await self._add_message_to_ticket(
             ticket_public_id=command.ticket_public_id,
             telegram_message_id=command.telegram_message_id,
             sender_type=TicketMessageSenderType.OPERATOR,
             text=command.text,
             attachment=command.attachment,
             sender_operator_id=operator_id,
+            ticket=ticket,
         )
-        if ticket is None:
+        if ticket_summary is None:
             return None
 
         return OperatorReplyResult(
-            ticket=ticket,
-            client_chat_id=ticket_details.client_chat_id,
+            ticket=ticket_summary,
+            client_chat_id=ticket.client_chat_id,
         )
 
 

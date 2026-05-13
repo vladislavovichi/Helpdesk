@@ -280,6 +280,10 @@ class InMemoryTicketRepository:
     async def get_by_public_id(self, public_id: UUID) -> InMemoryTicketRecord | None:
         return self.tickets.get(public_id)
 
+    async def update(self, ticket: InMemoryTicketRecord) -> InMemoryTicketRecord:
+        self.tickets[ticket.public_id] = ticket
+        return ticket
+
     async def get_details_by_public_id(self, public_id: UUID) -> TicketDetails | None:
         ticket = self.tickets.get(public_id)
         if ticket is None:
@@ -414,6 +418,8 @@ class InMemoryTicketRepository:
         ticket = self.tickets.get(ticket_public_id)
         if ticket is None:
             return None
+        if ticket.status == TicketStatus.CLOSED:
+            return ticket
         now = datetime.now(UTC)
         ticket.status = TicketStatus.CLOSED
         ticket.updated_at = now

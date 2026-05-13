@@ -46,6 +46,9 @@ class TicketRepository(Protocol):
     async def get_active_by_client_chat_id(self, client_chat_id: int) -> Ticket | None:
         """Return the most recent open ticket for a client chat, if any."""
 
+    async def update(self, ticket: Ticket) -> Ticket:
+        """Persist mutations made to an existing ticket entity."""
+
     async def get_next_queued_ticket(self, *, prioritize_priority: bool = False) -> Ticket | None:
         """Return the next queued ticket according to the queue ordering."""
 

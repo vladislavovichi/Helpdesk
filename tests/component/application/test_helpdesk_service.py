@@ -17,10 +17,12 @@ from application.contracts.tickets import (
     OperatorTicketReplyCommand,
     TicketAssignmentCommand,
 )
+from application.errors import InternalApplicationError
 from application.services.authorization import AuthorizationError
 from application.services.helpdesk.components import HelpdeskExportRenderers
 from application.services.helpdesk.service import HelpdeskService
 from application.services.stats import AnalyticsWindow
+from application.use_cases.tickets.creation import CreateTicketFromClientMessageUseCase
 from application.use_cases.tickets.exports import TicketReportFormat
 from application.use_cases.tickets.operator_invites import OPERATOR_INVITE_PREFIX
 from application.use_cases.tickets.summaries import (
@@ -28,8 +30,10 @@ from application.use_cases.tickets.summaries import (
     MacroManagementError,
     OperatorManagementError,
     TagSummary,
+    TicketSummary,
 )
 from domain.entities.ticket import (
+    Ticket,
     TicketAttachmentDetails,
     TicketDetails,
     TicketHistoryEntry,
@@ -81,8 +85,11 @@ class StubTicketRepository:
     def __post_init__(self) -> None:
         self.create_calls: list[dict[str, object]] = []
         self.active_lookup_calls: list[int] = []
+        self.public_lookup_calls: list[UUID] = []
+        self.details_lookup_calls: list[UUID] = []
         self.next_queued_calls: list[bool] = []
         self.list_queued_calls: list[dict[str, object]] = []
+        self.update_calls: list[Ticket] = []
         self.enqueue_calls: list[UUID] = []
         self.assign_queued_calls: list[dict[str, object]] = []
         self.assign_calls: list[dict[str, object]] = []
@@ -155,6 +162,7 @@ class StubTicketRepository:
         return self.active_ticket
 
     async def get_details_by_public_id(self, public_id: UUID) -> TicketDetails | None:
+        self.details_lookup_calls.append(public_id)
         ticket = self.tickets.get(public_id)
         if ticket is None or ticket.id is None:
             return None
@@ -270,7 +278,12 @@ class StubTicketRepository:
         return tickets[offset : offset + limit]
 
     async def get_by_public_id(self, public_id: UUID) -> SimpleNamespace | None:
+        self.public_lookup_calls.append(public_id)
         return self.tickets.get(public_id)
+
+    async def update(self, ticket: Ticket) -> Ticket:
+        self.update_calls.append(ticket)
+        return ticket
 
     async def enqueue(self, *, ticket_public_id: UUID) -> SimpleNamespace | None:
         self.enqueue_calls.append(ticket_public_id)
@@ -328,6 +341,8 @@ class StubTicketRepository:
         self.close_calls.append(ticket_public_id)
         ticket = self.tickets.get(ticket_public_id)
         if ticket is not None:
+            if ticket.status == TicketStatus.CLOSED:
+                return ticket
             ticket.status = TicketStatus.CLOSED
             ticket.closed_at = object()
         return ticket
@@ -629,6 +644,32 @@ def build_operator_repository_mock(operator_ids: dict[int, int]) -> Mock:
 
     repository.get_or_create = AsyncMock(side_effect=get_or_create)
     return repository
+
+
+@dataclass
+class FakeAddMessageToTicketUseCase:
+    result: TicketSummary | None
+    calls: list[dict[str, object]] = field(default_factory=list)
+
+    async def __call__(
+        self,
+        *,
+        ticket_public_id: UUID,
+        telegram_message_id: int,
+        sender_type: TicketMessageSenderType,
+        text: str | None,
+        attachment: TicketAttachmentDetails | None = None,
+    ) -> TicketSummary | None:
+        self.calls.append(
+            {
+                "ticket_public_id": ticket_public_id,
+                "telegram_message_id": telegram_message_id,
+                "sender_type": sender_type,
+                "text": text,
+                "attachment": attachment,
+            }
+        )
+        return self.result
 
 
 @dataclass
@@ -1204,6 +1245,46 @@ async def test_create_ticket_from_first_client_message_creates_queues_and_logs_e
     ]
 
 
+async def test_create_ticket_from_client_message_uses_injected_add_message_use_case() -> None:
+    public_id = uuid4()
+    created_ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.NEW)
+    ticket_repository = StubTicketRepository(created_ticket=created_ticket)
+    event_repository = build_event_repository_mock()
+    fake_add_message = FakeAddMessageToTicketUseCase(
+        result=TicketSummary(
+            public_id=public_id,
+            public_number="HD-TEST",
+            status=TicketStatus.QUEUED,
+            event_type=TicketEventType.CLIENT_MESSAGE_ADDED,
+        )
+    )
+    use_case = CreateTicketFromClientMessageUseCase(
+        ticket_repository=ticket_repository,
+        ticket_event_repository=event_repository,
+        add_message_to_ticket=fake_add_message,
+    )
+
+    result = await use_case(
+        ClientTicketMessageCommand(
+            client_chat_id=555,
+            telegram_message_id=777,
+            text="Cannot log in",
+        )
+    )
+
+    assert result.public_id == public_id
+    assert result.created is True
+    assert fake_add_message.calls == [
+        {
+            "ticket_public_id": public_id,
+            "telegram_message_id": 777,
+            "sender_type": TicketMessageSenderType.CLIENT,
+            "text": "Cannot log in",
+            "attachment": None,
+        }
+    ]
+
+
 async def test_create_ticket_from_first_media_message_builds_attachment_aware_subject() -> None:
     public_id = uuid4()
     created_ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.NEW)
@@ -1390,10 +1471,11 @@ async def test_create_ticket_from_client_intake_persists_selected_category() -> 
 async def test_add_operator_message_logs_event_and_sets_first_response_timestamp() -> None:
     public_id = uuid4()
     ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.ASSIGNED)
+    ticket_repository = StubTicketRepository(created_ticket=ticket)
     message_repository = build_message_repository_mock()
     event_repository = build_event_repository_mock()
     service = build_service(
-        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_repository=ticket_repository,
         message_repository=message_repository,
         event_repository=event_repository,
     )
@@ -1409,8 +1491,38 @@ async def test_add_operator_message_logs_event_and_sets_first_response_timestamp
     assert result is not None
     assert result.event_type == TicketEventType.OPERATOR_MESSAGE_ADDED
     assert ticket.first_response_at is not None
+    assert ticket_repository.update_calls == [ticket]
     assert message_repository.added_messages[0]["sender_operator_id"] == 42
     assert event_repository.added_events[0]["event_type"] == TicketEventType.OPERATOR_MESSAGE_ADDED
+
+
+async def test_add_message_to_ticket_with_missing_internal_id_raises_explicit_error() -> None:
+    public_id = uuid4()
+    ticket = build_ticket(ticket_id=1, public_id=public_id, status=TicketStatus.ASSIGNED)
+    ticket.id = None
+    message_repository = build_message_repository_mock()
+    event_repository = build_event_repository_mock()
+    service = build_service(
+        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        message_repository=message_repository,
+        event_repository=event_repository,
+    )
+
+    try:
+        await service.add_message_to_ticket(
+            ticket_public_id=public_id,
+            telegram_message_id=999,
+            sender_type=TicketMessageSenderType.OPERATOR,
+            text="Please try again now.",
+            sender_operator_id=42,
+        )
+    except InternalApplicationError as exc:
+        assert exc.code == "internal_error"
+    else:
+        raise AssertionError("Expected InternalApplicationError for ticket without internal id")
+
+    assert message_repository.added_messages == []
+    assert event_repository.added_events == []
 
 
 async def test_assign_and_reassign_ticket_create_distinct_events() -> None:
@@ -1902,7 +2014,7 @@ async def test_service_supports_main_ticket_lifecycle_and_stats() -> None:
         ticket_repository=ticket_repository,
         message_repository=message_repository,
         event_repository=event_repository,
-        operator_repository=build_operator_repository_mock({1001: 7}),
+        operator_repository=StubOperatorManagementRepository(active_operator_ids={1001}),
     )
 
     created = await service.create_ticket_from_client_message(
@@ -1932,7 +2044,10 @@ async def test_service_supports_main_ticket_lifecycle_and_stats() -> None:
             text="Please try again now.",
         )
     )
-    closed = await service.close_ticket(ticket_public_id=public_id)
+    closed = await service.close_ticket_as_operator(
+        ticket_public_id=public_id,
+        actor=RequestActor(telegram_user_id=1001),
+    )
 
     ticket_repository.by_status = {TicketStatus.CLOSED: 1}
     stats = await service.get_operational_stats()
@@ -1998,10 +2113,14 @@ async def test_close_ticket_rejects_already_closed_ticket() -> None:
     service = build_service(
         ticket_repository=StubTicketRepository(created_ticket=ticket),
         event_repository=event_repository,
+        operator_repository=StubOperatorManagementRepository(active_operator_ids={1001}),
     )
 
     try:
-        await service.close_ticket(ticket_public_id=public_id)
+        await service.close_ticket_as_operator(
+            ticket_public_id=public_id,
+            actor=RequestActor(telegram_user_id=1001),
+        )
     except InvalidTicketTransitionError as exc:
         assert "закры" in str(exc).lower()
     else:
@@ -2291,8 +2410,9 @@ async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_c
     )
     message_repository = build_message_repository_mock()
     event_repository = build_event_repository_mock()
+    ticket_repository = StubTicketRepository(created_ticket=ticket)
     service = build_service(
-        ticket_repository=StubTicketRepository(created_ticket=ticket),
+        ticket_repository=ticket_repository,
         message_repository=message_repository,
         event_repository=event_repository,
         operator_repository=build_operator_repository_mock({1001: 7}),
@@ -2316,6 +2436,8 @@ async def test_reply_to_ticket_as_operator_persists_message_and_returns_client_c
     assert result.ticket.public_id == public_id
     assert message_repository.added_messages[0]["telegram_message_id"] == 4321
     assert event_repository.added_events[0]["event_type"] == TicketEventType.OPERATOR_MESSAGE_ADDED
+    assert ticket_repository.public_lookup_calls == [public_id]
+    assert ticket_repository.details_lookup_calls == []
 
 
 async def test_list_macros_returns_sorted_operator_templates() -> None:

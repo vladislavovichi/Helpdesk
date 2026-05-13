@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 
 from application.contracts.actors import OperatorIdentity, RequestActor, actor_telegram_user_id
-from application.errors import ForbiddenError, InternalApplicationError
+from application.errors import InternalApplicationError
 from application.services.audit import AuditTrail
 from application.services.authorization import Permission
 from application.services.helpdesk.components import HelpdeskComponents
@@ -27,16 +27,12 @@ from application.use_cases.tickets.summaries import (
     OperatorRoleMutationResult,
     OperatorSummary,
 )
-from domain.contracts.repositories import OperatorRepository
-from domain.enums.roles import UserRole
 
 
 class HelpdeskOperatorOperations:
     _components: HelpdeskComponents
     _audit: AuditTrail
     _require_permission_if_actor: Callable[..., Awaitable[None]]
-    operator_repository: OperatorRepository
-    super_admin_telegram_user_ids: frozenset[int]
 
     async def list_operators(
         self,
@@ -54,23 +50,7 @@ class HelpdeskOperatorOperations:
         *,
         actor: RequestActor | None,
     ) -> AccessContextSummary:
-        actor_id = actor_telegram_user_id(actor)
-        if actor_id is None:
-            raise ForbiddenError("Не удалось определить Telegram пользователя.")
-
-        if actor_id in self.super_admin_telegram_user_ids:
-            role = UserRole.SUPER_ADMIN
-        elif await self.operator_repository.exists_active_by_telegram_user_id(
-            telegram_user_id=actor_id
-        ):
-            role = UserRole.OPERATOR
-        else:
-            role = UserRole.USER
-
-        return AccessContextSummary(
-            telegram_user_id=actor_id,
-            role=role,
-        )
+        return await self._components.permissions.get_access_context(actor=actor)
 
     async def promote_operator(
         self,

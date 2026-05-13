@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, Mock
@@ -10,6 +8,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
 from redis.asyncio import Redis
 
+from bot import dispatcher as dispatcher_module
 from bot.dispatcher import (
     _configure_mini_app_menu_button,
     _menu_button_signature,
@@ -168,3 +167,53 @@ def test_menu_button_signature_extracts_web_app_url() -> None:
     )
 
     assert signature == ("web_app", "Панель", "https://mini-app.example.com")
+
+
+@pytest.mark.asyncio
+async def test_menu_button_reconciler_reuses_startup_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class StopReconciler(Exception):
+        pass
+
+    expected_bot = AsyncMock()
+    expected_logger = Mock()
+    expected_settings = cast(
+        Settings,
+        SimpleNamespace(
+            mini_app=SimpleNamespace(
+                public_url_is_valid=True,
+                telegram_launch_url="https://mini-app.example.com",
+                public_url_status_detail="ok",
+                public_url="https://mini-app.example.com",
+                public_url_hostname="mini-app.example.com",
+                public_url_looks_temporary=False,
+            )
+        ),
+    )
+
+    async def sleep(_: float) -> None:
+        return None
+
+    async def configure(
+        *,
+        bot: object,
+        settings: Settings,
+        logger: object,
+        source: str,
+    ) -> None:
+        assert bot is expected_bot
+        assert settings is expected_settings
+        assert logger is expected_logger
+        assert source == "runtime-reconcile"
+        raise StopReconciler
+
+    monkeypatch.setattr(dispatcher_module.asyncio, "sleep", sleep)
+    monkeypatch.setattr(dispatcher_module, "_configure_mini_app_menu_button", configure)
+
+    with pytest.raises(StopReconciler):
+        await dispatcher_module._run_mini_app_menu_button_reconciler(
+            bot=expected_bot,
+            settings=expected_settings,
+            logger=expected_logger,
+        )

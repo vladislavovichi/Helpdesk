@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 from typing import Any
@@ -15,7 +13,6 @@ from aiogram.types import (
     MenuButtonWebApp,
     WebAppInfo,
 )
-from pydantic import ValidationError
 
 from bot.middlewares.authorization import AuthorizationMiddleware
 from bot.middlewares.context import UpdateContextMiddleware
@@ -23,7 +20,7 @@ from bot.middlewares.workflow_contexts import WorkflowContextMiddleware
 from bot.routers import build_root_router
 from bot.texts.buttons import WORKSPACE_BUTTON_TEXT
 from bot.texts.common import SERVICE_UNAVAILABLE_TEXT
-from infrastructure.config.settings import BotConfig, Settings, get_settings
+from infrastructure.config.settings import BotConfig, Settings
 
 _MENU_BUTTON_RECONCILE_INTERVAL_SECONDS = 90.0
 _MENU_BUTTON_RECONCILE_TASK_KEY = "mini_app_menu_button_reconcile_task"
@@ -68,7 +65,12 @@ async def on_startup(dispatcher: Dispatcher, bot: Bot, settings: Settings, **_: 
         logger=logger,
         source="startup",
     )
-    _start_mini_app_menu_button_reconciler(dispatcher=dispatcher, bot=bot, logger=logger)
+    _start_mini_app_menu_button_reconciler(
+        dispatcher=dispatcher,
+        bot=bot,
+        settings=settings,
+        logger=logger,
+    )
     bot_info = await bot.get_me()
     logger.info(
         "Bot startup completed username=%s app=%s update_types=%s",
@@ -223,6 +225,7 @@ def _start_mini_app_menu_button_reconciler(
     *,
     dispatcher: Dispatcher,
     bot: Bot,
+    settings: Settings,
     logger: logging.Logger,
 ) -> None:
     existing_task = dispatcher.workflow_data.get(_MENU_BUTTON_RECONCILE_TASK_KEY)
@@ -230,7 +233,7 @@ def _start_mini_app_menu_button_reconciler(
         return
 
     task = asyncio.create_task(
-        _run_mini_app_menu_button_reconciler(bot=bot, logger=logger),
+        _run_mini_app_menu_button_reconciler(bot=bot, settings=settings, logger=logger),
         name="mini-app-menu-button-reconciler",
     )
     dispatcher.workflow_data[_MENU_BUTTON_RECONCILE_TASK_KEY] = task
@@ -259,19 +262,11 @@ async def _stop_mini_app_menu_button_reconciler(
 async def _run_mini_app_menu_button_reconciler(
     *,
     bot: Bot,
+    settings: Settings,
     logger: logging.Logger,
 ) -> None:
     while True:
         await asyncio.sleep(_MENU_BUTTON_RECONCILE_INTERVAL_SECONDS)
-        try:
-            settings = _reload_runtime_settings()
-        except ValidationError:
-            logger.warning(
-                "Mini App menu button reconciliation skipped because settings reload failed.",
-                exc_info=True,
-            )
-            continue
-
         try:
             await _configure_mini_app_menu_button(
                 bot=bot,
@@ -284,8 +279,3 @@ async def _run_mini_app_menu_button_reconciler(
                 "Mini App menu button reconciliation failed while applying Telegram state.",
                 exc_info=True,
             )
-
-
-def _reload_runtime_settings() -> Settings:
-    get_settings.cache_clear()
-    return get_settings()

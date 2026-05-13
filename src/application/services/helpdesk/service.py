@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
@@ -77,8 +75,8 @@ class HelpdeskService(
     _audit: AuditTrail = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._validate_configuration()
         self._components = self._build_components()
+        self._validate_configuration()
         self._audit = self._build_audit_trail()
 
     def _validate_configuration(self) -> None:
