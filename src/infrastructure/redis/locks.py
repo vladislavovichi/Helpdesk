@@ -1,4 +1,5 @@
-from __future__ import annotations
+from types import TracebackType
+from typing import Self
 
 from redis.asyncio import Redis
 from redis.asyncio.lock import Lock
@@ -38,6 +39,19 @@ class RedisTicketLock(TicketLock):
         finally:
             self._is_acquired = False
             self._lock = None
+
+    async def __aenter__(self) -> Self:
+        if await self.acquire():
+            return self
+        raise LockError("Unable to acquire ticket lock.")
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self.release()
 
 
 class RedisTicketLockManager(TicketLockManager):
