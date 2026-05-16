@@ -7,9 +7,9 @@ from application.contracts.tickets import ClientTicketMessageCommand
 from application.errors import InternalApplicationError
 from application.use_cases.tickets.common import (
     build_status_payload,
-    build_ticket_subject,
     build_ticket_summary,
 )
+from application.use_cases.tickets.message_content import build_ticket_subject
 from application.use_cases.tickets.summaries import TicketSummary
 from domain.contracts.repositories import (
     TicketEventRepository,

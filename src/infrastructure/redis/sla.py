@@ -38,7 +38,7 @@ class RedisSLADeadlineScheduler(SLADeadlineScheduler):
         return list(items)
 
     async def claim_due(self, *, until: datetime, limit: int = 100) -> Sequence[str]:
-        result = await self.redis.eval(
+        result = await self.redis.eval(  # type: ignore[misc]
             _CLAIM_DUE_SCRIPT,
             1,
             SLA_DEADLINES_KEY,

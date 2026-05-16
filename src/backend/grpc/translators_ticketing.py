@@ -507,6 +507,7 @@ def deserialize_ticket_details(
             else None
         ),
         created_at=_deserialize_timestamp(ticket.created_at),
+        updated_at=_deserialize_timestamp(ticket.updated_at),
         closed_at=_deserialize_timestamp(ticket.closed_at)
         if ticket.HasField("closed_at")
         else None,

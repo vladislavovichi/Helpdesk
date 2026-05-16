@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import httpx
 
+from application.contracts.actors import OperatorIdentity
 from application.errors import NotFoundError
 from domain.enums.roles import UserRole
 from infrastructure.config.settings import MiniAppConfig
@@ -124,7 +125,7 @@ class StubGateway:
         *,
         user: TelegramMiniAppUser,
         ticket_public_id: object,
-        operator_identity: object,
+        operator_identity: OperatorIdentity,
     ) -> dict[str, object]:
         del user, ticket_public_id
         self.calls.append("assign_ticket")
