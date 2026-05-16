@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 INTAKE_CATEGORY_PROMPT_TEXT = "Выберите тему обращения. Дальше продолжим без лишних шагов."
+INTAKE_CATEGORY_PENDING_TEXT = "Сначала выберите тему обращения — нажмите на одну из кнопок выше."
 INTAKE_CATEGORY_STALE_TEXT = "Этот выбор уже неактуален. Если нужно, просто начните заново."
 INTAKE_CANCELLED_TEXT = "Новое обращение отменено. Когда будете готовы, просто напишите в чат."
 

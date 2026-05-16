@@ -44,6 +44,7 @@ async def handle_start(
         )
         if started:
             return
+    await state.clear()
     await message.answer(
         build_start_text(event_user_role, mini_app_available=mini_app_available),
         reply_markup=build_main_menu(

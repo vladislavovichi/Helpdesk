@@ -21,7 +21,7 @@ from bot.handlers.user.intake_flow import (
     submit_client_intake_message,
 )
 from bot.handlers.user.states import UserIntakeStates
-from bot.texts.categories import INTAKE_CANCELLED_TEXT
+from bot.texts.categories import INTAKE_CANCELLED_TEXT, INTAKE_CATEGORY_PENDING_TEXT
 from bot.texts.common import ATTACHMENT_NOT_SUPPORTED_TEXT
 from domain.enums.roles import UserRole
 
@@ -95,6 +95,14 @@ async def handle_client_intake_cancel(
     await callback.answer()
     if isinstance(callback.message, Message):
         await callback.message.edit_text(INTAKE_CANCELLED_TEXT, reply_markup=None)
+
+
+@router.message(
+    StateFilter(UserIntakeStates.choosing_category),
+    MagicData(F.event_user_role == UserRole.USER),
+)
+async def handle_client_intake_category_pending(message: Message) -> None:
+    await message.answer(INTAKE_CATEGORY_PENDING_TEXT)
 
 
 @router.message(
