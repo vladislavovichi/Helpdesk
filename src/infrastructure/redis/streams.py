@@ -61,4 +61,3 @@ class RedisTicketStreamConsumer(TicketStreamConsumer):
             )
             for message_id, payload in stream_messages
         ]
-

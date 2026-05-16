@@ -27,6 +27,7 @@ def test_format_ticket_assist_snapshot_marks_stale_summary_explicitly() -> None:
         assigned_operator_name="Иван Петров",
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 7, 12, 30, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 7, 12, 40, tzinfo=UTC),
         message_history=(),
     )
     snapshot = TicketAssistSnapshot(

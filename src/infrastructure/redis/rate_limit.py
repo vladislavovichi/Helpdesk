@@ -5,7 +5,6 @@ from redis.asyncio import Redis
 from application.contracts.runtime import ChatRateLimiter, GlobalRateLimiter
 from infrastructure.redis.keys import GLOBAL_RATE_LIMIT_KEY, chat_rate_limit_key
 
-
 _INCR_WITH_EXPIRE_LUA = """
 local c = redis.call('incr', KEYS[1])
 if c == 1 then redis.call('expire', KEYS[1], ARGV[1]) end
@@ -20,9 +19,7 @@ class RedisFixedWindowRateLimiter:
         self.window_seconds = window_seconds
 
     async def allow_key(self, key: str) -> bool:
-        current = int(
-            await self.redis.eval(_INCR_WITH_EXPIRE_LUA, 1, key, self.window_seconds)
-        )
+        current = int(await self.redis.eval(_INCR_WITH_EXPIRE_LUA, 1, key, self.window_seconds))
         return current <= self.limit
 
 

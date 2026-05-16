@@ -156,6 +156,7 @@ async def test_client_message_with_active_ticket_keeps_live_dialogue_path() -> N
         assigned_operator_name=None,
         assigned_operator_telegram_user_id=None,
         created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 8, 12, 5, tzinfo=UTC),
     )
     service = ClientIntakeBackendClient(
         active_ticket=ticket,
@@ -202,6 +203,7 @@ async def test_client_duplicate_burst_is_not_forwarded_to_operator_again() -> No
         assigned_operator_name="Иван Петров",
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 8, 12, 5, tzinfo=UTC),
     )
     service = ClientIntakeBackendClient(
         active_ticket=ticket,

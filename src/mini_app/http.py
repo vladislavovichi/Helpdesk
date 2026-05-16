@@ -13,8 +13,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-_MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024  # 1 MB
-
 from application.errors import ApplicationError
 from infrastructure.config.settings import MiniAppConfig
 from mini_app.api import MiniAppGateway
@@ -35,6 +33,8 @@ from mini_app.routes.dashboard import build_dashboard_router
 from mini_app.routes.queue import build_queue_router
 from mini_app.routes.session import build_session_router
 from mini_app.routes.tickets import build_ticket_router
+
+_MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024  # 1 MB
 
 logger = logging.getLogger(__name__)
 

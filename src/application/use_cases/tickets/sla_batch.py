@@ -64,7 +64,7 @@ class RunTicketSLAChecksUseCase:
         policies = await asyncio.gather(
             *[self.sla_policy_repository.get_for_priority(priority=p) for p in priorities]
         )
-        policy_by_priority = dict(zip(priorities, policies))
+        policy_by_priority = dict(zip(priorities, policies, strict=True))
 
         processed: list[TicketSLAProcessingSummary] = []
         auto_escalated_count = 0

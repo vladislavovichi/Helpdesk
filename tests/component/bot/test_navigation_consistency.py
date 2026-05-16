@@ -61,6 +61,7 @@ async def test_back_from_more_action_returns_to_current_ticket_surface() -> None
         assigned_operator_name="Иван Петров",
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 8, 12, 20, tzinfo=UTC),
         tags=("vip",),
         last_message_text="Не могу войти",
         last_message_sender_type=None,

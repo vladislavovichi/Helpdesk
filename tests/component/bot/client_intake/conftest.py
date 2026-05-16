@@ -140,6 +140,7 @@ def build_ticket_details(
         assigned_operator_name=None,
         assigned_operator_telegram_user_id=None,
         created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
         category_id=category_id,
         category_title=category_title,
     )

@@ -4,7 +4,6 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from application.use_cases.tickets.identifiers import format_public_ticket_number
-from application.use_cases.tickets.message_content import build_ticket_subject
 from application.use_cases.tickets.summaries import TicketSummary
 from domain.entities.ticket import Ticket, TicketAttachmentDetails, TicketDetails
 from domain.enums.tickets import TicketEventType, TicketMessageSenderType, TicketStatus

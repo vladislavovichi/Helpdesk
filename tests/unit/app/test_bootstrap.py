@@ -231,7 +231,7 @@ async def test_build_runtime_closes_resources_when_database_check_fails(
     monkeypatch.setattr(bootstrap, "dispose_engine", dispose_engine_mock)
     monkeypatch.setattr(bootstrap, "close_redis_client", AsyncMock())
 
-    with pytest.raises(RuntimeError, match="db down"):
+    with pytest.raises(RuntimeError, match="Критическая зависимость postgresql недоступна"):
         await bootstrap.build_runtime(settings)
 
     dispose_engine_mock.assert_awaited_once_with(fake_engine)

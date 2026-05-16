@@ -64,7 +64,7 @@ class CreateTicketFromClientMessageUseCase:
         ticket = await self.ticket_repository.create(
             client_chat_id=command.client_chat_id,
             subject=build_ticket_subject(
-                message_text=command.text,
+                text=command.text,
                 attachment=command.attachment,
             ),
             category_id=command.category_id,

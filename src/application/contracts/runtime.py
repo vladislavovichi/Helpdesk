@@ -134,7 +134,6 @@ class TicketStreamConsumer(Protocol):
         """Read new-ticket events as structured stream messages."""
 
 
-
 class SLATimeoutProcessor(Protocol):
     async def claim_due_ticket_ids(self, *, limit: int = 100) -> Sequence[str]:
         """Claim due SLA ticket identifiers for immediate synchronous handling."""

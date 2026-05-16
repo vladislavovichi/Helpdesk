@@ -308,6 +308,7 @@ def _ticket_details(
         assigned_operator_telegram_user_id=1001 if assigned_operator_name else None,
         assigned_operator_username="anna" if assigned_operator_name else None,
         created_at=datetime(2026, 4, 20, 10, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 20, 10, 5, tzinfo=UTC),
         category_id=1 if category_title else None,
         category_code="topic" if category_title else None,
         category_title=category_title,

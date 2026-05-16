@@ -143,6 +143,7 @@ def _build_ticket() -> TicketDetailsSummary:
         assigned_operator_name="Anna",
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 20, 10, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 20, 10, 1, tzinfo=UTC),
         closed_at=datetime(2026, 4, 20, 10, 40, tzinfo=UTC),
         category_title="Access",
         tags=("vip",),

@@ -82,6 +82,7 @@ async def test_operator_reply_refreshes_action_surface_after_successful_live_mes
         assigned_operator_name="Иван Петров",
         assigned_operator_telegram_user_id=1001,
         created_at=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 8, 12, 15, tzinfo=UTC),
     )
     reply_result = OperatorReplyResult(
         ticket=TicketSummary(

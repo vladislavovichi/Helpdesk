@@ -10,7 +10,6 @@ from redis.asyncio.lock import Lock
 from redis.exceptions import LockError
 
 from application.contracts.runtime import TicketStreamMessage
-from infrastructure.redis.keys import SLA_DEADLINES_KEY
 from infrastructure.redis.locks import RedisTicketLock
 from infrastructure.redis.sla import RedisSLADeadlineScheduler, RedisSLATimeoutProcessor
 from infrastructure.redis.streams import RedisTicketStreamConsumer
@@ -147,14 +146,13 @@ async def test_ticket_stream_consumer_returns_structured_messages() -> None:
 
 async def test_sla_deadline_scheduler_claims_due_ticket_ids() -> None:
     redis = Mock()
-    redis.zrangebyscore = AsyncMock(return_value=["ticket-1", "ticket-2"])
-    redis.zrem = AsyncMock()
+    redis.eval = AsyncMock(return_value=["ticket-1", "ticket-2"])
     scheduler = RedisSLADeadlineScheduler(redis)
 
     due = await scheduler.claim_due(until=datetime.now(UTC), limit=10)
 
     assert list(due) == ["ticket-1", "ticket-2"]
-    redis.zrem.assert_awaited_once_with(SLA_DEADLINES_KEY, "ticket-1", "ticket-2")
+    redis.eval.assert_awaited_once()
 
 
 async def test_sla_timeout_processor_claims_due_ticket_ids_before_counting() -> None:
