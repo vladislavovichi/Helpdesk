@@ -9,8 +9,11 @@ from pathlib import Path
 import uvicorn
 from fastapi import Depends, FastAPI
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
+_MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024  # 1 MB
 
 from application.errors import ApplicationError
 from infrastructure.config.settings import MiniAppConfig
@@ -51,6 +54,8 @@ def create_mini_app(
     )
     app.state.mini_app_static_dir = static_dir
 
+    app.add_middleware(BaseHTTPMiddleware, dispatch=_security_headers_middleware)
+    app.add_middleware(BaseHTTPMiddleware, dispatch=_limit_request_body_middleware)
     _register_exception_handlers(app)
     _register_public_routes(app)
     app.include_router(build_session_router())
@@ -202,6 +207,25 @@ def _register_exception_handlers(app: FastAPI) -> None:
             )
         status, payload = mini_app_error_response(exc, is_ai_route=is_ai_route(request.url.path))
         return json_response(payload, status_code=status)
+
+
+async def _limit_request_body_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+    content_length = request.headers.get("content-length")
+    if content_length is not None and int(content_length) > _MAX_REQUEST_BODY_BYTES:
+        return json_response(
+            {"error": "Тело запроса слишком большое.", "code": "payload_too_large"},
+            status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+        )
+    return await call_next(request)
+
+
+async def _security_headers_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 def _route_not_found_response() -> Response:

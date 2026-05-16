@@ -20,6 +20,9 @@ def build_engine(config: DatabaseConfig) -> AsyncEngine:
         config.sqlalchemy_url,
         echo=config.echo,
         pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        connect_args={"server_settings": {"statement_timeout": "30000"}},
     )
 
 

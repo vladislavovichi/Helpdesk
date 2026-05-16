@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hmac
 
 import grpc
 
@@ -46,7 +47,7 @@ def resolve_backend_request_context(
     metadata = {item.key.lower(): item.value for item in context.invocation_metadata()}
 
     provided_token = metadata.get(INTERNAL_AUTH_TOKEN_HEADER)
-    if not provided_token or provided_token != auth_config.token.strip():
+    if not provided_token or not hmac.compare_digest(provided_token, auth_config.token.strip()):
         raise ForbiddenError("Внутренний backend запрос отклонён.")
 
     caller = metadata.get(CALLER_HEADER, "unknown")

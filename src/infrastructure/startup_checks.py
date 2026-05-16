@@ -114,7 +114,7 @@ async def _run_single_dependency_check(
                 )
                 return
     except EXPECTED_STARTUP_FAILURES as exc:
-        raise RuntimeError(f"Критическая зависимость {check.name} недоступна: {exc}") from exc
+        raise RuntimeError(f"Критическая зависимость {check.name} недоступна.") from exc
 
 
 def _log_startup_check_failure(

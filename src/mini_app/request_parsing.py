@@ -36,12 +36,12 @@ class AssignTicketPayload(BaseModel):
     @field_validator("display_name", mode="before")
     @classmethod
     def validate_display_name(cls, value: object) -> str:
-        return normalize_required_string(value, key="display_name")
+        return normalize_required_string(value, key="display_name", max_length=256)
 
     @field_validator("username", mode="before")
     @classmethod
     def validate_username(cls, value: object) -> str | None:
-        return normalize_optional_string(value, key="username")
+        return normalize_optional_string(value, key="username", max_length=256)
 
 
 class TicketNotePayload(BaseModel):
@@ -52,7 +52,7 @@ class TicketNotePayload(BaseModel):
     @field_validator("text", mode="before")
     @classmethod
     def validate_text(cls, value: object) -> str:
-        return normalize_required_string(value, key="text")
+        return normalize_required_string(value, key="text", max_length=10_000)
 
 
 def parse_analytics_window(parsed: ParseResult) -> AnalyticsWindow:
@@ -102,21 +102,25 @@ def parse_positive_int_path(raw_value: str) -> int | None:
     return int(raw_value)
 
 
-def normalize_required_string(value: object, *, key: str) -> str:
+def normalize_required_string(value: object, *, key: str, max_length: int = 10_000) -> str:
     if not isinstance(value, str):
         raise ValueError(f"Поле {key} должно быть строкой.")
     normalized = " ".join(value.split())
     if not normalized:
         raise ValueError(f"Поле {key} не должно быть пустым.")
+    if len(normalized) > max_length:
+        raise ValueError(f"Поле {key} не должно превышать {max_length} символов.")
     return normalized
 
 
-def normalize_optional_string(value: object, *, key: str) -> str | None:
+def normalize_optional_string(value: object, *, key: str, max_length: int = 10_000) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
         raise ValueError(f"Поле {key} должно быть строкой.")
     normalized = value.strip()
+    if normalized and len(normalized) > max_length:
+        raise ValueError(f"Поле {key} не должно превышать {max_length} символов.")
     return normalized or None
 
 

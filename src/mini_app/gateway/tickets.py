@@ -100,7 +100,7 @@ class MiniAppTicketsGateway:
 
         try:
             timeline = serialize_ticket_timeline(details, ai_snapshot)
-        except Exception:  # noqa: BLE001
+        except (TypeError, ValueError, AttributeError, KeyError):
             timeline = {
                 "items": [],
                 "warning": "Ticket history is temporarily unavailable.",
