@@ -135,6 +135,14 @@ class FakeHelpdeskBackendClient(HelpdeskBackendClient):
     ) -> TicketSummary | None:
         _not_implemented()
 
+    async def close_ticket_as_client(
+        self,
+        *,
+        ticket_public_id: UUID,
+        actor: RequestActor | None,
+    ) -> TicketSummary | None:
+        _not_implemented()
+
     async def close_ticket_as_operator(
         self,
         *,
