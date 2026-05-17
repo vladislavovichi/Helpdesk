@@ -391,7 +391,9 @@ class HelpdeskTicketOperations:
             permission=Permission.ACCESS_OPERATOR,
             telegram_user_id=actor_telegram_user_id(actor),
         )
-        result = await self._ctx.components.tickets.escalate_ticket(ticket_public_id=ticket_public_id)
+        result = await self._ctx.components.tickets.escalate_ticket(
+            ticket_public_id=ticket_public_id
+        )
         if result is not None:
             await self._ctx.sync_sla_deadline(ticket_public_id=result.public_id)
             await self._ctx.audit.write(

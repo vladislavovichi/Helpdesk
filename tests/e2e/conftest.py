@@ -44,7 +44,7 @@ def _free_tcp_port() -> int:
 def _build_mock_ai_factory() -> AIServiceClientFactory:
     client = AsyncMock()
     client.analyze_sentiment = AsyncMock(
-        return_value=AnalyzedTicketSentimentResult(sentiment=None, confidence=None)
+        return_value=AnalyzedTicketSentimentResult(available=False)
     )
     client.predict_category = AsyncMock(return_value=None)
     client.summarize_ticket = AsyncMock(return_value=None)

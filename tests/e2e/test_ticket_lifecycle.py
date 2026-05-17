@@ -84,6 +84,4 @@ async def test_client_submits_operator_replies_ticket_closes(
     assert ticket.public_id not in remaining_ids, "Closed ticket must leave the queue"
 
     # --- cleanup: revoke operator to avoid polluting other tests ---
-    await grpc_client.revoke_operator(
-        telegram_user_id=operator.telegram_user_id, actor=super_admin
-    )
+    await grpc_client.revoke_operator(telegram_user_id=operator.telegram_user_id, actor=super_admin)

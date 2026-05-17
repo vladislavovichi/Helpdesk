@@ -115,29 +115,40 @@ class GrpcMetricsInterceptor(grpc.aio.ServerInterceptor):  # type: ignore[misc]
 
         method = handler_call_details.method or "unknown"
 
-        original = handler.unary_unary or handler.unary_stream
-
-        if original is None:
-            return handler
-
-        async def timed_handler(request: Any, context: grpc.aio.ServicerContext) -> Any:  # type: ignore[return]
-            start = time.perf_counter()
-            try:
-                result = await original(request, context)
-                code = str(context.code() or grpc.StatusCode.OK)
-                GRPC_REQUEST_DURATION.labels(method=method).observe(
-                    time.perf_counter() - start
-                )
-                return result
-            except Exception:
-                GRPC_REQUEST_ERRORS.labels(
-                    method=method, grpc_status=str(grpc.StatusCode.INTERNAL)
-                ).inc()
-                GRPC_REQUEST_DURATION.labels(method=method).observe(
-                    time.perf_counter() - start
-                )
-                raise
-
         if handler.unary_unary is not None:
-            return handler._replace(unary_unary=timed_handler)
-        return handler._replace(unary_stream=timed_handler)
+            original_unary = handler.unary_unary
+
+            async def timed_unary(request: Any, context: grpc.aio.ServicerContext) -> Any:
+                start = time.perf_counter()
+                try:
+                    result = await original_unary(request, context)
+                    GRPC_REQUEST_DURATION.labels(method=method).observe(time.perf_counter() - start)
+                    return result
+                except Exception:
+                    GRPC_REQUEST_ERRORS.labels(
+                        method=method, grpc_status=str(grpc.StatusCode.INTERNAL)
+                    ).inc()
+                    GRPC_REQUEST_DURATION.labels(method=method).observe(time.perf_counter() - start)
+                    raise
+
+            return handler._replace(unary_unary=timed_unary)
+
+        if handler.unary_stream is not None:
+            original_stream = handler.unary_stream
+
+            async def timed_stream(request: Any, context: grpc.aio.ServicerContext) -> Any:  # type: ignore[return]
+                start = time.perf_counter()
+                try:
+                    async for item in original_stream(request, context):
+                        yield item
+                    GRPC_REQUEST_DURATION.labels(method=method).observe(time.perf_counter() - start)
+                except Exception:
+                    GRPC_REQUEST_ERRORS.labels(
+                        method=method, grpc_status=str(grpc.StatusCode.INTERNAL)
+                    ).inc()
+                    GRPC_REQUEST_DURATION.labels(method=method).observe(time.perf_counter() - start)
+                    raise
+
+            return handler._replace(unary_stream=timed_stream)
+
+        return handler

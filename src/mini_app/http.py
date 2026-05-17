@@ -233,9 +233,7 @@ async def _metrics_middleware(request: Request, call_next):  # type: ignore[no-u
     HTTP_REQUEST_DURATION.labels(
         method=request.method, path_template=label, status_code=status
     ).observe(duration)
-    HTTP_REQUESTS.labels(
-        method=request.method, path_template=label, status_code=status
-    ).inc()
+    HTTP_REQUESTS.labels(method=request.method, path_template=label, status_code=status).inc()
     return response
 
 

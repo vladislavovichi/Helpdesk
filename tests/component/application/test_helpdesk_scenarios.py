@@ -845,16 +845,10 @@ def helpdesk_scenario() -> HelpdeskScenario:
             repository_bundle=HelpdeskRepositoryBundle(
                 ticket=cast(TicketRepository, ticket_repository),
                 ticket_analytics=cast(TicketAnalyticsRepository, ticket_repository),
-                ticket_feedback=cast(
-                    TicketFeedbackRepository, EmptyTicketFeedbackRepository()
-                ),
-                ticket_ai_summary=cast(
-                    TicketAISummaryRepository, EmptyTicketAISummaryRepository()
-                ),
+                ticket_feedback=cast(TicketFeedbackRepository, EmptyTicketFeedbackRepository()),
+                ticket_ai_summary=cast(TicketAISummaryRepository, EmptyTicketAISummaryRepository()),
                 ticket_message=cast(TicketMessageRepository, message_repository),
-                ticket_internal_note=cast(
-                    TicketInternalNoteRepository, internal_note_repository
-                ),
+                ticket_internal_note=cast(TicketInternalNoteRepository, internal_note_repository),
                 ticket_event=cast(TicketEventRepository, event_repository),
                 audit_log=cast(AuditLogRepository, EmptyAuditLogRepository()),
                 operator=cast(OperatorRepository, operator_repository),
@@ -864,9 +858,7 @@ def helpdesk_scenario() -> HelpdeskScenario:
                 macro=cast(MacroRepository, EmptyMacroRepository()),
                 sla_policy=cast(SLAPolicyRepository, StaticSLAPolicyRepository()),
                 tag=cast(TagRepository, EmptyTagRepository()),
-                ticket_category=cast(
-                    TicketCategoryRepository, EmptyTicketCategoryRepository()
-                ),
+                ticket_category=cast(TicketCategoryRepository, EmptyTicketCategoryRepository()),
                 ticket_tag=cast(TicketTagRepository, EmptyTicketTagRepository()),
             ),
             ai_client_factory=build_ai_client_factory(),

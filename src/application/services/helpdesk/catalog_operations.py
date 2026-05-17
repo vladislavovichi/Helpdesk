@@ -272,7 +272,9 @@ class HelpdeskCatalogOperations:
             permission=Permission.ACCESS_OPERATOR,
             actor_telegram_user_id=actor_telegram_user_id(actor),
         )
-        return await self._ctx.components.catalog.list_ticket_tags(ticket_public_id=ticket_public_id)
+        return await self._ctx.components.catalog.list_ticket_tags(
+            ticket_public_id=ticket_public_id
+        )
 
     async def list_available_tags(
         self,

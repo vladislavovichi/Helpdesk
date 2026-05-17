@@ -9,6 +9,17 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, "../static"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: (chunkInfo) =>
+          chunkInfo.name === "index" ? "assets/app.js" : `assets/${chunkInfo.name}.js`,
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name][extname]",
+        manualChunks: {
+          renderers: [resolve(__dirname, "assets/renderers.js")],
+        },
+      },
+    },
   },
   test: {
     include: ["tests/**/*.test.js"],
