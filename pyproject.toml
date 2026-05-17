@@ -42,7 +42,7 @@ transformers = ">=4.45,<5.0"
 pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-q --cov=src --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml"
+addopts = "-q --cov=src --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml -m 'not e2e'"
 markers = [
     "unit: pure unit tests without real runtime boundaries",
     "component: handlers, services, repositories, or gateways tested with fake, stub, or mock dependencies",
