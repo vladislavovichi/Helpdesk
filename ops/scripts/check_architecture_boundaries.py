@@ -64,6 +64,7 @@ def check_boundaries(project_root: Path) -> list[str]:
         for path in sorted(scan_root.rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             relative_path = path.relative_to(project_root)
+            relative_path_posix = relative_path.as_posix()
             for node in ast.walk(tree):
                 for module in _imported_modules(node):
                     if not _matches_module(module, rule.forbidden_module):
@@ -72,7 +73,8 @@ def check_boundaries(project_root: Path) -> list[str]:
                         continue
                     line_number = getattr(node, "lineno", 0)
                     violations.append(
-                        f"{relative_path.as_posix()}:{line_number}: forbidden import {module} ({rule.reason})"
+                        f"{relative_path_posix}:{line_number}: "
+                        f"forbidden import {module} ({rule.reason})"
                     )
     return violations
 
