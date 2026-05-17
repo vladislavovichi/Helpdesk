@@ -101,10 +101,10 @@ def metrics_text() -> bytes:
     return generate_latest(REGISTRY)
 
 
-class GrpcMetricsInterceptor(grpc.aio.ServerInterceptor):  # type: ignore[misc]
+class GrpcMetricsInterceptor(grpc.aio.ServerInterceptor):
     """Records duration and error rate for every gRPC handler call."""
 
-    async def intercept_service(  # type: ignore[override]
+    async def intercept_service(
         self,
         continuation: Callable[..., Awaitable[Any]],
         handler_call_details: grpc.HandlerCallDetails,
@@ -136,7 +136,7 @@ class GrpcMetricsInterceptor(grpc.aio.ServerInterceptor):  # type: ignore[misc]
         if handler.unary_stream is not None:
             original_stream = handler.unary_stream
 
-            async def timed_stream(request: Any, context: grpc.aio.ServicerContext) -> Any:  # type: ignore[return]
+            async def timed_stream(request: Any, context: grpc.aio.ServicerContext) -> Any:
                 start = time.perf_counter()
                 try:
                     async for item in original_stream(request, context):
