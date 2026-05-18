@@ -247,9 +247,14 @@ class TicketDetailsSummary:
     last_message_attachment: TicketAttachmentSummary | None = None
     message_history: tuple[TicketMessageSummary, ...] = ()
     internal_notes: tuple[TicketInternalNoteSummary, ...] = ()
+    sla_state: TicketSLAEvaluationSummary | None = None
 
 
-def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSummary:
+def build_ticket_details_summary(
+    ticket: DomainTicketDetails,
+    *,
+    sla_evaluation: TicketSLAEvaluationSummary | None = None,
+) -> TicketDetailsSummary:
     return TicketDetailsSummary(
         public_id=ticket.public_id,
         public_number=format_public_ticket_number(ticket.public_id),
@@ -285,6 +290,7 @@ def build_ticket_details_summary(ticket: DomainTicketDetails) -> TicketDetailsSu
         internal_notes=tuple(
             build_ticket_internal_note_summary(note) for note in ticket.internal_notes
         ),
+        sla_state=sla_evaluation,
     )
 
 

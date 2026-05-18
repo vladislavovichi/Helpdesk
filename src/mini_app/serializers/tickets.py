@@ -8,7 +8,9 @@ from application.use_cases.tickets.summaries import (
     MacroSummary,
     OperatorTicketSummary,
     QueuedTicketSummary,
+    SLADeadlineStatus,
     TicketDetailsSummary,
+    TicketSLAEvaluationSummary,
 )
 from domain.enums.tickets import TicketMessageSenderType, TicketSentiment
 from mini_app.serializers.common import serialize_attachment, serialize_datetime
@@ -243,4 +245,17 @@ def _serialize_sla_state(ticket: object) -> dict[str, Any] | None:
         return state
     if isinstance(state, str):
         return {"status": state}
+    if isinstance(state, TicketSLAEvaluationSummary):
+        return _serialize_sla_evaluation(state)
     return None
+
+
+def _serialize_sla_evaluation(evaluation: TicketSLAEvaluationSummary) -> dict[str, Any]:
+    deadlines = [evaluation.first_response, evaluation.resolution]
+    if all(d.status == SLADeadlineStatus.NOT_APPLICABLE for d in deadlines):
+        return {"status": "missing"}
+    if any(d.status == SLADeadlineStatus.BREACHED for d in deadlines):
+        return {"status": "breached"}
+    if any(d.status == SLADeadlineStatus.APPROACHING for d in deadlines):
+        return {"status": "at_risk"}
+    return {"status": "ok"}

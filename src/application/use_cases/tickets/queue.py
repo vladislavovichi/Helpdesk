@@ -4,7 +4,8 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from application.contracts.tickets import AssignNextQueuedTicketCommand, TicketAssignmentCommand
-from application.use_cases.tickets.common import build_status_payload, build_ticket_summary
+from application.use_cases.tickets.common import build_status_payload, build_ticket_summary, utcnow
+from application.use_cases.tickets.sla_evaluation import evaluate_ticket_sla
 from application.use_cases.tickets.summaries import (
     HistoricalTicketSummary,
     OperatorTicketSummary,
@@ -18,6 +19,7 @@ from application.use_cases.tickets.summaries import (
 )
 from domain.contracts.repositories import (
     OperatorRepository,
+    SLAPolicyRepository,
     TicketEventRepository,
     TicketRepository,
 )
@@ -114,15 +116,25 @@ class ListQueuedTicketsUseCase:
 
 
 class GetTicketDetailsUseCase:
-    def __init__(self, ticket_repository: TicketRepository) -> None:
+    def __init__(
+        self,
+        ticket_repository: TicketRepository,
+        sla_policy_repository: SLAPolicyRepository | None = None,
+    ) -> None:
         self.ticket_repository = ticket_repository
+        self.sla_policy_repository = sla_policy_repository
 
     async def __call__(self, *, ticket_public_id: UUID) -> TicketDetailsSummary | None:
         ticket = await self.ticket_repository.get_details_by_public_id(ticket_public_id)
         if ticket is None:
             return None
 
-        return build_ticket_details_summary(ticket)
+        sla_evaluation = None
+        if self.sla_policy_repository is not None:
+            policy = await self.sla_policy_repository.get_for_priority(priority=ticket.priority)
+            sla_evaluation = evaluate_ticket_sla(ticket=ticket, policy=policy, now=utcnow())
+
+        return build_ticket_details_summary(ticket, sla_evaluation=sla_evaluation)
 
 
 class ListOperatorTicketsUseCase:

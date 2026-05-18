@@ -412,7 +412,10 @@ def _build_helpdesk_components(
                 ticket_event_repository=ticket_deps.ticket_event_repository,
                 operator_repository=operator_deps.operator_repository,
             ),
-            get_details=GetTicketDetailsUseCase(ticket_repository=ticket_deps.ticket_repository),
+            get_details=GetTicketDetailsUseCase(
+                ticket_repository=ticket_deps.ticket_repository,
+                sla_policy_repository=sla_deps.sla_policy_repository,
+            ),
             export_report=ExportTicketReportUseCase(
                 ticket_repository=ticket_deps.ticket_repository,
                 ticket_feedback_repository=ticket_deps.ticket_feedback_repository,

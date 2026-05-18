@@ -10,7 +10,9 @@ from application.services.stats import AnalyticsWindow
 from application.use_cases.tickets.summaries import (
     OperatorTicketSummary,
     QueuedTicketSummary,
+    SLADeadlineStatus,
     TicketDetailsSummary,
+    TicketSLAEvaluationSummary,
 )
 from backend.grpc.contracts import HelpdeskBackendClient, HelpdeskBackendClientFactory
 from domain.enums.tickets import TicketStatus
@@ -62,6 +64,20 @@ async def safe_get_ticket_details(
         return None
 
 
+def _ticket_sla_display_status(ticket: Any) -> str | None:
+    sla_state = getattr(ticket, "sla_state", None)
+    if not isinstance(sla_state, TicketSLAEvaluationSummary):
+        return None
+    deadlines = [sla_state.first_response, sla_state.resolution]
+    if all(d.status == SLADeadlineStatus.NOT_APPLICABLE for d in deadlines):
+        return None
+    if any(d.status == SLADeadlineStatus.BREACHED for d in deadlines):
+        return "breached"
+    if any(d.status == SLADeadlineStatus.APPROACHING for d in deadlines):
+        return "at_risk"
+    return "ok"
+
+
 def build_operator_dashboard(
     *,
     queued: Any,
@@ -88,6 +104,12 @@ def build_operator_dashboard(
     ]
     tickets_without_operator_reply = [
         ticket for ticket in my_records if needs_operator_reply(ticket)
+    ]
+    sla_breached_tickets = [
+        ticket for ticket in visible_records if _ticket_sla_display_status(ticket) == "breached"
+    ]
+    sla_at_risk_tickets = [
+        ticket for ticket in visible_records if _ticket_sla_display_status(ticket) == "at_risk"
     ]
 
     buckets = {
@@ -116,20 +138,18 @@ def build_operator_dashboard(
         "sla_breached_tickets": serialize_dashboard_bucket(
             key="sla_breached_tickets",
             label="SLA нарушен",
-            tickets=[],
+            tickets=sla_breached_tickets,
             route="queue",
             severity="critical",
-            empty_label="Живой SLA пока недоступен.",
-            unavailable_reason=("Живой SLA пока не передаётся в рабочее место."),
+            empty_label="Нарушений SLA в видимой зоне нет.",
         ),
         "sla_at_risk_tickets": serialize_dashboard_bucket(
             key="sla_at_risk_tickets",
             label="SLA в риске",
-            tickets=[],
+            tickets=sla_at_risk_tickets,
             route="queue",
             severity="warning",
-            empty_label="Живой SLA пока недоступен.",
-            unavailable_reason=("Живой SLA пока не передаётся в рабочее место."),
+            empty_label="Заявок в риске SLA нет.",
         ),
         "negative_sentiment_tickets": serialize_dashboard_bucket(
             key="negative_sentiment_tickets",
