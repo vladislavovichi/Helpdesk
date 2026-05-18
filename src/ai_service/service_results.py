@@ -48,7 +48,7 @@ def build_generated_ticket_summary(
         normalized_actions_taken,
         normalized_current_status,
     }
-    if len(unique_sections) < 3:
+    if len(unique_sections) < 2:
         return None
 
     return AIGeneratedTicketSummary(

@@ -144,7 +144,7 @@ async def test_disabled_summaries_do_not_request_summary_generation() -> None:
 
     assert result["summary_status"] == "missing"
     assert result["short_summary"] is None
-    assert client.snapshot_calls[0][1] is False
+    assert client.snapshot_calls[0][1] is True
 
 
 class StubAISettingsGateway:

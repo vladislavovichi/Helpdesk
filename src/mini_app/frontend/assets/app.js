@@ -310,9 +310,9 @@ function bindGlobalEvents() {
       await runMutation(async () => {
         refreshedPayload = await state.api.refreshTicketAi(state.currentTicketId);
         invalidateTicketData(state.currentTicketId);
-        await renderRoute();
       });
-      if (refreshedPayload?.available === false) {
+      await renderRoute();
+      if (refreshedPayload?.available === false || refreshedPayload?.summary_status === "missing") {
         showNotice("AI-сводка сейчас недоступна.", "danger");
       } else if (refreshedPayload) {
         showNotice("AI-сводка обновлена.", "success");

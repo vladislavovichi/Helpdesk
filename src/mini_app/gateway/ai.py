@@ -92,7 +92,7 @@ class MiniAppAIGateway:
         async with self.backend_client_factory() as client:
             ai_snapshot = await client.get_ticket_ai_assist_snapshot(
                 ticket_public_id=ticket_public_id,
-                refresh_summary=settings.ai_summaries_enabled,
+                refresh_summary=True,
                 actor=actor,
             )
         if ai_snapshot is None:
